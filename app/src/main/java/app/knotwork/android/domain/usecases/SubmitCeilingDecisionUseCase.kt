@@ -3,7 +3,6 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.PendingDecision
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
-import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.TriggerHitlResolution
 import app.knotwork.android.domain.models.ceilingBreach
@@ -145,23 +144,14 @@ class SubmitCeilingDecisionUseCase @Inject constructor(
      * when it stopped, which is not necessarily the limit configured now, and is
      * definitely not the base limit when the user had already granted portions.
      *
-     * A record missing either half — written before the columns existed, or
-     * degraded — falls back to [RunTerminationReason.NotResumable]. That is the
-     * honest reading: without the axis there is nothing to say the run was
-     * stopped by a ceiling, and claiming one with invented numbers would put a
-     * false `15/15` into the run record.
+     * A record that cannot produce a breach — a missing field, or the unmeasured
+     * money axis — falls back to [RunTerminationReason.NotResumable]. That is
+     * the honest reading: there is nothing to say the run was stopped by a
+     * ceiling, and claiming one with invented numbers would put a false `15/15`
+     * into the run record.
      *
      * @return The cause to settle the run with.
      */
-    private fun PendingInteraction.terminationReason(): RunTerminationReason {
-        val breach = ceilingBreach() ?: return RunTerminationReason.NotResumable
-        return when (breach.axis) {
-            RunCeilingAxis.STEPS -> RunTerminationReason.StepCeiling(limit = breach.limit, spent = breach.spent)
-            RunCeilingAxis.TOKENS -> RunTerminationReason.TokenCeiling(limit = breach.limit, spent = breach.spent)
-            // Unmeasured in this release, so nothing can have parked on it. If
-            // that changes, this must gain a reason rather than fall back to a
-            // stop that reads as "could not be resumed".
-            RunCeilingAxis.MONEY -> RunTerminationReason.NotResumable
-        }
-    }
+    private fun PendingInteraction.terminationReason(): RunTerminationReason =
+        ceilingBreach()?.asTerminationReason() ?: RunTerminationReason.NotResumable
 }

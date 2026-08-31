@@ -1320,7 +1320,12 @@ data class InterruptedRunPending(
  * @property runId Id of the paused run record — the decision settles exactly
  *   this run, never "whatever is paused now". For a pause raised inside a
  *   sub-pipeline this is the child run, which is where the record sits; the
- *   submission path resolves the tree root itself.
+ *   submission path resolves the tree root itself. `null` on the live path,
+ *   where the orchestrator emission carries no id and the decision falls back
+ *   to the session's parked record — which is exactly the record the pause just
+ *   wrote. Naming the session's *active* run instead would be worse than
+ *   naming nothing: for a nested pause the record sits on the child while the
+ *   active run is the parent.
  * @property breach Which ceiling bound and by how much, exactly as it stood
  *   when the run stopped. Read off the durable record on reattach, so a pause
  *   answered after a restart states the same numbers it stated live.
@@ -1329,7 +1334,7 @@ data class InterruptedRunPending(
  *   the next morning must still say when the run stopped, not what time it is
  *   now.
  */
-data class CeilingPausePending(val runId: String, val breach: HardCeilingBreach, val timestamp: String)
+data class CeilingPausePending(val runId: String?, val breach: HardCeilingBreach, val timestamp: String)
 
 /**
  * One-shot failure outcomes of a Resume tap on the interrupted-run card,

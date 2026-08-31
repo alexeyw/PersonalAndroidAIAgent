@@ -370,8 +370,8 @@ and its answer still lands in the conversation. What actually ends a run is
 **Stop the run** on a limit pause, the repetition detector, or — for a chain of
 scheduled tasks — **More → Active tasks → Stop all scheduled tasks**, which also
 cancels one that is executing. The limit pause is the one reliable moment a run
-offers to stop: it waits for an answer rather than pressing on. A per-run cancel is not built yet; see
-[Known limitations](#known-limitations).
+offers to stop: it waits for an answer rather than pressing on. A per-run cancel
+is not built yet; see [Known limitations](#known-limitations).
 
 ### My run stopped by itself. Which limit was it?
 

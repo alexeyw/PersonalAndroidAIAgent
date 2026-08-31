@@ -374,6 +374,21 @@ constructor(
             )
         }
 
+        // A run resumed from a ceiling pause still holds the record of the
+        // question it parked on. Nothing else will consume it — the other two
+        // kinds are consumed by the node executor that raised them, and a
+        // ceiling belongs to no node — so it is consumed here, at the one point
+        // every attempt of every run in the tree passes through. Leaving it
+        // would hand the maintenance sweep a park whose run is happily running
+        // again, and the sweep's job is to fail exactly those.
+        if (runId != null) {
+            val parkedCeiling = pendingInteractionRepository.getForRun(runId)
+            if (parkedCeiling?.kind == PendingInteractionKind.CEILING) {
+                pendingInteractionRepository.delete(runId)
+                ceilingNotifier.cancelCeilingNotification(sessionId)
+            }
+        }
+
         // Spend ledger shared across the whole run tree. A sub-pipeline run
         // reuses the parent's instance (threaded in via [budget]) so nested
         // execution cannot side-step the parent's ceilings; a top-level run
@@ -405,20 +420,6 @@ constructor(
         // passes, so a resumed run rebuilds the window it had rather than
         // starting blind — which matters precisely because a run that parks
         // often is a run in a loop.
-        // A run resumed from a ceiling pause still holds the record of the
-        // question it parked on. Nothing else will consume it — the other two
-        // kinds are consumed by the node executor that raised them, and a
-        // ceiling belongs to no node — so it is consumed here, at the one point
-        // every attempt of every run in the tree passes through. Leaving it
-        // would hand the maintenance sweep a park whose run is happily running
-        // again, and the sweep's job is to fail those.
-        if (runId != null) {
-            val parkedCeiling = pendingInteractionRepository.getForRun(runId)
-            if (parkedCeiling?.kind == PendingInteractionKind.CEILING) {
-                pendingInteractionRepository.delete(runId)
-                ceilingNotifier.cancelCeilingNotification(sessionId)
-            }
-        }
         val runStuckDetector = stuckDetector ?: GraphStuckDetector()
         // Shared for the same reason the detector is — see the parameter doc.
         val runContextNotes = contextNotes ?: RunContextNotes()
@@ -632,7 +633,12 @@ constructor(
                 // hold the foreground service open buying nothing.
                 val ceiling = breach.asCeilingBreach()
                 if (runId != null && ceiling != null && parkOnCeiling(runId, sessionId, ceiling)) {
-                    pushConsole(ConsoleEventType.RunCeiling, "${breach.diagnostic()} — asked to continue")
+                    // The diagnostic plus one stable word, not a sentence. The
+                    // suffix is load-bearing: without it a pause and a stop
+                    // produce byte-identical console lines, and whoever greps
+                    // this later cannot tell a run that ended from one that is
+                    // still waiting.
+                    pushConsole(ConsoleEventType.RunCeiling, "${breach.diagnostic()} — paused")
                     val pause = AgentOrchestratorState.WaitingForCeilingRaise(
                         axis = ceiling.axis,
                         limit = ceiling.limit,

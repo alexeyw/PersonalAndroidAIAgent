@@ -3,7 +3,6 @@ package app.knotwork.android.domain.usecases
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRunStatus
-import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.TriggerHitlEvent
 import app.knotwork.android.domain.models.TriggerHitlResolution
@@ -142,17 +141,13 @@ class ParkedRunResumer @Inject constructor(
      * @param pending The park whose window elapsed.
      */
     suspend fun failExpiredPark(pending: PendingInteraction) {
-        val ceiling = pending.ceilingBreach()
-        if (ceiling == null) {
+        // A park that cannot produce a breach — another kind, a partial record,
+        // or the unmeasured money axis — has no ceiling to settle at, and the
+        // window story is true of it either way.
+        val reason = pending.ceilingBreach()?.asTerminationReason()
+        if (reason == null) {
             failPark(pending, APPROVAL_WINDOW_EXPIRED_MESSAGE, RunTerminationReason.HitlWindowExpired)
             return
-        }
-        val reason = when (ceiling.axis) {
-            RunCeilingAxis.STEPS -> RunTerminationReason.StepCeiling(limit = ceiling.limit, spent = ceiling.spent)
-            RunCeilingAxis.TOKENS -> RunTerminationReason.TokenCeiling(limit = ceiling.limit, spent = ceiling.spent)
-            // Unmeasured in this release, so nothing can have parked on it; the
-            // window story is still true, so that is what it settles as.
-            RunCeilingAxis.MONEY -> RunTerminationReason.HitlWindowExpired
         }
         failPark(pending, reason.diagnostic(), reason, TriggerHitlResolution.TIMED_OUT)
     }

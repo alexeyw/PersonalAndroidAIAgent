@@ -182,7 +182,27 @@ sealed interface RunTerminationReason {
  *   including every portion already granted to this run.
  * @property spent What the run tree had charged against the axis.
  */
-data class HardCeilingBreach(val axis: RunCeilingAxis, val limit: Int, val spent: Int)
+data class HardCeilingBreach(val axis: RunCeilingAxis, val limit: Int, val spent: Int) {
+
+    /**
+     * The typed stop a run settles with when this breach is not continued.
+     *
+     * Stated once because three callers need it and would otherwise each write
+     * the same `when`: the submission path when the user stops the run, the
+     * expiry pass when nobody answers, and the chat surface when it explains
+     * the stop it just asked for. Three copies of one mapping is how the same
+     * event ends up recorded as two different things.
+     *
+     * `null` for the unmeasured money axis, which cannot raise a pause in this
+     * release — inventing a `MoneyCeiling` stop for it would put a cause into
+     * the run record that no code can produce.
+     */
+    fun asTerminationReason(): RunTerminationReason? = when (axis) {
+        RunCeilingAxis.STEPS -> RunTerminationReason.StepCeiling(limit = limit, spent = spent)
+        RunCeilingAxis.TOKENS -> RunTerminationReason.TokenCeiling(limit = limit, spent = spent)
+        RunCeilingAxis.MONEY -> null
+    }
+}
 
 /**
  * Reads a stop back as a ceiling breach, or `null` when the run stopped for

@@ -2374,9 +2374,9 @@ themselves live on the **Pipelines** tab (library and editor) and under
 
 #### Run limits
 
-An autonomous run stops when it reaches one of these limits — and asks you first.
-Everything a run starts counts towards them: pipelines it calls, and every time it
-resumes after a pause. There are four numbers and one statement:
+A run that reaches one of these limits pauses and asks whether it may carry on.
+Everything a run starts counts towards them: pipelines it calls, and every time
+it resumes after a pause. There are four numbers and one statement:
 
 - **Steps per run** (5 – 100) — how many steps a run may take before it stops.
   One step is one node execution.

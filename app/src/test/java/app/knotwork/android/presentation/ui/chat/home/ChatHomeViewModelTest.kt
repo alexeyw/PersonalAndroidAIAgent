@@ -3072,7 +3072,7 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `stopAtCeiling settles the run and leaves the surface at rest`() = runTest(testDispatcher) {
+    fun `stopAtCeiling settles the run and explains the stop where the user is looking`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
         val sessionId = viewModel.state.value.thread.currentSessionId
@@ -3091,9 +3091,14 @@ class ChatHomeViewModelTest {
 
         coVerify { submitCeilingDecisionUseCase(sessionId, false, null) }
         assertNull(viewModel.state.value.pending.ceiling)
-        // Not Generating: stopping ends the run, and a surface left spinning
-        // would wait for a stream that will never arrive.
-        assertNotEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
+        // The tile has to be raised here, not awaited: the engine coroutine
+        // ended when the run parked, so no terminal orchestrator state is
+        // coming, and without this the chat would look as if nothing happened.
+        val stopped = viewModel.state.value.visual as ChatHomeUiState.Error
+        assertEquals(RunTerminationReason.TokenCeiling(limit = 100, spent = 140), stopped.reason)
+        // Settling the run writes its own outcome line, so the tile explains
+        // without repeating it.
+        assertTrue(stopped.announcedInThread)
     }
 
     @Test

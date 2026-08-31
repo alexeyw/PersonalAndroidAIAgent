@@ -7,6 +7,7 @@ import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.ToolRisk
+import app.knotwork.android.domain.models.diagnostic
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
@@ -177,50 +178,73 @@ class ChatHomeHitlDelegate(
         state.update {
             it.copy(pending = it.pending.copy(ceiling = null), visual = ChatHomeUiState.Generating())
         }
-        scope.launch { submitCeilingDecision(sessionId, pending.runId, shouldContinue = true) }
+        scope.launch {
+            submitCeilingDecision(sessionId, pending.runId, shouldContinue = true) {
+                state.update { it.copy(visual = it.restingVisual()) }
+            }
+        }
     }
 
     /**
      * Stops the paused run at the limit it reached. No-op when no pause is
      * showing.
      *
-     * No SYSTEM chat row is written here, unlike a tool denial. The run is
-     * being *settled*, and settling it already produces the outcome line every
-     * stopped run gets — worded, like every other surface, by
-     * `RunTerminationCopyMapper`. Adding one here would say the same thing
-     * twice, in two wordings.
+     * The surface flips to the same typed-termination tile a run gets when it
+     * reaches a limit any other way — the reason is built from the pause's own
+     * breach, so the tile states the numbers the card just showed and offers
+     * **Adjust limits**. This has to be done here: the engine coroutine ended
+     * when the run parked, so no terminal orchestrator state is coming, and
+     * without it stopping would leave the chat looking as though nothing had
+     * happened.
+     *
+     * `announcedInThread` is set because settling the run writes its own
+     * outcome line into the conversation. The tile then explains without
+     * repeating it — the same arrangement every settled run already uses.
+     *
+     * A record that cannot name its breach falls back to the resting visual
+     * rather than inventing a tile: the run is still stopped by the submission
+     * below, and its outcome line is the account the user gets.
      */
     fun stopAtCeiling() {
         val pending = state.value.pending.ceiling ?: return
         val sessionId = state.value.thread.currentSessionId
         if (sessionId.isBlank()) return
+        val reason = pending.breach.asTerminationReason()
         state.update { current ->
             val cleared = current.copy(pending = current.pending.copy(ceiling = null))
-            cleared.copy(visual = cleared.restingVisual())
+            cleared.copy(
+                visual = if (reason != null) {
+                    ChatHomeUiState.Error(
+                        message = reason.diagnostic(),
+                        reason = reason,
+                        announcedInThread = true,
+                    )
+                } else {
+                    cleared.restingVisual()
+                },
+            )
         }
-        scope.launch { submitCeilingDecision(sessionId, pending.runId, shouldContinue = false) }
+        scope.launch {
+            // `NothingPending` is what a *successful* stop reports — once the
+            // run is settled there is nothing left pending — so the tile raised
+            // above must stay. Resetting here (as the continue path does, where
+            // the same outcome means the answer did not land) would wipe the
+            // only account the surface gives of what just happened.
+            submitCeilingDecision(sessionId, pending.runId, shouldContinue = false) {}
+        }
     }
 
     /**
-     * Captures a run paused at one of its ceilings and flips the UI to the
-     * pause state.
+     * Captures a run paused at one of its ceilings, live from the orchestrator,
+     * and flips the UI to the pause state.
      *
-     * @param pause The orchestrator emission carrying the axis and both numbers.
-     * @param runId Id of the paused run. Defaults to the id the reattach path
-     *   read off the durable record; the live path passes the session's active
-     *   run.
-     * @param timestamp Pre-formatted time the run paused.
+     * @param pause The emission carrying the axis and both numbers. It carries
+     *   no run id and does not need to — see [CeilingPausePending.runId].
      */
     fun handleCeilingPause(pause: AgentOrchestratorState.WaitingForCeilingRaise) {
         restoreCeilingPause(
             CeilingPausePending(
-                // The live emission carries no run id, and does not need to: the
-                // decision falls back to the session's parked record, which is
-                // exactly the record this pause just wrote. Naming the session's
-                // *active* run here would be worse than saying nothing — for a
-                // pause raised inside a sub-pipeline the record sits on the
-                // child, and the active run is the parent.
-                runId = "",
+                runId = null,
                 breach = HardCeilingBreach(axis = pause.axis, limit = pause.limit, spent = pause.spent),
                 timestamp = chatRowTimestamp(System.currentTimeMillis()),
             ),
@@ -285,21 +309,35 @@ class ChatHomeHitlDelegate(
      * [SubmitCeilingDecisionUseCase] and folds the outcome onto the shared
      * resume plumbing.
      *
-     * `NothingPending` settles the visual and says nothing else. Unlike a
-     * clarification reply, there is no in-thread note to write: either the run
-     * was already settled — in which case its own outcome line is already in the
-     * thread — or a racing duplicate submission lost, in which case the winner's
-     * effect is the truth and a second sentence about it would be noise.
+     * `NothingPending` means opposite things on the two paths, which is why the
+     * caller supplies its handling. On a continue it means the answer did not
+     * land (already settled, or a racing duplicate lost) and the optimistic
+     * `Generating` must be undone; on a stop it is the *success* report — there
+     * is nothing left pending once the run is settled.
+     *
+     * Neither path writes an in-thread note, unlike a clarification reply:
+     * settling the run already writes its own outcome line, and a racing
+     * duplicate's loser has nothing to add that the winner's effect does not
+     * already say.
+     *
+     * @param sessionId The session whose run is being answered.
+     * @param runId The parked run's id, or `null` to answer the session's record.
+     * @param shouldContinue `true` to grant a portion, `false` to stop the run.
+     * @param onNothingPending What to do when the submission reports nothing
+     *   pending — see above.
      */
-    private suspend fun submitCeilingDecision(sessionId: String, runId: String, shouldContinue: Boolean) {
+    private suspend fun submitCeilingDecision(
+        sessionId: String,
+        runId: String?,
+        shouldContinue: Boolean,
+        onNothingPending: suspend () -> Unit,
+    ) {
         val outcome = submitCeilingDecisionUseCase(
             sessionId = sessionId,
             shouldContinue = shouldContinue,
-            runId = runId.takeIf { it.isNotBlank() },
+            runId = runId,
         )
-        routePendingOutcome(outcome, sessionId) {
-            state.update { it.copy(visual = it.restingVisual()) }
-        }
+        routePendingOutcome(outcome, sessionId, onNothingPending)
     }
 
     /**

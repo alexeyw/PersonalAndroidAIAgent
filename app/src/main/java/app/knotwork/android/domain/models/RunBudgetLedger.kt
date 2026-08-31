@@ -80,13 +80,23 @@ class RunBudgetLedger(
      * Extra portions of the step ceiling the user has granted this tree. Each
      * one multiplies the base ceiling by one further whole allowance — see
      * [effectiveHard].
+     *
+     * Fixed for the ledger's lifetime, unlike the spend counters beside it, and
+     * deliberately so: a grant is bought while the run is **parked**, by a
+     * coroutine that may well be in another process, and it reaches the run by
+     * seeding the next attempt's ledger from the record. There is no moment at
+     * which a live ledger could usefully raise its own ceiling — by the time an
+     * answer exists, this object is gone.
+     *
+     * That also settles the soft warning: a resumed run builds a fresh ledger
+     * with an empty claim set, so it warns again three quarters of the way
+     * through the allowance it was just granted, without anything having to
+     * re-arm it.
      */
-    var stepCeilingExtensions: Int = stepCeilingExtensions
-        private set
+    val stepCeilingExtensions: Int = stepCeilingExtensions
 
-    /** Extra portions of the token ceiling the user has granted this tree. */
-    var tokenCeilingExtensions: Int = tokenCeilingExtensions
-        private set
+    /** Extra portions of the token ceiling granted to this tree. See [stepCeilingExtensions]. */
+    val tokenCeilingExtensions: Int = tokenCeilingExtensions
 
     /**
      * `true` once any charged node reported an estimated rather than a
@@ -137,35 +147,6 @@ class RunBudgetLedger(
         RunCeilingAxis.STEPS -> extend(ceilings.steps.hard, stepCeilingExtensions)
         RunCeilingAxis.TOKENS -> extend(ceilings.tokens.hard, tokenCeilingExtensions)
         RunCeilingAxis.MONEY -> Int.MAX_VALUE
-    }
-
-    /**
-     * Grants one more portion of [axis] to this tree.
-     *
-     * In-memory only: the durable count lives on the root run record and is
-     * written by whoever recorded the user's answer, because the answer may well
-     * arrive in a different process from the one that asked. This call exists so
-     * a ledger built *before* the grant — a non-persisted editor run, or the
-     * live tree in the process that is about to resume — agrees with the record.
-     *
-     * Also clears the axis's soft-warning claim, so the run warns again three
-     * quarters of the way through the allowance it was just given. Without that
-     * the extra portion would be spent with no notice at all: the claim set
-     * remembers that this axis already warned, and the threshold it warned at is
-     * now far behind.
-     *
-     * @param axis The axis the user granted one more portion of.
-     */
-    fun grantExtension(axis: RunCeilingAxis) {
-        when (axis) {
-            RunCeilingAxis.STEPS -> stepCeilingExtensions++
-            RunCeilingAxis.TOKENS -> tokenCeilingExtensions++
-            // Unmeasured: there is no ceiling to raise, so a grant would be a
-            // record of a decision that changed nothing. Listed rather than
-            // defaulted so promoting the money axis cannot silently skip it.
-            RunCeilingAxis.MONEY -> return
-        }
-        softBreachesAnnounced -= axis
     }
 
     /**
@@ -240,8 +221,8 @@ class RunBudgetLedger(
      *
      * Derived from [effectiveHard] rather than read off [ceilings], because a
      * granted extension moves the hard limit and a warning still anchored to the
-     * original would fire the moment the run resumed — the spend is already past
-     * it — telling a user who has just raised the ceiling that they are
+     * original would fire on the resumed run's first node — the spend is already
+     * past it — telling a user who has just raised the ceiling that they are
      * approaching it.
      */
     private fun softThreshold(axis: RunCeilingAxis): Int = RunCeilings.softFor(effectiveHard(axis))

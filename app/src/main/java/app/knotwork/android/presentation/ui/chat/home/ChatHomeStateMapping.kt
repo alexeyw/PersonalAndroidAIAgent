@@ -618,7 +618,10 @@ internal fun ceilingPauseRow(
 ): ChatHomeMessageRow {
     val copy = RunTerminationCopyMapper.ceilingPauseCopy(pending.breach)
     return ChatHomeMessageRow(
-        id = "a-ceiling-${pending.runId}",
+        // A live pause has no run id yet (the emission carries none), so the
+        // row falls back to a stable literal. There is only ever one pause row
+        // in a thread, so it cannot collide with itself.
+        id = "a-ceiling-${pending.runId ?: "live"}",
         role = ChatRole.Assistant,
         content = ChatContent.RunCeilingPause(
             model = RunCeilingPauseCardModel(
