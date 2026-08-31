@@ -441,6 +441,10 @@ generated: much of it is `.png` baselines, which no Kotlin source map covers.
   — pure-JVM check of the per-type port topology.
 - `src/test/java/app/knotwork/design/components/pipelineeditor/NodeConfigValidationTest.kt`
   — pure-JVM coverage of the `NodeConfig` validation rules.
+- `src/test/java/app/knotwork/design/components/pipelineeditor/NodeConfigSheetSnapshotTest.kt`
+  — Roborazzi baselines for the node configuration sheets, which had none
+  until the sheets were pruned. Covers the seven types whose fields changed,
+  not all fourteen: a frame nobody has inspected is not coverage.
 - `src/test/java/app/knotwork/design/components/pipelineeditor/PipelineEditorCatalogPageSnapshotTest.kt`
   — Roborazzi baseline for the pipeline-editor catalog page.
 - `src/test/java/app/knotwork/design/components/pipelineeditor/HeroSnapshotTest.kt`

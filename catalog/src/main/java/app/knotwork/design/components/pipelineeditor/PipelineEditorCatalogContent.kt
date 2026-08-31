@@ -187,17 +187,17 @@ private fun EdgeLabelRow() {
 /** Sample subtitle for the per-type grid. */
 private fun sampleSubtitle(type: NodeType): String? = when (type) {
     NodeType.INPUT -> "user.message"
-    NodeType.OUTPUT -> "markdown"
+    NodeType.OUTPUT -> "final answer"
     NodeType.LITE_RT -> "gemma-2b-it"
     NodeType.CLOUD -> "openai/gpt-5"
     NodeType.INTENT_ROUTER -> "3 classes"
-    NodeType.IF_CONDITION -> "score > 0.8"
+    NodeType.IF_CONDITION -> "is it urgent?"
     NodeType.CLARIFICATION -> "Ask the user"
     NodeType.TOOL -> "fs.write_file"
     NodeType.DECOMPOSITION -> "max 5 steps"
-    NodeType.QUEUE_PROCESSOR -> "parallelism = 2"
+    NodeType.QUEUE_PROCESSOR -> "one subtask at a time"
     NodeType.EVALUATION -> "retries = 2"
-    NodeType.SUMMARY -> "bullets"
+    NodeType.SUMMARY -> "condense"
     NodeType.PIPELINE -> "→ Multi-step research"
     NodeType.SKILL -> "★ Translator"
 }

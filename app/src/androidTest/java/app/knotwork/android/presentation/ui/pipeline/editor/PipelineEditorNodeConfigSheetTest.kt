@@ -12,6 +12,7 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.platform.app.InstrumentationRegistry
 import app.knotwork.design.components.pipelineeditor.CloudConfig
+import app.knotwork.design.components.pipelineeditor.IfConditionConfig
 import app.knotwork.design.components.pipelineeditor.InputConfig
 import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfig
@@ -65,13 +66,15 @@ class PipelineEditorNodeConfigSheetTest {
             }
         }
 
+        // INPUT carries no payload beyond the shared title: the entry contract
+        // is fixed. The sheet says so instead of showing an empty body.
         composeTestRule
-            .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_field_input_name))
+            .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_input_no_settings))
             .assertIsDisplayed()
     }
 
     @Test
-    fun outputForm_rendersFormatAndSystemPromptFields() {
+    fun outputForm_rendersSystemPromptField() {
         val config: NodeConfig = OutputConfig(title = "Output")
         composeTestRule.setContent {
             MaterialTheme {
@@ -85,9 +88,6 @@ class PipelineEditorNodeConfigSheetTest {
             }
         }
 
-        composeTestRule
-            .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_field_format))
-            .assertIsDisplayed()
         composeTestRule
             .onNodeWithText(ctx.getString(KnotworkR.string.knotwork_node_field_system_prompt))
             .assertIsDisplayed()
@@ -141,8 +141,8 @@ class PipelineEditorNodeConfigSheetTest {
     }
 
     @Test
-    fun editingInputName_invokesOnChangeWithMutatedConfig() {
-        val initial = InputConfig(title = "Input", inputName = "user.message")
+    fun editingKeywords_invokesOnChangeWithMutatedConfig() {
+        val initial = IfConditionConfig(title = "Branch", expression = "urgent?", keywords = "asap")
         var latest: NodeConfig? = null
         composeTestRule.setContent {
             // `OutlinedTextField` is stateless — its visible text is whatever
@@ -151,11 +151,11 @@ class PipelineEditorNodeConfigSheetTest {
             // never recomposes with the new value the user typed. The
             // internal text-input state then resyncs back to the (still
             // unchanged) parent value on the next recomposition cycle, and
-            // `onValueChange` ultimately fires with the original
-            // "user.message" — which is exactly the symptom this test hit
-            // before. Holding the config in a `remember { mutableStateOf }`
-            // makes Compose track the writes, the field stays in sync, and
-            // the final onChange carries the typed "user.email".
+            // `onValueChange` ultimately fires with the original text —
+            // which is exactly the symptom this test hit before. Holding the
+            // config in a `remember { mutableStateOf }` makes Compose track
+            // the writes, the field stays in sync, and the final onChange
+            // carries what was typed.
             var current by remember { mutableStateOf<NodeConfig>(initial) }
             MaterialTheme {
                 NodeConfigSheetBody(
@@ -171,18 +171,17 @@ class PipelineEditorNodeConfigSheetTest {
             }
         }
 
-        // The field is matched by its visible value — `onNodeWithText`
-        // resolves to the OutlinedTextField whose `EditableText` is
-        // "user.message", and `performTextReplacement` fires the field's
-        // `SetText` semantic action.
+        // Matched by its visible value, like the INPUT-name field this test
+        // replaced: `onNodeWithText` resolves to the OutlinedTextField whose
+        // `EditableText` is "asap".
         composeTestRule
-            .onNodeWithText("user.message")
-            .performTextReplacement("user.email")
+            .onNodeWithText("asap")
+            .performTextReplacement("refund, cancel")
         composeTestRule.waitForIdle()
 
-        val mutated = latest as? InputConfig
-        assertNotNull("expected onChange to fire with an InputConfig", mutated)
-        assertEquals("user.email", mutated?.inputName)
+        val mutated = latest as? IfConditionConfig
+        assertNotNull("expected onChange to fire with an IfConditionConfig", mutated)
+        assertEquals("refund, cancel", mutated?.keywords)
     }
 
     @Test

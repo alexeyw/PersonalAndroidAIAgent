@@ -885,7 +885,7 @@ directory (e.g. `local_only_qa.json` → id `local_only_qa`). Schema:
                   "conditionHasImage": null },
       "contextConfig": { "chatHistory": false, "originalTask": false, "nodeInput": true,
                          "longTermMemory": false, "toolResults": false },
-      "nodeConfig": { "v": 1, "type": "INPUT", "title": "Input", "inputName": "user.message" }
+      "nodeConfig": { "v": 1, "type": "INPUT", "title": "Input" }
     }
     // … LITE_RT, OUTPUT, …
   ],

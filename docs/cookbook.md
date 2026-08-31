@@ -114,11 +114,6 @@ Where the run starts: your message, a shared page, or the prompt a trigger carri
 
 **Nothing on this node changes a run.** What it does is fixed; what happens around it is decided by the graph.
 
-**Also on the sheet, and ignored by the run:**
-
-- `inputName` — the entry contract is fixed; the run's text arrives as it is
-- `schemaJson` — typed pipeline inputs are not implemented
-
 ### Output — `OUTPUT`
 
 Where the run ends and the answer reaches you. With no prompt of its own it forwards the previous node's text verbatim; give it one and it re-formats that text with one more model pass. Exactly one per pipeline.
@@ -131,10 +126,6 @@ Where the run ends and the answer reaches you. With no prompt of its own it forw
 | What it decides | Where the value comes from |
 |---|---|
 | Whether the answer is re-worded before you see it, and how | the sheet's `systemPrompt` |
-
-**Also on the sheet, and ignored by the run:**
-
-- `format` — ask for the format in the prompt instead
 
 ### LiteRT — `LITE_RT`
 
@@ -150,10 +141,6 @@ One inference step on the model running on the phone. The default answering node
 | The instruction the model follows | the sheet's `systemPrompt` — a new node arrives with this type's shipped default in it |
 | Which model answers | the sheet's `modelId` |
 
-**Also on the sheet, and ignored by the run:**
-
-- `temperature`, `topP`, `maxNewTokens`, `stopTokens` — the engine leaves the model's own sampler in place
-
 ### Cloud — `CLOUD`
 
 One inference step against a configured cloud provider. Everything this node is given leaves the device, so it is a node to place deliberately rather than by default.
@@ -167,12 +154,6 @@ One inference step against a configured cloud provider. Everything this node is 
 |---|---|
 | The instruction the model follows | the sheet's `systemPrompt` — a new node arrives with this type's shipped default in it |
 | Which provider answers | the sheet's `provider` |
-
-**Also on the sheet, and ignored by the run:**
-
-- `model` — the model comes from the provider's own setting
-- `temperature`, `maxTokens` — the request carries no sampling parameters
-- `timeoutMs` — cloud timeouts come from the client's own configuration
 
 ### Intent Router — `INTENT_ROUTER`
 
@@ -205,14 +186,10 @@ A two-way branch: a yes/no question about the input, or a deterministic check fo
 | What it decides | Where the value comes from |
 |---|---|
 | **Checked first:** whether an attached image sends the run down True | the sheet's `branchOnImage` |
-| **Checked second:** keywords that send the run down True when the input contains one | ⚠ nothing in the app writes it, and an imported pipeline that carries keywords never reaches the question below |
-| **Checked third:** an input length above which the run goes down True | ⚠ nothing in the app writes it, and like keywords it is checked before the question |
+| **Checked second:** keywords that send the run down True when the input contains one | the sheet's `keywords` |
+| **Checked third:** an input length above which the run goes down True | the sheet's `complexityThreshold` |
 | **Checked last:** the yes/no question put to the model | the sheet's `expression` |
 | Whether the question runs on-device or in the cloud | the sheet's `engineProvider` |
-
-**Also on the sheet, and ignored by the run:**
-
-- `labelTrue`, `labelFalse` — the ports are always labelled True and False
 
 ### Clarification — `CLARIFICATION`
 
@@ -248,7 +225,6 @@ Calls one tool — a built-in, an AppFunction from another app, or one published
 
 **Also on the sheet, and ignored by the run:**
 
-- `argumentMapping` — arguments are produced by the model from the node's input
 - `confirmOverride` — approval follows the tool's risk level and your settings
 
 ### Decomposition — `DECOMPOSITION`
@@ -268,7 +244,6 @@ Turns one instruction into a list of subtasks. On its own it only produces the l
 **Also on the sheet, and ignored by the run:**
 
 - `maxSubtasks` — how many subtasks appear is decided by the prompt and the run's step ceiling
-- `outputSchemaJson` — the subtask list is validated against a fixed shape
 
 ### Queue Processor — `QUEUE_PROCESSOR`
 
@@ -281,9 +256,6 @@ Walks a list of subtasks one at a time, sending each down the Item branch and ta
 
 **Also on the sheet, and ignored by the run:**
 
-- `inputList` — the queue is the subtask list produced upstream
-- `itemVariable` — the current subtask arrives as the node's input
-- `parallelism` — subtasks always run one at a time
 - `stopOnError` — what happens after a failed subtask is decided by the graph, not by this switch
 
 ### Evaluation — `EVALUATION`
@@ -313,11 +285,6 @@ Condenses what several earlier steps produced into one piece of text, typically 
 | What it decides | Where the value comes from |
 |---|---|
 | The instruction that combines the results | the sheet's `customPrompt` — a new node arrives with this type's shipped default in it |
-
-**Also on the sheet, and ignored by the run:**
-
-- `format` — ask for the shape in the prompt instead
-- `targetLengthChars` — ask for the length in the prompt instead
 
 ### Pipeline — `PIPELINE`
 
@@ -526,9 +493,9 @@ pipeline is the cause.
 
 ## Appendix: every configuration field
 
-Every field of every node's configuration sheet, with its default and whether
-the run reads it. The sheets show all of these; the last column is what the
-engine does with each one.
+Every field a node's configuration carries, with its default and whether the run
+reads it. Most are on the sheet; a few are not, and the last column says which is
+which as well as what the engine does with each one.
 
 - **Yes** — the value is saved onto the node and read while the pipeline runs.
 - **Shapes the graph** — the value does not reach the engine as a value, but it
@@ -536,6 +503,9 @@ engine does with each one.
   those ports carry.
 - **Not a setting** — the sheet shows it, and the app fills it in from a choice
   you made elsewhere in the same form. Nothing to change here.
+- **Not a control** — no sheet shows it. The field survives only so a pipeline
+  file written by an older version round-trips through the app unchanged. There
+  is nothing to set and nothing that reads it.
 - **No** — a control you can change that changes nothing: stored with the
   pipeline, exported with it, never read during a run. The bracket says what to
   do instead.
@@ -545,60 +515,61 @@ only two ways it can be — the control is wired up to the setting it names, or 
 leaves the sheet — and this table shrinks as that happens. Until then it is here
 so you do not spend an evening tuning one.
 
-The worst four have already gone: the prompt fields of Intent Router,
-Decomposition, Evaluation and Summary were *required* by the sheet and still
-never reached the run. They do now, and the rows above say so — this page is
-generated, so a repaired control corrects its own entry.
+Most of them have now gone. Four prompt fields were *required* by the sheet and
+still never reached the run; they were wired up. Ten more named things the engine
+has no concept of — a typed pipeline input, an output format, a parallel queue,
+hand-mapped tool arguments — and those controls were removed rather than
+explained, so the app's sheets no longer offer them. (The browser editor still
+does; it is being brought in line separately.) Eight became **Not a control**:
+they had already lost their controls and were only ever listed here because the
+verdict column had no word for "kept for compatibility". This page is generated
+from the code that defines a node, so each repair corrects its own entry.
+
+Two fields went the other way. `IF_CONDITION` reads a keyword list and a length
+threshold *before* it asks the model anything, and until now neither had a
+control at all — an imported pipeline could decide every branch on a keyword and
+the sheet said nothing about it. Both are now on the sheet.
 
 <!-- AUTO-GEN:FIELD_TABLE -->
 | Node | Field | Default | Reaches the run |
 |---|---|---|---|
-| `INPUT` | `inputName` | `"user.message"` | **No** — stored and exported, but nothing reads it during a run (the entry contract is fixed; the run's text arrives as it is) |
-| `INPUT` | `schemaJson` | `null` | **No** — stored and exported, but nothing reads it during a run (typed pipeline inputs are not implemented) |
-| `OUTPUT` | `format` | `OutputFormat.PLAIN_TEXT` | **No** — stored and exported, but nothing reads it during a run (ask for the format in the prompt instead) |
+| `INPUT` | — | — | **Nothing to configure** — this node has no settings of its own |
 | `OUTPUT` | `systemPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
 | `LITE_RT` | `modelId` | `""` | **Yes** — saved as the node's `modelPath` |
 | `LITE_RT` | `systemPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
-| `LITE_RT` | `temperature` | `0.7f` | **No** — stored and exported, but nothing reads it during a run (the engine leaves the model's own sampler in place) |
-| `LITE_RT` | `topP` | `0.9f` | **No** — stored and exported, but nothing reads it during a run (the engine leaves the model's own sampler in place) |
-| `LITE_RT` | `maxNewTokens` | `512` | **No** — stored and exported, but nothing reads it during a run (the engine leaves the model's own sampler in place) |
-| `LITE_RT` | `stopTokens` | `emptyList()` | **No** — stored and exported, but nothing reads it during a run (the engine leaves the model's own sampler in place) |
+| `LITE_RT` | `temperature` | `0.7f` | **Not a control** — no sheet shows it; kept so an older pipeline file round-trips (sampling is set once per run from Settings, not per node) |
+| `LITE_RT` | `topP` | `0.9f` | **Not a control** — no sheet shows it; kept so an older pipeline file round-trips (sampling is set once per run from Settings, not per node) |
+| `LITE_RT` | `maxNewTokens` | `512` | **Not a control** — no sheet shows it; kept so an older pipeline file round-trips (sampling is set once per run from Settings, not per node) |
+| `LITE_RT` | `stopTokens` | `emptyList()` | **Not a control** — no sheet shows it; kept so an older pipeline file round-trips (sampling is set once per run from Settings, not per node) |
 | `CLOUD` | `provider` | `CloudProvider.OPEN_AI` | **Yes** — saved as the node's `cloudProvider` |
-| `CLOUD` | `model` | `""` | **No** — stored and exported, but nothing reads it during a run (the model comes from the provider's own setting) |
+| `CLOUD` | `model` | `""` | **Not a control** — no sheet shows it; kept so an older pipeline file round-trips (the cloud client is configured from the provider's own settings) |
 | `CLOUD` | `systemPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
-| `CLOUD` | `temperature` | `0.7f` | **No** — stored and exported, but nothing reads it during a run (the request carries no sampling parameters) |
-| `CLOUD` | `maxTokens` | `1024` | **No** — stored and exported, but nothing reads it during a run (the request carries no sampling parameters) |
-| `CLOUD` | `timeoutMs` | `30_000` | **No** — stored and exported, but nothing reads it during a run (cloud timeouts come from the client's own configuration) |
+| `CLOUD` | `temperature` | `0.7f` | **Not a control** — no sheet shows it; kept so an older pipeline file round-trips (the cloud client is configured from the provider's own settings) |
+| `CLOUD` | `maxTokens` | `1024` | **Not a control** — no sheet shows it; kept so an older pipeline file round-trips (the cloud client is configured from the provider's own settings) |
+| `CLOUD` | `timeoutMs` | `30_000` | **Not a control** — no sheet shows it; kept so an older pipeline file round-trips (the cloud client is configured from the provider's own settings) |
 | `INTENT_ROUTER` | `classes` | `emptyList()` | **Shapes the graph** — which branches exist — one port per class, and the run follows the edge the model picks |
 | `INTENT_ROUTER` | `classifierPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
 | `INTENT_ROUTER` | `fallbackClass` | `null` | **No** — stored and exported, but nothing reads it during a run (an answer matching no class takes whichever branch you connected first, not the class named here; connect the branch you want as the fallback before the others) |
 | `INTENT_ROUTER` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
 | `IF_CONDITION` | `expression` | `""` | **Yes** — saved as the node's `conditionPrompt` |
-| `IF_CONDITION` | `labelTrue` | `"True"` | **No** — stored and exported, but nothing reads it during a run (the ports are always labelled True and False) |
-| `IF_CONDITION` | `labelFalse` | `"False"` | **No** — stored and exported, but nothing reads it during a run (the ports are always labelled True and False) |
+| `IF_CONDITION` | `keywords` | `""` | **Yes** — saved as the node's `conditionKeywords` |
+| `IF_CONDITION` | `complexityThreshold` | `null` | **Yes** — saved as the node's `conditionComplexity` |
 | `IF_CONDITION` | `branchOnImage` | `false` | **Yes** — saved as the node's `conditionHasImage` |
 | `IF_CONDITION` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
 | `CLARIFICATION` | `questionTemplate` | `""` | **Yes** — saved as the node's `systemPrompt` |
 | `CLARIFICATION` | `quickReplies` | `emptyList()` | **No** — stored and exported, but nothing reads it during a run (the answer options are produced by the model) |
 | `CLARIFICATION` | `timeoutMs` | `null` | **Yes** — saved as the node's `clarificationTimeoutMs` |
 | `TOOL` | `toolId` | `""` | **Yes** — saved as the node's `toolName` |
-| `TOOL` | `argumentMapping` | `emptyList()` | **No** — stored and exported, but nothing reads it during a run (arguments are produced by the model from the node's input) |
 | `TOOL` | `confirmOverride` | `null` | **No** — stored and exported, but nothing reads it during a run (approval follows the tool's risk level and your settings) |
 | `TOOL` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
 | `DECOMPOSITION` | `planningPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
 | `DECOMPOSITION` | `maxSubtasks` | `5` | **No** — stored and exported, but nothing reads it during a run (how many subtasks appear is decided by the prompt and the run's step ceiling) |
-| `DECOMPOSITION` | `outputSchemaJson` | `null` | **No** — stored and exported, but nothing reads it during a run (the subtask list is validated against a fixed shape) |
 | `DECOMPOSITION` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
-| `QUEUE_PROCESSOR` | `inputList` | `""` | **No** — stored and exported, but nothing reads it during a run (the queue is the subtask list produced upstream) |
-| `QUEUE_PROCESSOR` | `itemVariable` | `"item"` | **No** — stored and exported, but nothing reads it during a run (the current subtask arrives as the node's input) |
-| `QUEUE_PROCESSOR` | `parallelism` | `1` | **No** — stored and exported, but nothing reads it during a run (subtasks always run one at a time) |
 | `QUEUE_PROCESSOR` | `stopOnError` | `true` | **No** — stored and exported, but nothing reads it during a run (what happens after a failed subtask is decided by the graph, not by this switch) |
 | `EVALUATION` | `criteriaPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
 | `EVALUATION` | `maxRetries` | `2` | **Shapes the graph** — whether the node has a Retry branch at all — it does not cap how often that branch is taken |
 | `EVALUATION` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
-| `SUMMARY` | `format` | `SummaryFormat.BULLETS` | **No** — stored and exported, but nothing reads it during a run (ask for the shape in the prompt instead) |
 | `SUMMARY` | `customPrompt` | `null` | **Yes** — saved as the node's `systemPrompt` |
-| `SUMMARY` | `targetLengthChars` | `600` | **No** — stored and exported, but nothing reads it during a run (ask for the length in the prompt instead) |
 | `PIPELINE` | `targetPipelineId` | `""` | **Yes** — saved as the node's `targetPipelineId` |
 | `PIPELINE` | `targetPipelineName` | `null` | **Not a setting** — the app fills it in from the pipeline you picked |
 | `SKILL` | `skillId` | `""` | **Yes** — saved as the node's `skillId` |

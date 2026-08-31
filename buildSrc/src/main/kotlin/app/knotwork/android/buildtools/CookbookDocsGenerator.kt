@@ -281,6 +281,21 @@ object CookbookDocsGenerator {
         data class EditorOnly(val note: String) : Reach
 
         /**
+         * The field survives so an older pipeline file round-trips through the
+         * app unchanged, and nothing else: it has no control on any sheet and no
+         * reader at run time.
+         *
+         * Split out of [EditorOnly] because the two are different facts about
+         * the product. [EditorOnly] is a defect — a control that changes
+         * nothing — while this is a deliberate compatibility remnant, and
+         * listing them under one verdict made the reference read as a longer
+         * list of broken controls than the app actually has.
+         *
+         * @property note Why the value cannot reach a run.
+         */
+        data class RoundTripOnly(val note: String) : Reach
+
+        /**
          * Not a control at all: the sheet shows the value, and the app fills it
          * in from a choice made elsewhere in the same form.
          *
@@ -295,8 +310,17 @@ object CookbookDocsGenerator {
         data class DisplayOnly(val note: String) : Reach
     }
 
-    /** Shared note for the local sampling controls the inference engine ignores. */
-    private const val SAMPLER_UNTOUCHED: String = "the engine leaves the model's own sampler in place"
+    /**
+     * Shared note for the per-node sampling fields.
+     *
+     * They are per-node, and the engine's sampler is set once per conversation
+     * from Settings — so there is nowhere for a node-level value to land. The
+     * global Temperature / Top-K / Top-P do reach the engine.
+     */
+    private const val SAMPLER_PER_NODE: String = "sampling is set once per run from Settings, not per node"
+
+    /** Shared note for the per-node cloud fields the request never carries. */
+    private const val CLOUD_CLIENT_OWNED: String = "the cloud client is configured from the provider's own settings"
 
     /**
      * Per-field verdicts, keyed `ConfigClass.field`.
@@ -314,29 +338,19 @@ object CookbookDocsGenerator {
      * `systemPrompt`, so they are ordinary [Reach.Runtime] fields.
      */
     val FIELD_REACH: Map<String, Reach> = mapOf(
-        "InputConfig.inputName" to
-            Reach.EditorOnly("the entry contract is fixed; the run's text arrives as it is"),
-        "InputConfig.schemaJson" to
-            Reach.EditorOnly("typed pipeline inputs are not implemented"),
-        "OutputConfig.format" to
-            Reach.EditorOnly("ask for the format in the prompt instead"),
         "OutputConfig.systemPrompt" to Reach.Runtime("systemPrompt"),
         "LiteRtConfig.modelId" to Reach.Runtime("modelPath"),
         "LiteRtConfig.systemPrompt" to Reach.Runtime("systemPrompt"),
-        "LiteRtConfig.temperature" to Reach.EditorOnly(SAMPLER_UNTOUCHED),
-        "LiteRtConfig.topP" to Reach.EditorOnly(SAMPLER_UNTOUCHED),
-        "LiteRtConfig.maxNewTokens" to Reach.EditorOnly(SAMPLER_UNTOUCHED),
-        "LiteRtConfig.stopTokens" to Reach.EditorOnly(SAMPLER_UNTOUCHED),
+        "LiteRtConfig.temperature" to Reach.RoundTripOnly(SAMPLER_PER_NODE),
+        "LiteRtConfig.topP" to Reach.RoundTripOnly(SAMPLER_PER_NODE),
+        "LiteRtConfig.maxNewTokens" to Reach.RoundTripOnly(SAMPLER_PER_NODE),
+        "LiteRtConfig.stopTokens" to Reach.RoundTripOnly(SAMPLER_PER_NODE),
         "CloudConfig.provider" to Reach.Runtime("cloudProvider"),
-        "CloudConfig.model" to
-            Reach.EditorOnly("the model comes from the provider's own setting"),
+        "CloudConfig.model" to Reach.RoundTripOnly(CLOUD_CLIENT_OWNED),
         "CloudConfig.systemPrompt" to Reach.Runtime("systemPrompt"),
-        "CloudConfig.temperature" to
-            Reach.EditorOnly("the request carries no sampling parameters"),
-        "CloudConfig.maxTokens" to
-            Reach.EditorOnly("the request carries no sampling parameters"),
-        "CloudConfig.timeoutMs" to
-            Reach.EditorOnly("cloud timeouts come from the client's own configuration"),
+        "CloudConfig.temperature" to Reach.RoundTripOnly(CLOUD_CLIENT_OWNED),
+        "CloudConfig.maxTokens" to Reach.RoundTripOnly(CLOUD_CLIENT_OWNED),
+        "CloudConfig.timeoutMs" to Reach.RoundTripOnly(CLOUD_CLIENT_OWNED),
         "IntentRouterConfig.classes" to
             Reach.Graph("which branches exist — one port per class, and the run follows the edge the model picks"),
         "IntentRouterConfig.classifierPrompt" to Reach.Runtime("systemPrompt"),
@@ -346,10 +360,8 @@ object CookbookDocsGenerator {
         ),
         "IntentRouterConfig.engineProvider" to Reach.Runtime("cloudProvider"),
         "IfConditionConfig.expression" to Reach.Runtime("conditionPrompt"),
-        "IfConditionConfig.labelTrue" to
-            Reach.EditorOnly("the ports are always labelled True and False"),
-        "IfConditionConfig.labelFalse" to
-            Reach.EditorOnly("the ports are always labelled True and False"),
+        "IfConditionConfig.keywords" to Reach.Runtime("conditionKeywords"),
+        "IfConditionConfig.complexityThreshold" to Reach.Runtime("conditionComplexity"),
         "IfConditionConfig.branchOnImage" to Reach.Runtime("conditionHasImage"),
         "IfConditionConfig.engineProvider" to Reach.Runtime("cloudProvider"),
         "ClarificationConfig.questionTemplate" to Reach.Runtime("systemPrompt"),
@@ -357,34 +369,20 @@ object CookbookDocsGenerator {
             Reach.EditorOnly("the answer options are produced by the model"),
         "ClarificationConfig.timeoutMs" to Reach.Runtime("clarificationTimeoutMs"),
         "ToolConfig.toolId" to Reach.Runtime("toolName"),
-        "ToolConfig.argumentMapping" to
-            Reach.EditorOnly("arguments are produced by the model from the node's input"),
         "ToolConfig.confirmOverride" to
             Reach.EditorOnly("approval follows the tool's risk level and your settings"),
         "ToolConfig.engineProvider" to Reach.Runtime("cloudProvider"),
         "DecompositionConfig.planningPrompt" to Reach.Runtime("systemPrompt"),
         "DecompositionConfig.maxSubtasks" to
             Reach.EditorOnly("how many subtasks appear is decided by the prompt and the run's step ceiling"),
-        "DecompositionConfig.outputSchemaJson" to
-            Reach.EditorOnly("the subtask list is validated against a fixed shape"),
         "DecompositionConfig.engineProvider" to Reach.Runtime("cloudProvider"),
-        "QueueProcessorConfig.inputList" to
-            Reach.EditorOnly("the queue is the subtask list produced upstream"),
-        "QueueProcessorConfig.itemVariable" to
-            Reach.EditorOnly("the current subtask arrives as the node's input"),
-        "QueueProcessorConfig.parallelism" to
-            Reach.EditorOnly("subtasks always run one at a time"),
         "QueueProcessorConfig.stopOnError" to
             Reach.EditorOnly("what happens after a failed subtask is decided by the graph, not by this switch"),
         "EvaluationConfig.criteriaPrompt" to Reach.Runtime("systemPrompt"),
         "EvaluationConfig.maxRetries" to
             Reach.Graph("whether the node has a Retry branch at all — it does not cap how often that branch is taken"),
         "EvaluationConfig.engineProvider" to Reach.Runtime("cloudProvider"),
-        "SummaryConfig.format" to
-            Reach.EditorOnly("ask for the shape in the prompt instead"),
         "SummaryConfig.customPrompt" to Reach.Runtime("systemPrompt"),
-        "SummaryConfig.targetLengthChars" to
-            Reach.EditorOnly("ask for the length in the prompt instead"),
         "PipelineConfig.targetPipelineId" to Reach.Runtime("targetPipelineId"),
         "PipelineConfig.targetPipelineName" to
             Reach.DisplayOnly("the app fills it in from the pipeline you picked"),
@@ -449,17 +447,12 @@ object CookbookDocsGenerator {
             RuntimeInput(
                 decides = "**Checked second:** keywords that send the run down True when the input contains one",
                 property = "conditionKeywords",
-                setVia = SetVia.NoControl(
-                    "nothing in the app writes it, and an imported pipeline that carries keywords never " +
-                        "reaches the question below",
-                ),
+                setVia = SetVia.Sheet,
             ),
             RuntimeInput(
                 decides = "**Checked third:** an input length above which the run goes down True",
                 property = "conditionComplexity",
-                setVia = SetVia.NoControl(
-                    "nothing in the app writes it, and like keywords it is checked before the question",
-                ),
+                setVia = SetVia.Sheet,
             ),
             RuntimeInput(
                 decides = "**Checked last:** the yes/no question put to the model",
@@ -863,6 +856,14 @@ object CookbookDocsGenerator {
         val out = StringBuilder("\n")
         out.append("| Node | Field | Default | Reaches the run |\n|---|---|---|---|\n")
         nodes.forEach { node ->
+            // A node whose configuration has no fields still gets a row. Letting
+            // it vanish would read as an omission — the appendix claims to cover
+            // every node type — and "nothing to configure" is itself the answer
+            // a reader came for.
+            if (node.fields.isEmpty()) {
+                out.append("| `").append(node.doc.id)
+                    .append("` | — | — | **Nothing to configure** — this node has no settings of its own |\n")
+            }
             node.fields.forEach { field ->
                 out.append("| `").append(node.doc.id).append("` | `").append(field.name).append("` | ")
                     .append(field.default?.let { "`${escapePipes(it)}`" } ?: "*required*").append(" | ")
@@ -920,6 +921,8 @@ object CookbookDocsGenerator {
         is Reach.Runtime -> "**Yes** — saved as the node's `${reach.field}`"
         is Reach.Graph -> "**Shapes the graph** — ${reach.effect}"
         is Reach.EditorOnly -> "**No** — stored and exported, but nothing reads it during a run (${reach.note})"
+        is Reach.RoundTripOnly ->
+            "**Not a control** — no sheet shows it; kept so an older pipeline file round-trips (${reach.note})"
         is Reach.DisplayOnly -> "**Not a setting** — ${reach.note}"
     }
 

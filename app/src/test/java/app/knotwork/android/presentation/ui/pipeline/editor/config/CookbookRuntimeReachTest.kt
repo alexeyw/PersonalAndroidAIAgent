@@ -15,14 +15,11 @@ import app.knotwork.design.components.pipelineeditor.IntentRouterConfig
 import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfig
 import app.knotwork.design.components.pipelineeditor.OutputConfig
-import app.knotwork.design.components.pipelineeditor.OutputFormat
 import app.knotwork.design.components.pipelineeditor.PipelineConfig
 import app.knotwork.design.components.pipelineeditor.QueueProcessorConfig
 import app.knotwork.design.components.pipelineeditor.SkillConfig
 import app.knotwork.design.components.pipelineeditor.SkillEngine
 import app.knotwork.design.components.pipelineeditor.SummaryConfig
-import app.knotwork.design.components.pipelineeditor.SummaryFormat
-import app.knotwork.design.components.pipelineeditor.ToolArgument
 import app.knotwork.design.components.pipelineeditor.ToolConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -178,17 +175,11 @@ class CookbookRuntimeReachTest {
      */
     @Suppress("CyclomaticComplexMethod") // One arm per node type; each is a literal.
     private fun mutatedConfig(type: NodeType): NodeConfig = when (type) {
-        NodeType.INPUT -> InputConfig(
-            title = TITLE,
-            description = NOTE,
-            inputName = "mutated.input",
-            schemaJson = "{}",
-        )
+        NodeType.INPUT -> InputConfig(title = TITLE, description = NOTE)
 
         NodeType.OUTPUT -> OutputConfig(
             title = TITLE,
             description = NOTE,
-            format = OutputFormat.MARKDOWN,
             systemPrompt = PROMPT,
         )
 
@@ -227,8 +218,8 @@ class CookbookRuntimeReachTest {
             title = TITLE,
             description = NOTE,
             expression = PROMPT,
-            labelTrue = "Yes",
-            labelFalse = "No",
+            keywords = "urgent, now",
+            complexityThreshold = 500,
             branchOnImage = true,
             engineProvider = CloudProvider.ANTHROPIC,
         )
@@ -245,7 +236,6 @@ class CookbookRuntimeReachTest {
             title = TITLE,
             description = NOTE,
             toolId = "mutated_tool",
-            argumentMapping = listOf(ToolArgument("query", "input")),
             confirmOverride = ConfirmPolicy.ALWAYS_CONFIRM,
             engineProvider = CloudProvider.ANTHROPIC,
         )
@@ -255,16 +245,12 @@ class CookbookRuntimeReachTest {
             description = NOTE,
             planningPrompt = PROMPT,
             maxSubtasks = 9,
-            outputSchemaJson = "{}",
             engineProvider = CloudProvider.ANTHROPIC,
         )
 
         NodeType.QUEUE_PROCESSOR -> QueueProcessorConfig(
             title = TITLE,
             description = NOTE,
-            inputList = "items",
-            itemVariable = "entry",
-            parallelism = 4,
             stopOnError = false,
         )
 
@@ -279,9 +265,7 @@ class CookbookRuntimeReachTest {
         NodeType.SUMMARY -> SummaryConfig(
             title = TITLE,
             description = NOTE,
-            format = SummaryFormat.CUSTOM,
             customPrompt = PROMPT,
-            targetLengthChars = 1_234,
         )
 
         NodeType.PIPELINE -> PipelineConfig(
