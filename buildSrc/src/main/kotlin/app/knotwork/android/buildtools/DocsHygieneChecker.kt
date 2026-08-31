@@ -27,6 +27,16 @@ package app.knotwork.android.buildtools
  * The forbidden tokens below are assembled from fragments at runtime rather than
  * written as whole literals so that this scanner's own source — and any document
  * that describes it — does not match itself.
+ *
+ * **What this gate deliberately does not catch**, recorded so the question is
+ * not reopened: an internal file referenced by its **bare basename** with no
+ * directory (`node-specs.md`, `metrics.md`). Deriving the list from the internal
+ * tree is not an option — `project_docs/` is gitignored, so on CI the derived
+ * set would be empty and the gate green for the wrong reason, which is worse
+ * than no gate. A hand-written list of hundreds of arbitrary basenames would
+ * drift and would collide with public ones. Bare basenames stay a review
+ * concern; the six stable top-level names and the directory prefix below are
+ * what a machine can hold honestly.
  */
 object DocsHygieneChecker {
 
