@@ -121,6 +121,10 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
     // Overflow DropdownMenu visibility — opened from the toolbar's overflow callback,
     // dismissed by tap-outside or by clicking any menu item.
     var overflowOpen by remember { mutableStateOf(false) }
+
+    // Raised by either exit — system back or the toolbar's back icon — when the
+    // editor holds work that is not in storage.
+    var leaveRequested by remember { mutableStateOf(false) }
     // Rename-node dialog state — set to the target node id when the user picks
     // "Rename node…" from the overflow menu (requires exactly one node selected).
     var pendingRenameNodeId by remember { mutableStateOf<String?>(null) }
@@ -182,6 +186,11 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             editor.selectedEdgeId != null -> {
                 editor.selectedEdgeId = null
             }
+            // Leaving with unsaved work is the one exit that used to lose it
+            // silently: Save lives in the overflow menu, and nothing on screen
+            // said the pipeline had drifted from storage. Ask instead of
+            // discarding — the same guard the toolbar's back icon goes through.
+            uiState.hasUnsavedChanges -> leaveRequested = true
             else -> onBack()
         }
     }
@@ -332,10 +341,11 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             errorsByNodeId = emptyMap(),
             reducedMotion = KnotworkTheme.a11y.reducedMotion(),
             toolbarSubtitle = toolbarSubtitle,
+            unsavedChanges = uiState.hasUnsavedChanges,
             onPipelineNameChange = { name ->
                 viewModel.replaceCurrentPipeline(pipeline.copy(name = name))
             },
-            onNavigateUp = onBack,
+            onNavigateUp = { if (uiState.hasUnsavedChanges) leaveRequested = true else onBack() },
             onOverflow = { overflowOpen = true },
             onMoveNode = { nodeId, dxCanvas, dyCanvas ->
                 editor.undoRedo.push(pipeline)
@@ -909,6 +919,31 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
                     TextButton(onClick = { pendingEdgeDelete = null }) {
                         Text(text = stringResource(R.string.pipeline_editor_remove_connection_cancel))
                     }
+                },
+            )
+        }
+
+        if (leaveRequested) {
+            AlertDialog(
+                onDismissRequest = { leaveRequested = false },
+                title = { Text(text = stringResource(R.string.pipeline_editor_unsaved_title)) },
+                text = { Text(text = stringResource(R.string.pipeline_editor_unsaved_text)) },
+                // Save is the confirm slot because it is the one that keeps the
+                // work. Discarding is reachable, and named for what it does
+                // rather than "OK" — the whole defect was an exit that looked
+                // like it kept things.
+                confirmButton = {
+                    TextButton(onClick = {
+                        leaveRequested = false
+                        viewModel.saveCurrentPipeline()
+                        onBack()
+                    }) { Text(text = stringResource(R.string.pipeline_editor_unsaved_save)) }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        leaveRequested = false
+                        onBack()
+                    }) { Text(text = stringResource(R.string.pipeline_editor_unsaved_discard)) }
                 },
             )
         }

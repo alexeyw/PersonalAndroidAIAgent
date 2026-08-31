@@ -37,7 +37,7 @@ class EditorToolbarTest {
 
     private fun string(id: Int): String = RuntimeEnvironment.getApplication().getString(id)
 
-    private fun render(onNavigateUp: () -> Unit = {}, onOverflow: () -> Unit = {}) {
+    private fun render(onNavigateUp: () -> Unit = {}, onOverflow: () -> Unit = {}, unsavedChanges: Boolean = false) {
         composeTestRule.setContent {
             KnotworkTheme {
                 EditorToolbar(
@@ -46,6 +46,7 @@ class EditorToolbarTest {
                     onNavigateUp = onNavigateUp,
                     onOverflow = onOverflow,
                     subtitle = "Editing · 4 nodes · 3 edges",
+                    unsavedChanges = unsavedChanges,
                 )
             }
         }
@@ -84,5 +85,24 @@ class EditorToolbarTest {
 
         assertEquals(1, back)
         assertEquals(1, overflow)
+    }
+
+    @Test
+    fun `toolbar says nothing about saving when there is nothing to save`() {
+        render(unsavedChanges = false)
+
+        composeTestRule.onNodeWithText(string(R.string.knotwork_editor_unsaved_changes)).assertDoesNotExist()
+        composeTestRule.onNodeWithText("Editing · 4 nodes · 3 edges").assertExists()
+    }
+
+    @Test
+    fun `toolbar marks unsaved work beside the subtitle rather than instead of it`() {
+        render(unsavedChanges = true)
+
+        // Both, on purpose: the subtitle is the one line that survives every
+        // editor state, so a marker that replaced it would cost the node count
+        // to say something the dot already says.
+        composeTestRule.onNodeWithText(string(R.string.knotwork_editor_unsaved_changes)).assertExists()
+        composeTestRule.onNodeWithText("Editing · 4 nodes · 3 edges").assertExists()
     }
 }

@@ -779,6 +779,7 @@
     <!-- ============ Pipeline editor — EditorToolbar ============ -->
 
     <!-- Placeholder when the inline pipeline-name field is empty. -->
+    <string name="knotwork_editor_unsaved_changes">Unsaved</string>
     <string name="knotwork_editor_name_placeholder">Untitled pipeline</string>
     <!-- ContentDescription for the navigation-up (back) icon button on the editor toolbar. -->
     <string name="knotwork_editor_action_navigate_up">Back</string>

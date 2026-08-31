@@ -296,7 +296,19 @@ constructor(
                         } else {
                             state.currentPipeline
                         }
-                        state.copy(savedPipelines = pipelines, currentPipeline = newCurrent)
+                        state.copy(
+                            savedPipelines = pipelines,
+                            currentPipeline = newCurrent,
+                            // Adopting the first saved pipeline is a load, not an
+                            // edit: it starts clean. Any other emission leaves the
+                            // baseline alone, or an edit made while the list
+                            // refreshed would look saved.
+                            persistedPipeline = if (newCurrent !== state.currentPipeline) {
+                                newCurrent
+                            } else {
+                                state.persistedPipeline
+                            },
+                        )
                     }
                 }
         }
@@ -739,6 +751,8 @@ constructor(
                         val saved = collision == null && saveErr == null
                         state.copy(
                             currentPipeline = if (saved) outcome.graph else state.currentPipeline,
+                            // An import that reached storage IS the saved state.
+                            persistedPipeline = if (saved) outcome.graph else state.persistedPipeline,
                             isLoading = false,
                             pendingImport = null,
                             pendingCollision = collision,
@@ -792,12 +806,10 @@ constructor(
             val result = importPipelineUseCase.persistWithResolution(graph, resolution)
             _uiState.update { state ->
                 val saveErr = result.exceptionOrNull()?.let(::messageForSaveError)
+                val replaced = saveErr == null && resolution == ImportCollisionResolution.REPLACE
                 state.copy(
-                    currentPipeline = if (saveErr == null && resolution == ImportCollisionResolution.REPLACE) {
-                        graph
-                    } else {
-                        state.currentPipeline
-                    },
+                    currentPipeline = if (replaced) graph else state.currentPipeline,
+                    persistedPipeline = if (replaced) graph else state.persistedPipeline,
                     isLoading = false,
                     errorMessage = saveErr,
                 )
@@ -972,6 +984,7 @@ constructor(
                         val saveErr = confirmed.result.exceptionOrNull()?.let(::messageForSaveError)
                         state.copy(
                             currentPipeline = if (saveErr == null) pending.graph else state.currentPipeline,
+                            persistedPipeline = if (saveErr == null) pending.graph else state.persistedPipeline,
                             isLoading = false,
                             errorMessage = saveErr,
                         )
@@ -991,12 +1004,23 @@ constructor(
      * Saves the current pipeline.
      */
     fun saveCurrentPipeline() {
+        // Captured before the launch, not inside it: Save means "save what is on
+        // screen now". Reading it in the coroutine would pick up whatever the
+        // user did between the tap and the dispatch, and then record THAT as
+        // the persisted baseline — quietly marking an edit as saved that never
+        // reached storage.
+        val saved = _uiState.value.currentPipeline
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val result = savePipelineUseCase(_uiState.value.currentPipeline)
+            val result = savePipelineUseCase(saved)
             _uiState.update { state ->
                 state.copy(
                     isLoading = false,
+                    // The baseline moves only on success, and to the exact graph
+                    // that was persisted rather than to whatever is on screen
+                    // now: an edit made while the save was in flight is still
+                    // unsaved, and saying otherwise is how work goes missing.
+                    persistedPipeline = if (result.isSuccess) saved else state.persistedPipeline,
                     errorMessage = result.exceptionOrNull()?.let(::messageForSaveError),
                 )
             }
@@ -1102,7 +1126,12 @@ constructor(
             val pipeline = loadPipelineUseCase.getPipelineById(pipelineId)
             _uiState.update { state ->
                 if (pipeline != null) {
-                    state.copy(currentPipeline = pipeline, isLoading = false, errorMessage = null)
+                    state.copy(
+                        currentPipeline = pipeline,
+                        persistedPipeline = pipeline,
+                        isLoading = false,
+                        errorMessage = null,
+                    )
                 } else {
                     state.copy(
                         isLoading = false,

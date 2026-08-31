@@ -38,6 +38,8 @@ import app.knotwork.design.components.pipelineeditor.NodeError
  * @param errorsByNodeId map of `nodeId -> NodeError?` for the canvas to render the
  * inline error border / icon on the matching [app.knotwork.design.components.pipelineeditor.NodeCard].
  * @param reducedMotion reduced-motion flag — gates animations longer than `motionSm`.
+ * @param unsavedChanges whether the editor holds work that is not in storage;
+ * drives the toolbar marker and, on the screen, the leave guard.
  * @param toolbarSubtitle subtitle line under the pipeline name — pre-computed by
  * the screen from validation / node count / mini-map state.
  * @param onPipelineNameChange invoked when the inline name field accepts input.
@@ -62,6 +64,7 @@ internal fun PipelineEditorContent(
     errorsByNodeId: Map<String, NodeError?>,
     reducedMotion: Boolean,
     toolbarSubtitle: String?,
+    unsavedChanges: Boolean,
     onPipelineNameChange: (String) -> Unit,
     onNavigateUp: () -> Unit,
     onOverflow: () -> Unit,
@@ -96,6 +99,7 @@ internal fun PipelineEditorContent(
                 onNavigateUp = onNavigateUp,
                 onOverflow = onOverflow,
                 subtitle = toolbarSubtitle,
+                unsavedChanges = unsavedChanges,
             )
         }
 

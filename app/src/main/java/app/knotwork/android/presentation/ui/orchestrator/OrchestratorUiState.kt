@@ -18,6 +18,10 @@ import app.knotwork.android.presentation.ui.common.UiText
  *
  * @property currentPipeline The pipeline graph currently being edited.
  * @property savedPipelines List of all saved pipelines available to load.
+ * @property persistedPipeline The last version of [currentPipeline] known to be
+ * in storage, or `null` for a pipeline that has never been saved. Compared
+ * against [currentPipeline] to answer [hasUnsavedChanges]; the editor asks
+ * before discarding a difference.
  * @property isLoading Whether a loading operation is currently in progress.
  * @property errorMessage An error message if an operation fails.
  * @property availableTools List of all available tools in the system.
@@ -65,6 +69,7 @@ data class OrchestratorUiState(
         name = DEFAULT_PIPELINE_NAME,
     ),
     val savedPipelines: List<PipelineGraph> = emptyList(),
+    val persistedPipeline: PipelineGraph? = null,
     val isLoading: Boolean = false,
     val errorMessage: UiText? = null,
     val availableTools: List<AgentTool> = emptyList(),
@@ -83,6 +88,22 @@ data class OrchestratorUiState(
     val shareTargetPipelineId: String? = null,
     val quickSettingsTilePipelineId: String? = null,
 ) {
+    /**
+     * `true` when the editor holds work that is not in storage.
+     *
+     * Compared against the whole graph rather than a hash: `PipelineGraph` is a
+     * data class, so structural equality already covers the name, the sample
+     * prompts and the memory query — all of which are edits a person would be
+     * upset to lose, and none of which `contentHash()` includes (it exists to
+     * invalidate resume checkpoints, which is a different question).
+     *
+     * A pipeline that has never been persisted counts as dirty as soon as it has
+     * a node on the canvas. The empty graph the editor starts on does not, or
+     * opening the editor and leaving would ask about work nobody did.
+     */
+    val hasUnsavedChanges: Boolean
+        get() = persistedPipeline?.let { it != currentPipeline } ?: currentPipeline.nodes.isNotEmpty()
+
     /**
      * Helper to get nodes easily.
      */
