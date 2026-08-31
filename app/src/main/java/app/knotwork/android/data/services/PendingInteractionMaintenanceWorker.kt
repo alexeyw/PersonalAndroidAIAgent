@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.ParkedRunResumer
@@ -23,9 +22,12 @@ import timber.log.Timber
  * memory-compaction maintenance pass it runs no inference — a handful of
  * Room reads and notification cancels — and an expiry that waits days for a
  * charging-and-idle window would let "dead" runs linger far past their
- * window. Each expired park is settled through [ParkedRunResumer.failPark]:
- * the run record fails with "Approval window expired", the pending record is
- * deleted, and the notification is removed. Records whose run already
+ * window. Each expired park is settled through
+ * [ParkedRunResumer.failExpiredPark]: the run record fails, the pending record
+ * is deleted, and the notification is removed. The failure it records depends
+ * on what the run was waiting for — an unanswered approval or question stopped
+ * waiting for the user, while a run paused at a limit was simply never told to
+ * carry on, and settles at that limit. Records whose run already
  * settled elsewhere are cleaned up by the same call — `finishRun` is a
  * guarded no-op on terminal records, so the pass doubles as zombie-record
  * collection.
@@ -59,13 +61,7 @@ class PendingInteractionMaintenanceWorker @AssistedInject constructor(
         val windowHours = settingsRepository.backgroundApprovalWindowHours.first()
         val cutoff = System.currentTimeMillis() - windowHours * MILLIS_PER_HOUR
         val expired = pendingInteractionRepository.getRequestedAtOrBefore(cutoff)
-        expired.forEach { pending ->
-            parkedRunResumer.failPark(
-                pending,
-                ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
-                RunTerminationReason.HitlWindowExpired,
-            )
-        }
+        expired.forEach { pending -> parkedRunResumer.failExpiredPark(pending) }
         if (expired.isNotEmpty()) {
             Timber.tag(TAG).i("Expired %d parked interaction(s) past the %d h window", expired.size, windowHours)
         }

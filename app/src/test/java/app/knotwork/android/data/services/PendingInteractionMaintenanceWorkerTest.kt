@@ -7,7 +7,6 @@ import androidx.work.WorkerParameters
 import androidx.work.testing.TestListenableWorkerBuilder
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
-import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.usecases.ParkedRunResumer
@@ -88,17 +87,12 @@ class PendingInteractionMaintenanceWorkerTest {
         val result = buildWorker().doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
+        // Through the shared settlement, not a hand-written one: what an
+        // expired park should be recorded as depends on what the run was
+        // waiting for, and the worker deliberately does not decide that here.
         coVerify {
-            parkedRunResumer.failPark(
-                match { it.runId == "run-1" },
-                ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
-                RunTerminationReason.HitlWindowExpired,
-            )
-            parkedRunResumer.failPark(
-                match { it.runId == "run-2" },
-                ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
-                RunTerminationReason.HitlWindowExpired,
-            )
+            parkedRunResumer.failExpiredPark(match { it.runId == "run-1" })
+            parkedRunResumer.failExpiredPark(match { it.runId == "run-2" })
         }
     }
 
@@ -109,7 +103,7 @@ class PendingInteractionMaintenanceWorkerTest {
         val result = buildWorker().doWork()
 
         assertEquals(ListenableWorker.Result.success(), result)
-        coVerify(exactly = 0) { parkedRunResumer.failPark(any(), any(), any()) }
+        coVerify(exactly = 0) { parkedRunResumer.failExpiredPark(any()) }
     }
 
     @Test

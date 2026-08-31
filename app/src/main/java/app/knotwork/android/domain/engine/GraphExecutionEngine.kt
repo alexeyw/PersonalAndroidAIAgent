@@ -15,11 +15,14 @@ import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.EngineImageInput
 import app.knotwork.android.domain.models.ExecutionScope
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteraction
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
@@ -33,6 +36,7 @@ import app.knotwork.android.domain.models.RunSpend
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
+import app.knotwork.android.domain.models.asCeilingBreach
 import app.knotwork.android.domain.models.diagnostic
 import app.knotwork.android.domain.models.usesContextConfig
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
@@ -42,9 +46,11 @@ import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import kotlinx.coroutines.NonCancellable
@@ -98,6 +104,8 @@ constructor(
     private val pipelineRunRepository: PipelineRunRepository,
     private val runTraceRepository: RunTraceRepository,
     private val resolveRunCeilingsUseCase: ResolveRunCeilingsUseCase,
+    private val pendingInteractionRepository: PendingInteractionRepository,
+    private val ceilingNotifier: CeilingNotifier,
 ) {
 
     /**
@@ -386,6 +394,8 @@ constructor(
                 rootRunId = runId,
                 stepsAlreadySpent = spent.steps,
                 tokensAlreadySpent = spent.tokens,
+                stepCeilingExtensions = spent.stepCeilingExtensions,
+                tokenCeilingExtensions = spent.tokenCeilingExtensions,
             )
         }
         // The repetition detector for this tree. Built fresh rather than seeded
@@ -395,6 +405,20 @@ constructor(
         // passes, so a resumed run rebuilds the window it had rather than
         // starting blind — which matters precisely because a run that parks
         // often is a run in a loop.
+        // A run resumed from a ceiling pause still holds the record of the
+        // question it parked on. Nothing else will consume it — the other two
+        // kinds are consumed by the node executor that raised them, and a
+        // ceiling belongs to no node — so it is consumed here, at the one point
+        // every attempt of every run in the tree passes through. Leaving it
+        // would hand the maintenance sweep a park whose run is happily running
+        // again, and the sweep's job is to fail those.
+        if (runId != null) {
+            val parkedCeiling = pendingInteractionRepository.getForRun(runId)
+            if (parkedCeiling?.kind == PendingInteractionKind.CEILING) {
+                pendingInteractionRepository.delete(runId)
+                ceilingNotifier.cancelCeilingNotification(sessionId)
+            }
+        }
         val runStuckDetector = stuckDetector ?: GraphStuckDetector()
         // Shared for the same reason the detector is — see the parameter doc.
         val runContextNotes = contextNotes ?: RunContextNotes()
@@ -593,8 +617,44 @@ constructor(
             // Ask the ledger before charging, so a node that is refused is never
             // counted: a run stopped at the ceiling has spent exactly the
             // ceiling, not one more than it.
-            terminationReason = runBudget.hardBreach()
-            if (terminationReason != null) break
+            val breach = runBudget.hardBreach()
+            if (breach != null) {
+                // A ceiling is a number the user chose, and reaching it says
+                // nothing went wrong — so the run asks whether it may carry on
+                // instead of ending on the spot, which is what it used to do.
+                //
+                // The park is durable from the first moment, with no live
+                // in-process phase before it. The two HITL gates have one
+                // because something is in flight — a resolved tool call, a
+                // generated question — that a park would have to persist and a
+                // resume re-consume. Here the walk is *between* nodes: the
+                // checkpoint already holds everything, so a live wait would
+                // hold the foreground service open buying nothing.
+                val ceiling = breach.asCeilingBreach()
+                if (runId != null && ceiling != null && parkOnCeiling(runId, sessionId, ceiling)) {
+                    pushConsole(ConsoleEventType.RunCeiling, "${breach.diagnostic()} — asked to continue")
+                    val pause = AgentOrchestratorState.WaitingForCeilingRaise(
+                        axis = ceiling.axis,
+                        limit = ceiling.limit,
+                        spent = ceiling.spent,
+                    )
+                    persistSuspensionTransition(runId, pause, runSuspended)
+                    emit(pause)
+                    // Ends the walk without a terminal state, exactly as an
+                    // approval park does — and, from a sub-pipeline, tells the
+                    // parent PIPELINE node to park the whole stack rather than
+                    // settle this run.
+                    emit(AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.CEILING))
+                    runTraceRepository.flush()
+                    return@flow
+                }
+                // Non-persisted runs (editor test runs) and storage failures
+                // keep the old behaviour. A pause the user cannot be asked
+                // about, or one recorded nowhere and so unanswerable after this
+                // coroutine ends, is worse than a stop that says why it stopped.
+                terminationReason = breach
+                break
+            }
 
             stepCount++
 
@@ -1552,6 +1612,18 @@ constructor(
             runTraceRepository.flush()
             true
         }
+        state is AgentOrchestratorState.WaitingForCeilingRaise -> {
+            // Reached twice for one pause, and both are wanted. The engine that
+            // raised it calls this directly, before parking. A *parent* engine
+            // reaches it when a sub-pipeline forwards the pause upwards, which
+            // is what puts the whole stack into WAITING_CEILING rather than
+            // leaving the root RUNNING behind a child that is waiting — the
+            // shape of phase-40 finding F7, which made every answer to a nested
+            // park bounce off the resume guard.
+            pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_CEILING)
+            runTraceRepository.flush()
+            true
+        }
         // Console lines, node-I/O snapshots and run notices are observations
         // *about* the run, not progress of it: they keep arriving while a HITL
         // gate is waiting (a sub-pipeline forwards its child's console traffic
@@ -1574,6 +1646,45 @@ constructor(
             false
         }
         else -> false
+    }
+
+    /**
+     * Makes a ceiling pause durable and, unless the user is already looking at
+     * the session, tells them about it.
+     *
+     * The record is what the pause *is*: the engine coroutine ends immediately
+     * after this returns, so from here on the question exists only in the
+     * pending-interaction store. It carries the axis and both numbers because
+     * the card that asks it has to state the limit **this run** was stopped at —
+     * the setting behind that number may well have been edited by the time the
+     * answer comes, hours later and in another process.
+     *
+     * @param runId Id of the run being parked. For a sub-pipeline this is the
+     *   child's id: the park sits where the pause happened, while the grant it
+     *   buys lands on the tree's root, which the submission path resolves.
+     * @param sessionId Id of the owning chat session.
+     * @param ceiling Which ceiling bound, and by how much.
+     * @return `true` when the park is durable and the caller may end the walk;
+     *   `false` when the store refused it and the run must stop instead — a
+     *   question recorded nowhere would leave the run waiting for an answer no
+     *   surface could ever offer.
+     */
+    private suspend fun parkOnCeiling(runId: String, sessionId: String, ceiling: HardCeilingBreach): Boolean {
+        val saved = pendingInteractionRepository.save(
+            PendingInteraction(
+                runId = runId,
+                sessionId = sessionId,
+                kind = PendingInteractionKind.CEILING,
+                ceilingAxis = ceiling.axis,
+                ceilingLimit = ceiling.limit,
+                ceilingSpent = ceiling.spent,
+                requestedAt = System.currentTimeMillis(),
+            ),
+        )
+        if (saved) {
+            ceilingNotifier.sendCeilingPauseRequest(runId, sessionId, ceiling)
+        }
+        return saved
     }
 
     /**

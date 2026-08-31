@@ -188,6 +188,99 @@ class RunBudgetLedgerTest {
     }
 
     @Test
+    fun `given no extensions then the effective ceiling is the configured one`() {
+        val ledger = RunBudgetLedger(ceilings(stepsHard = 10))
+
+        assertEquals(10, ledger.effectiveHard(RunCeilingAxis.STEPS))
+        assertEquals(1_000, ledger.effectiveHard(RunCeilingAxis.TOKENS))
+    }
+
+    @Test
+    fun `given one granted extension then the axis gets one more whole allowance`() {
+        // "Continue for another N" is the promise the card makes, so the number
+        // has to be the same allowance again — not a doubling of some other
+        // quantity, and not the removal of the limit.
+        val ledger = RunBudgetLedger(ceilings(stepsHard = 10), stepsAlreadySpent = 10)
+        assertEquals(RunTerminationReason.StepCeiling(limit = 10, spent = 10), ledger.hardBreach())
+
+        ledger.grantExtension(RunCeilingAxis.STEPS)
+
+        assertEquals(20, ledger.effectiveHard(RunCeilingAxis.STEPS))
+        assertNull(ledger.hardBreach())
+    }
+
+    @Test
+    fun `given a granted extension on one axis then the other axis is untouched`() {
+        // The answer buys a portion of the axis that bound. A run waved past its
+        // step ceiling has not been granted more tokens, and treating the grant
+        // as budget-wide would let one answer authorise spending nobody agreed to.
+        val ledger = RunBudgetLedger(ceilings(stepsHard = 10, tokensHard = 1_000))
+
+        ledger.grantExtension(RunCeilingAxis.STEPS)
+
+        assertEquals(20, ledger.effectiveHard(RunCeilingAxis.STEPS))
+        assertEquals(1_000, ledger.effectiveHard(RunCeilingAxis.TOKENS))
+    }
+
+    @Test
+    fun `given seeded extensions then a resumed ledger binds where the previous attempt was allowed to`() {
+        // The seed is the whole reason the counts are persisted: a resumed run
+        // that reads the spend but not the grant breaches on its first node and
+        // re-asks the question the user just answered.
+        val ledger = RunBudgetLedger(
+            ceilings(stepsHard = 10),
+            stepsAlreadySpent = 15,
+            stepCeilingExtensions = 1,
+        )
+
+        assertNull(ledger.hardBreach())
+        assertEquals(1, ledger.stepCeilingExtensions)
+    }
+
+    @Test
+    fun `given an extension then the axis warns again inside the allowance it was granted`() {
+        // The claim set remembers the axis already warned, and the threshold it
+        // warned at is now far behind. Without re-arming, the extra portion
+        // would be spent with no advisory at all.
+        val ledger = RunBudgetLedger(ceilings(stepsHard = 10), stepsAlreadySpent = 8)
+        assertEquals(RunCeilingAxis.STEPS, ledger.claimSoftBreach()?.axis)
+        assertNull(ledger.claimSoftBreach())
+
+        ledger.grantExtension(RunCeilingAxis.STEPS)
+
+        // 8 of 20 is below the new 75% threshold, so nothing fires yet…
+        assertNull(ledger.claimSoftBreach())
+        repeat(7) { ledger.chargeStep() }
+        // …and 15 of 20 crosses it, naming the raised ceiling rather than the base one.
+        val soft = ledger.claimSoftBreach()
+        assertEquals(RunCeilingAxis.STEPS, soft?.axis)
+        assertEquals(20, soft?.hardLimit)
+    }
+
+    @Test
+    fun `given many extensions on a huge ceiling then the limit clamps instead of wrapping negative`() {
+        // Nothing bounds how often a user may answer "continue". An overflow
+        // here would not merely report a wrong number — it would wrap negative
+        // and kill the run on the step after the one just paid for.
+        val ledger = RunBudgetLedger(ceilings(stepsHard = Int.MAX_VALUE))
+
+        repeat(3) { ledger.grantExtension(RunCeilingAxis.STEPS) }
+
+        assertEquals(Int.MAX_VALUE, ledger.effectiveHard(RunCeilingAxis.STEPS))
+        assertNull(ledger.hardBreach())
+    }
+
+    @Test
+    fun `given the unmeasured money axis then a grant changes nothing`() {
+        val ledger = RunBudgetLedger(ceilings())
+
+        ledger.grantExtension(RunCeilingAxis.MONEY)
+
+        assertEquals(0, ledger.stepCeilingExtensions)
+        assertEquals(0, ledger.tokenCeilingExtensions)
+    }
+
+    @Test
     fun `given the money axis then it is unavailable rather than zero`() {
         val ledger = RunBudgetLedger(ceilings())
 

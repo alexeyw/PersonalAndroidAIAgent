@@ -584,8 +584,9 @@ Three run-wide limits span the whole call tree:
 
 - **Step limit.** The step ceiling is shared across the parent and every
   sub-pipeline it calls, so a composition cannot loop forever by nesting.
-  If it runs out deep inside a sub-pipeline, the whole run stops and says
-  it was **stopped by a safety limit**.
+  If it runs out deep inside a sub-pipeline, the whole stack pauses and the
+  question appears in the chat like any other — continuing resumes the nested
+  run in place.
 - **Token limit.** Charged against the same shared allowance, on the same
   whole-tree basis.
 - **Approvals and questions.** A tool approval or clarification raised
@@ -2373,9 +2374,9 @@ themselves live on the **Pipelines** tab (library and editor) and under
 
 #### Run limits
 
-An autonomous run stops itself when it reaches one of these limits. Everything a
-run starts counts towards them — pipelines it calls, and every time it resumes
-after a pause. There are four numbers and one statement:
+An autonomous run stops when it reaches one of these limits — and asks you first.
+Everything a run starts counts towards them: pipelines it calls, and every time it
+resumes after a pause. There are four numbers and one statement:
 
 - **Steps per run** (5 – 100) — how many steps a run may take before it stops.
   One step is one node execution.
@@ -2422,13 +2423,38 @@ A run that keeps producing *different* results is not repeating itself, however
 long it takes, and this never touches it. That case is what the limits above are
 for.
 
-When a limit is actually reached, the run **ends** — it does not pause and does
-not ask what to do. The chat shows **Stopped by a safety limit**, which allowance
-ran out, how much of it was used, and an **Adjust limits** action. A background
-run that stops this way is announced the same way in its notification and
-recorded in the trigger's journal, where it deliberately does **not** count
-against the trigger's health: a limit you configured doing its job is not a
-fault.
+#### When a run reaches a limit
+
+The run **pauses and asks**. The chat shows **Paused at a safety limit**, which
+allowance ran out, how much of it was used, and two actions: **Continue (+N)**
+and **Stop the run**.
+
+Continuing buys the run **one more portion of the same allowance** — the number
+on the button, which is the limit it just reached. It does not lift the limit:
+when that portion runs out the run asks again, so a run that has been waved
+through five times is one you have said yes to five times. Stopping ends it
+exactly as reaching a limit used to: **Stopped by a safety limit**, with an
+**Adjust limits** action.
+
+The pause survives everything. It is written down the moment it is raised, so a
+run that reaches its limit while you are elsewhere — a trigger firing overnight,
+or the app being killed while you were away — is still waiting when you come
+back, with the same numbers it stopped at. A run that pauses while you are not
+looking at its chat posts a notification; tapping it opens the conversation where
+the question is. The notification carries no buttons on purpose: what you are
+deciding depends on how much the run has already spent, and the shade has nowhere
+to show you that.
+
+Two things bound the wait. An unanswered pause expires with the same
+**background response window** that governs approvals (Settings → Tools &
+workspace), after which the run is ended at its limit; and a run whose pipeline
+you edit while it waits cannot be continued, because its checkpoint no longer
+matches the graph.
+
+A background run that ends at a limit — whether you stopped it or the window
+closed — is announced in its notification and recorded in the trigger's journal,
+where it deliberately does **not** count against the trigger's health: a limit
+you configured doing its job is not a fault.
 
 ### Tools & workspace
 

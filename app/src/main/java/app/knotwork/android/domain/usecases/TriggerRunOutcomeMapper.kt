@@ -96,6 +96,7 @@ fun triggerRunOutcomeForTerminal(
     PipelineRunStatus.RUNNING,
     PipelineRunStatus.WAITING_APPROVAL,
     PipelineRunStatus.WAITING_CLARIFICATION,
+    PipelineRunStatus.WAITING_CEILING,
     -> throw IllegalArgumentException("triggerRunOutcomeForTerminal requires a terminal status, got $status")
 }
 

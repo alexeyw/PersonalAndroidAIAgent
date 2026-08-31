@@ -53,7 +53,8 @@ class PipelineRunRepositoryImplTest {
     private lateinit var repository: PipelineRunRepositoryImpl
 
     private val terminalNames = listOf("COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED")
-    private val activeNames = listOf("QUEUED", "RUNNING", "WAITING_APPROVAL", "WAITING_CLARIFICATION")
+    private val activeNames =
+        listOf("QUEUED", "RUNNING", "WAITING_APPROVAL", "WAITING_CLARIFICATION", "WAITING_CEILING")
 
     private val sampleRun = PipelineRun(
         id = "run-1",
@@ -990,7 +991,12 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given a stored spend then it round-trips for the resume seed`() = runTest {
-        coEvery { pipelineRunDao.getSpend("root-1") } returns RunSpendProjection(stepsSpent = 9, tokensSpent = 900)
+        coEvery { pipelineRunDao.getSpend("root-1") } returns RunSpendProjection(
+            stepsSpent = 9,
+            tokensSpent = 900,
+            stepCeilingExtensions = 0,
+            tokenCeilingExtensions = 0,
+        )
 
         assertEquals(RunSpend(steps = 9, tokens = 900), repository.getSpend("root-1"))
     }

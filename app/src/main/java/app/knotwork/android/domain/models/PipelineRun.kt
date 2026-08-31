@@ -138,7 +138,8 @@ enum class RunOrigin {
 /**
  * Lifecycle status of a persistent pipeline run.
  *
- * Transitions: [QUEUED] → [RUNNING] → ([WAITING_APPROVAL] | [WAITING_CLARIFICATION] → [RUNNING])*
+ * Transitions: [QUEUED] → [RUNNING] →
+ * ([WAITING_APPROVAL] | [WAITING_CLARIFICATION] | [WAITING_CEILING] → [RUNNING])*
  * → terminal ([COMPLETED] | [FAILED] | [CANCELLED]). [INTERRUPTED] is the terminal status applied
  * to QUEUED/RUNNING records whose owning process died before the run could finish (orphan sweep
  * at application start). User-initiated cancellation maps to [CANCELLED], never to [FAILED] —
@@ -156,6 +157,13 @@ enum class PipelineRunStatus {
 
     /** Suspended on a clarification question to the user. */
     WAITING_CLARIFICATION,
+
+    /**
+     * The run spent a ceiling and is waiting for the user to say whether it may
+     * continue. Resumable like the other waiting states: answering raises the
+     * spent axis by one more portion and the run picks up from its checkpoint.
+     */
+    WAITING_CEILING,
 
     /** Terminal: the run reached the OUTPUT node and produced a final answer. */
     COMPLETED,

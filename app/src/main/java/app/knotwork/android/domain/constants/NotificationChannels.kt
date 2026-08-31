@@ -56,6 +56,17 @@ object NotificationChannels {
     const val AGENT_CLARIFICATION: String = "AgentClarificationChannel"
 
     /**
+     * High-importance channel for runs paused at one of their own limits,
+     * waiting to be told whether they may carry on. Separate from the
+     * clarification channel it most resembles because the two interruptions ask
+     * for opposite things: a clarification asks the user to *supply* something
+     * the run needs, while this one asks permission to spend more than they
+     * allowed. A user who wants to be reachable for the first and left alone by
+     * the second — or the reverse — can only have that if the channels differ.
+     */
+    const val AGENT_RUN_CEILING: String = "AgentRunCeilingChannel"
+
+    /**
      * Low-importance channel for the ongoing model-download notification. Kept
      * separate from the agent's own foreground channel so a user who silences
      * "the agent is working" status does not also lose sight of a multi-gigabyte

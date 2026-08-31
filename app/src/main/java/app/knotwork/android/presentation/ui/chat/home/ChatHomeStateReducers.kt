@@ -11,15 +11,20 @@ package app.knotwork.android.presentation.ui.chat.home
  */
 
 /**
- * Resting (non-overlay) visual for this snapshot — `Interrupted` while an
- * interrupted-run snapshot is pending (the status card must survive transient
- * overlays like the drawer; dropping to Idle would strand the Resume / Discard
- * actions until the next thread switch), otherwise `Empty` / `Idle` by
- * message-list presence. Derived from the receiver (never `_state.value`) so
- * calls inside a `state.update` lambda stay consistent with the snapshot being
- * transformed.
+ * Resting (non-overlay) visual for this snapshot — a status card's own state
+ * while its snapshot is pending (the card must survive transient overlays like
+ * the drawer; dropping to Idle would strand its actions until the next thread
+ * switch), otherwise `Empty` / `Idle` by message-list presence. Derived from
+ * the receiver (never `_state.value`) so calls inside a `state.update` lambda
+ * stay consistent with the snapshot being transformed.
+ *
+ * The ceiling pause is tested first. The two snapshots are mutually exclusive
+ * in practice — a run cannot be both waiting and dead — but the pause is the
+ * one with a live run behind it, so if they ever did coincide, showing the
+ * decision the user can still act on beats showing the post-mortem.
  */
 internal fun ChatHomeScreenState.restingVisual(): ChatHomeUiState = when {
+    pending.ceiling != null -> ChatHomeUiState.CeilingPause
     pending.interrupted != null -> ChatHomeUiState.Interrupted
     messages.isEmpty() -> ChatHomeUiState.Empty
     else -> ChatHomeUiState.Idle

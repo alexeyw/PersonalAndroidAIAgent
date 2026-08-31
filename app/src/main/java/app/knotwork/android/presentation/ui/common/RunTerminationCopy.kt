@@ -2,6 +2,7 @@ package app.knotwork.android.presentation.ui.common
 
 import androidx.annotation.StringRes
 import app.knotwork.android.R
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunNoticeCause
 import app.knotwork.android.domain.models.RunTerminationKind
@@ -100,6 +101,37 @@ data class RunNoticeCopy(val tone: RunTerminationTone, val text: UiText)
 data class RunTerminationNotificationCopy(val title: UiText, val body: UiText)
 
 /**
+ * Everything a surface needs to ask whether a paused run may carry on.
+ *
+ * A *pause* is not a termination and does not reuse [RunTerminationCopy]: the
+ * run has not stopped, the tone is not a verdict, and the two labels are the
+ * whole point. But it is resolved from the same object as the stop it would
+ * otherwise have been, because the two are one story told at two moments — and
+ * the numbers, the axis wording and the word for "limit" must match between
+ * them or the same run appears to have hit two different things.
+ *
+ * @property title One line naming what happened. Deliberately *not* the
+ *   termination title, which says "stopped": the run has not stopped, and a
+ *   card that says it has beside a button offering to continue reads as an
+ *   error the user is being asked to override.
+ * @property body What continuing means, in the axis's own terms.
+ * @property meter The numbers behind the pause, in tabular figures on their own
+ *   line — the same shape [RunTerminationCopy.meter] uses, so a run that pauses
+ *   and is then stopped does not appear to change its arithmetic.
+ * @property continueLabel Affirmative CTA. Names the size of the grant rather
+ *   than saying "Continue": the user is buying a specific, finite amount, and a
+ *   button that hides the number reads as removing the limit.
+ * @property stopLabel Negative CTA.
+ */
+data class RunCeilingPauseCopy(
+    val title: UiText,
+    val body: UiText,
+    val meter: UiText,
+    val continueLabel: UiText,
+    val stopLabel: UiText,
+)
+
+/**
  * The single place a typed run outcome becomes words.
  *
  * Every surface that has to explain why a run stopped — the chat tile, the
@@ -131,6 +163,42 @@ object RunTerminationCopyMapper {
         banner = bannerFor(reason),
         action = actionFor(reason.kind),
     )
+
+    /**
+     * Copy for a run paused at one of its ceilings, waiting to be told whether
+     * it may carry on.
+     *
+     * The body and the affirmative label both state the size of the next
+     * portion, and it is [HardCeilingBreach.limit] — the limit that bound,
+     * which already includes every portion granted before now — not the
+     * configured setting. A run on its third extension is being offered the
+     * same amount again, and quoting the base ceiling would understate what the
+     * user is authorising by a factor of the extensions they have already
+     * granted.
+     *
+     * @param breach Which ceiling bound, and by how much.
+     * @return Title, body, numbers and the two CTA labels.
+     */
+    fun ceilingPauseCopy(breach: HardCeilingBreach): RunCeilingPauseCopy {
+        val steps = breach.axis != RunCeilingAxis.TOKENS
+        return RunCeilingPauseCopy(
+            title = UiText.Resource(R.string.run_ceiling_pause_title),
+            body = UiText.Resource(
+                if (steps) R.string.run_ceiling_pause_body_steps else R.string.run_ceiling_pause_body_tokens,
+                listOf(breach.limit),
+            ),
+            meter = UiText.Resource(
+                if (steps) {
+                    R.string.run_termination_meter_steps_live
+                } else {
+                    R.string.run_termination_meter_tokens_live
+                },
+                listOf(breach.spent, breach.limit),
+            ),
+            continueLabel = UiText.Resource(R.string.run_ceiling_pause_continue, listOf(breach.limit)),
+            stopLabel = UiText.Resource(R.string.run_ceiling_pause_stop),
+        )
+    }
 
     /**
      * Copy for the advisory shown while a run is still in flight.

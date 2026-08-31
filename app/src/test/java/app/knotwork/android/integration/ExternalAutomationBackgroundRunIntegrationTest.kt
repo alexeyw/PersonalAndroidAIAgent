@@ -52,6 +52,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
@@ -513,6 +514,8 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             runRepository,
             traceRepository,
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingRepository,
+            mockk<CeilingNotifier>(relaxed = true),
         )
         val taskQueueManager = TaskQueueManagerImpl(
             chatRepository = chatRepository,
@@ -545,6 +548,7 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             settingsRepository,
             approvalNotifier,
             clarificationNotifier,
+            mockk<CeilingNotifier>(relaxed = true),
             resumeRun,
             recordTriggerHitlEvent,
         )

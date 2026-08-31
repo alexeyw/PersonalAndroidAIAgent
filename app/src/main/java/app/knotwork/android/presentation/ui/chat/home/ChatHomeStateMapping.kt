@@ -15,6 +15,7 @@ import app.knotwork.design.components.chat.ComposerAttachment
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chat.HitlConfirmationModel
 import app.knotwork.design.components.chat.InterruptedRunCardModel
+import app.knotwork.design.components.chat.RunCeilingPauseCardModel
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleSnap
 import app.knotwork.design.screens.chat.ChatHomeMessageRow
@@ -167,6 +168,26 @@ fun ChatHomeScreenState.toViewState(
                 pending.interrupted?.let { liveInterruptedRow(modelName, it) }
                     ?: interruptedRow(modelName)
                 ),
+            composerValue = composerValue,
+            pipelineName = resolvedPipelineName,
+            tokensUsed = tokens.used,
+            tokensMax = tokens.max,
+            favorite = thread.favorite,
+            agentStatusLine = fixtures.statusIdle,
+            console = console,
+        )
+
+        is ChatHomeUiState.CeilingPause -> ChatHomeViewState(
+            visualState = ChatHomeVisualState.CeilingPause,
+            threadTitle = threadTitle,
+            modelName = modelName,
+            // No debug-picker fallback row, unlike the interrupted state above.
+            // That fallback exists so the state picker can show a card with no
+            // pending snapshot behind it; a pause card without one would offer
+            // Continue and Stop buttons wired to a run that does not exist.
+            messages = messages + listOfNotNull(
+                pending.ceiling?.let { ceilingPauseRow(modelName, it, resolveText) },
+            ),
             composerValue = composerValue,
             pipelineName = resolvedPipelineName,
             tokensUsed = tokens.used,
@@ -524,6 +545,20 @@ private fun renderJsonFragment(value: Any?): String = when (value) {
 private const val HITL_TIMESTAMP_PATTERN: String = "HH:mm"
 
 /**
+ * Formats [epochMs] with the in-chat message clock.
+ *
+ * One definition rather than one per card. The pattern is `HH:mm`, locale-aware
+ * and 24-hour, and it has to match the footer clock exactly — a status card
+ * whose time reads differently from the message above it looks like it is
+ * timing something else.
+ *
+ * @param epochMs The instant to render.
+ * @return The formatted time.
+ */
+internal fun chatRowTimestamp(epochMs: Long): String =
+    SimpleDateFormat(HITL_TIMESTAMP_PATTERN, Locale.getDefault()).format(Date(epochMs))
+
+/**
  * Fallback subtitle rendered when the pipeline library is still empty
  * (no pipelines have been created yet). Matches the catalog default in
  * `ChatHomeViewState.pipelineName` so the TopAppBar subtitle does not
@@ -562,6 +597,41 @@ internal fun interruptedRow(modelName: String): ChatHomeMessageRow = ChatHomeMes
     ),
     metadata = ChatMetadata(timestamp = "09:16", model = modelName),
 )
+
+/**
+ * Trailing run-ceiling pause row driven by the live [CeilingPausePending]
+ * snapshot.
+ *
+ * Every string is resolved here, through the same
+ * [RunTerminationCopyMapper] that words the run's stop, its console line and
+ * its notification. The card takes finished strings — so the alternative would
+ * be a second wording of one event, living in the catalog, invisible from the
+ * place that owns the first.
+ *
+ * The timestamp is the pause's own, not "now": a pause answered the next
+ * morning must still say when the run stopped.
+ */
+internal fun ceilingPauseRow(
+    modelName: String,
+    pending: CeilingPausePending,
+    resolveText: (UiText) -> String,
+): ChatHomeMessageRow {
+    val copy = RunTerminationCopyMapper.ceilingPauseCopy(pending.breach)
+    return ChatHomeMessageRow(
+        id = "a-ceiling-${pending.runId}",
+        role = ChatRole.Assistant,
+        content = ChatContent.RunCeilingPause(
+            model = RunCeilingPauseCardModel(
+                title = resolveText(copy.title),
+                body = resolveText(copy.body),
+                meter = resolveText(copy.meter),
+                continueLabel = resolveText(copy.continueLabel),
+                stopLabel = resolveText(copy.stopLabel),
+            ),
+        ),
+        metadata = ChatMetadata(timestamp = pending.timestamp, model = modelName),
+    )
+}
 
 /** Trailing clarification row appended in the Clarification state. */
 internal fun clarificationRow(modelName: String): ChatHomeMessageRow = ChatHomeMessageRow(

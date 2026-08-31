@@ -5,6 +5,7 @@ import app.knotwork.android.data.local.models.PendingInteractionEntity
 import app.knotwork.android.domain.models.PendingDecision
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
+import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.ToolRisk
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -182,5 +183,50 @@ class PendingInteractionRepositoryImplTest {
 
         coEvery { dao.getAllRunIds() } throws IllegalStateException("io")
         assertEquals(emptySet<String>(), repository.getAllRunIds())
+    }
+
+    @Test
+    fun `a ceiling park round-trips its axis and both numbers`() = runTest {
+        // All three or nothing: the card that asks the question, the
+        // notification that carries it and the stop that settles it each need
+        // the axis *and* both numbers, and a zero substituted for a missing
+        // spend would read as a run that used nothing.
+        val captured = slot<PendingInteractionEntity>()
+        coEvery { dao.upsert(capture(captured)) } returns Unit
+
+        repository.save(
+            PendingInteraction(
+                runId = "run-3",
+                sessionId = "session-3",
+                kind = PendingInteractionKind.CEILING,
+                ceilingAxis = RunCeilingAxis.TOKENS,
+                ceilingLimit = 100_000,
+                ceilingSpent = 100_400,
+                requestedAt = 9L,
+            ),
+        )
+
+        assertEquals("CEILING", captured.captured.kind)
+        assertEquals("TOKENS", captured.captured.ceilingAxis)
+        assertEquals(100_000, captured.captured.ceilingLimit)
+        assertEquals(100_400, captured.captured.ceilingSpent)
+
+        coEvery { dao.getForRun("run-3") } returns captured.captured
+        val read = repository.getForRun("run-3")
+
+        assertEquals(RunCeilingAxis.TOKENS, read?.ceilingAxis)
+        assertEquals(100_000, read?.ceilingLimit)
+        assertEquals(100_400, read?.ceilingSpent)
+    }
+
+    @Test
+    fun `a park of another kind carries no ceiling columns`() = runTest {
+        coEvery { dao.getForRun("run-2") } returns clarificationEntity()
+
+        val read = repository.getForRun("run-2")
+
+        assertNull(read?.ceilingAxis)
+        assertNull(read?.ceilingLimit)
+        assertNull(read?.ceilingSpent)
     }
 }

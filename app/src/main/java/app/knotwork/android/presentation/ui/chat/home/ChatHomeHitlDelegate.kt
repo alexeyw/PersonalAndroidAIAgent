@@ -3,12 +3,14 @@ package app.knotwork.android.presentation.ui.chat.home
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ClarificationRequest
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.ChatRepository
 import app.knotwork.android.domain.usecases.PendingSubmissionOutcome
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
+import app.knotwork.android.domain.usecases.SubmitCeilingDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,17 +20,18 @@ import kotlinx.coroutines.launch
 /**
  * Human-in-the-loop / clarification delegate of [ChatHomeViewModel].
  *
- * Owns the approval gate and the clarification reply: it writes the
- * `pending.tool` / `pending.clarification` snapshots, the destructive
- * typed-confirm input, and (because both flip the surface) the `visual` axis.
+ * Owns the approval gate, the clarification reply and the run-ceiling pause: it
+ * writes the `pending.tool` / `pending.clarification` / `pending.ceiling`
+ * snapshots, the destructive typed-confirm input, and (because they all flip the
+ * surface) the `visual` axis.
  * On a parked-run resume it re-attaches the live collector through the
  * [attachToLiveRun] seam (the ViewModel owns the collector), and surfaces
  * resume failures through [emitResumeFeedback] (the reattach delegate owns the
  * shared `resumeFeedbackEvents` channel).
  *
  * The capture handlers [handleWaitingForApproval] / [handleAwaitingClarification]
- * are public because the ViewModel's orchestrator router and the reattach
- * delegate's suspension-card restore both drive them.
+ * / [restoreCeilingPause] are public because the ViewModel's orchestrator router
+ * and the reattach delegate's suspension-card restore both drive them.
  *
  * Shares the ViewModel's [scope] and single [state] reducer (see
  * `docs/architecture.md` §1.2).
@@ -38,6 +41,7 @@ import kotlinx.coroutines.launch
  * @property chatRepository Persists the SYSTEM rows recording a denial / undelivered reply.
  * @property submitApprovalDecisionUseCase Routes an approve/deny to the live gate or parked record.
  * @property submitClarificationAnswerUseCase Routes a clarification reply likewise.
+ * @property submitCeilingDecisionUseCase Routes a continue/stop decision on a run paused at a ceiling.
  * @property attachToLiveRun Seam into the ViewModel's live-run collector (a parked resume re-attaches).
  * @property emitResumeFeedback Seam into the shared resume-feedback channel (owned by the reattach delegate).
  */
@@ -47,6 +51,7 @@ class ChatHomeHitlDelegate(
     private val chatRepository: ChatRepository,
     private val submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase,
     private val submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase,
+    private val submitCeilingDecisionUseCase: SubmitCeilingDecisionUseCase,
     private val attachToLiveRun: suspend (String, PipelineRunStatus) -> Unit,
     private val emitResumeFeedback: (ResumeFeedbackEvent) -> Unit,
 ) {
@@ -155,6 +160,92 @@ class ChatHomeHitlDelegate(
         }
     }
 
+    /**
+     * Grants the paused run one more portion of the limit it reached and
+     * resumes it from its checkpoint. No-op when no pause is showing.
+     *
+     * The card is dropped and the surface flips to `Generating` before the
+     * submission returns, because the answer really does restart the run — and
+     * a card left on screen through a resume invites a second tap that would
+     * either buy a second portion or be refused as a duplicate, depending on
+     * timing.
+     */
+    fun continuePastCeiling() {
+        val pending = state.value.pending.ceiling ?: return
+        val sessionId = state.value.thread.currentSessionId
+        if (sessionId.isBlank()) return
+        state.update {
+            it.copy(pending = it.pending.copy(ceiling = null), visual = ChatHomeUiState.Generating())
+        }
+        scope.launch { submitCeilingDecision(sessionId, pending.runId, shouldContinue = true) }
+    }
+
+    /**
+     * Stops the paused run at the limit it reached. No-op when no pause is
+     * showing.
+     *
+     * No SYSTEM chat row is written here, unlike a tool denial. The run is
+     * being *settled*, and settling it already produces the outcome line every
+     * stopped run gets — worded, like every other surface, by
+     * `RunTerminationCopyMapper`. Adding one here would say the same thing
+     * twice, in two wordings.
+     */
+    fun stopAtCeiling() {
+        val pending = state.value.pending.ceiling ?: return
+        val sessionId = state.value.thread.currentSessionId
+        if (sessionId.isBlank()) return
+        state.update { current ->
+            val cleared = current.copy(pending = current.pending.copy(ceiling = null))
+            cleared.copy(visual = cleared.restingVisual())
+        }
+        scope.launch { submitCeilingDecision(sessionId, pending.runId, shouldContinue = false) }
+    }
+
+    /**
+     * Captures a run paused at one of its ceilings and flips the UI to the
+     * pause state.
+     *
+     * @param pause The orchestrator emission carrying the axis and both numbers.
+     * @param runId Id of the paused run. Defaults to the id the reattach path
+     *   read off the durable record; the live path passes the session's active
+     *   run.
+     * @param timestamp Pre-formatted time the run paused.
+     */
+    fun handleCeilingPause(pause: AgentOrchestratorState.WaitingForCeilingRaise) {
+        restoreCeilingPause(
+            CeilingPausePending(
+                // The live emission carries no run id, and does not need to: the
+                // decision falls back to the session's parked record, which is
+                // exactly the record this pause just wrote. Naming the session's
+                // *active* run here would be worse than saying nothing — for a
+                // pause raised inside a sub-pipeline the record sits on the
+                // child, and the active run is the parent.
+                runId = "",
+                breach = HardCeilingBreach(axis = pause.axis, limit = pause.limit, spent = pause.spent),
+                timestamp = chatRowTimestamp(System.currentTimeMillis()),
+            ),
+        )
+    }
+
+    /**
+     * Installs a ceiling-pause snapshot and flips the surface to the pause
+     * state.
+     *
+     * Shared by the live path above and the reattach delegate's restore, so a
+     * pause looks the same whether it was just raised or is being picked up
+     * hours later from its durable record.
+     *
+     * @param pending The pause to surface.
+     */
+    fun restoreCeilingPause(pending: CeilingPausePending) {
+        state.update {
+            it.copy(
+                pending = it.pending.copy(ceiling = pending),
+                visual = ChatHomeUiState.CeilingPause,
+            )
+        }
+    }
+
     /** Captures the orchestrator's pending approval and flips the UI to the HITL state. */
     fun handleWaitingForApproval(approval: AgentOrchestratorState.WaitingForApproval) {
         state.update {
@@ -186,6 +277,28 @@ class ChatHomeHitlDelegate(
                 pending = it.pending.copy(clarification = request),
                 visual = ChatHomeUiState.Clarification,
             )
+        }
+    }
+
+    /**
+     * Routes the user's continue / stop decision through
+     * [SubmitCeilingDecisionUseCase] and folds the outcome onto the shared
+     * resume plumbing.
+     *
+     * `NothingPending` settles the visual and says nothing else. Unlike a
+     * clarification reply, there is no in-thread note to write: either the run
+     * was already settled — in which case its own outcome line is already in the
+     * thread — or a racing duplicate submission lost, in which case the winner's
+     * effect is the truth and a second sentence about it would be noise.
+     */
+    private suspend fun submitCeilingDecision(sessionId: String, runId: String, shouldContinue: Boolean) {
+        val outcome = submitCeilingDecisionUseCase(
+            sessionId = sessionId,
+            shouldContinue = shouldContinue,
+            runId = runId.takeIf { it.isNotBlank() },
+        )
+        routePendingOutcome(outcome, sessionId) {
+            state.update { it.copy(visual = it.restingVisual()) }
         }
     }
 

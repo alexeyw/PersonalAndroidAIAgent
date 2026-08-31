@@ -375,7 +375,8 @@ step; it can be a tool call, a chain, or a whole sub-pipeline. Whatever it is,
 its last node must connect back to the Queue Processor, or the run ends after
 the first subtask.
 
-**Watch the length.** Every subtask is a step, and a run has a step ceiling —
+**Watch the length.** Every subtask is a step, and a run has a step ceiling (it
+pauses and asks when it reaches one) —
 a plan of twenty subtasks will hit it. Keep the planning prompt asking for a
 short list.
 

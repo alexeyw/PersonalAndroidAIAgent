@@ -53,6 +53,12 @@ import androidx.room.PrimaryKey
  *   side happens to be the null one.
  * @property tokensSpent Tokens charged to this run tree, on the same root-keyed
  *   basis as [stepsSpent].
+ * @property stepCeilingExtensions How many extra portions of the step ceiling
+ *   the user has granted this run tree by answering a ceiling pause. Root-keyed
+ *   like [stepsSpent], and `NOT NULL DEFAULT 0` for the same reason: a run that
+ *   never asked has been granted nothing, and that is a number, not an absence.
+ * @property tokenCeilingExtensions Extra portions of the token ceiling granted
+ *   to this run tree, on the same basis as [stepCeilingExtensions].
  * @property terminationReason `RunTerminationKind` name explaining why the run
  *   stopped, when the app itself decided to stop it; `null` otherwise and for
  *   rows written before the column existed. Decoded permissively: an unknown
@@ -96,4 +102,8 @@ data class PipelineRunEntity(
     @ColumnInfo(defaultValue = "0")
     val tokensSpent: Int = 0,
     val terminationReason: String? = null,
+    @ColumnInfo(defaultValue = "0")
+    val stepCeilingExtensions: Int = 0,
+    @ColumnInfo(defaultValue = "0")
+    val tokenCeilingExtensions: Int = 0,
 )

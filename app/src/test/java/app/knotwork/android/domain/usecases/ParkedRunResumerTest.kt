@@ -4,6 +4,7 @@ import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.ToolRisk
@@ -13,10 +14,12 @@ import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.slot
 import io.mockk.verify
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -40,6 +43,7 @@ class ParkedRunResumerTest {
     private lateinit var settingsRepository: SettingsRepository
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var clarificationNotifier: ClarificationNotifier
+    private lateinit var ceilingNotifier: CeilingNotifier
     private lateinit var resumePipelineRunUseCase: ResumePipelineRunUseCase
     private lateinit var recordTriggerHitlEvent: RecordTriggerHitlEventUseCase
     private lateinit var resumer: ParkedRunResumer
@@ -51,6 +55,7 @@ class ParkedRunResumerTest {
         settingsRepository = mockk()
         approvalNotifier = mockk(relaxed = true)
         clarificationNotifier = mockk(relaxed = true)
+        ceilingNotifier = mockk(relaxed = true)
         resumePipelineRunUseCase = mockk()
         recordTriggerHitlEvent = mockk(relaxed = true)
         resumer = ParkedRunResumer(
@@ -59,6 +64,7 @@ class ParkedRunResumerTest {
             settingsRepository = settingsRepository,
             approvalNotifier = approvalNotifier,
             clarificationNotifier = clarificationNotifier,
+            ceilingNotifier = ceilingNotifier,
             resumePipelineRunUseCase = resumePipelineRunUseCase,
             recordTriggerHitlEvent = recordTriggerHitlEvent,
         )
@@ -279,5 +285,115 @@ class ParkedRunResumerTest {
         coVerify(exactly = 1) {
             recordTriggerHitlEvent("root-run", TriggerHitlEvent.Resolved(TriggerHitlResolution.TIMED_OUT))
         }
+    }
+
+    @Test
+    fun `given a parked ceiling pause then its own notification is the one torn down`() = runTest {
+        coEvery { resumePipelineRunUseCase("run-1") } returns ResumeOutcome.Resumed
+        val pending = PendingInteraction(
+            runId = "run-1",
+            sessionId = "session-1",
+            kind = PendingInteractionKind.CEILING,
+            ceilingAxis = RunCeilingAxis.STEPS,
+            ceilingLimit = 15,
+            ceilingSpent = 15,
+            requestedAt = System.currentTimeMillis(),
+        )
+
+        resumer.submit(pending) { true }
+
+        verify { ceilingNotifier.cancelCeilingNotification("session-1") }
+        // Cancelling by kind, not by shotgun: an approval parked on another
+        // session must not lose its notification because a ceiling was answered.
+        verify(exactly = 0) { approvalNotifier.cancelApprovalNotification(any()) }
+        verify(exactly = 0) { clarificationNotifier.cancelClarificationNotification(any()) }
+    }
+
+    @Test
+    fun `given an explicit resolution then it overrides the one derived from the cause`() = runTest {
+        // Every settlement the two HITL gates can reach is one the user never
+        // got to make, so the default reads "timed out" or "abandoned" off the
+        // cause. Stopping a run at its ceiling is a decision, deliberately
+        // given, and journalling it as abandonment would record the user as
+        // absent at the moment they were most present.
+        coEvery { pipelineRunRepository.getRootRunId("run-1") } returns "run-1"
+        val pending = PendingInteraction(
+            runId = "run-1",
+            sessionId = "session-1",
+            kind = PendingInteractionKind.CEILING,
+            ceilingAxis = RunCeilingAxis.STEPS,
+            ceilingLimit = 15,
+            ceilingSpent = 15,
+            requestedAt = System.currentTimeMillis(),
+        )
+
+        resumer.failPark(
+            pending = pending,
+            reason = "step-ceiling: 15/15 steps",
+            terminationReason = RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+            resolution = TriggerHitlResolution.DENIED,
+        )
+
+        coVerify {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.DENIED))
+        }
+        coVerify {
+            pipelineRunRepository.finishRun(
+                "run-1",
+                PipelineRunStatus.FAILED,
+                "step-ceiling: 15/15 steps",
+                RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+            )
+        }
+    }
+
+    @Test
+    fun `an unanswered ceiling pause expires at its limit, not as an unanswered approval`() = runTest {
+        // The run never asked for an approval — it reached a number the user
+        // set. Settling it as HitlWindowExpired would tell the owner of an
+        // overnight run that the app had been waiting for their *approval*, and
+        // send them looking for a tool call there was none of.
+        coEvery { pipelineRunRepository.getRootRunId("run-1") } returns "run-1"
+        val reason = slot<RunTerminationReason>()
+
+        resumer.failExpiredPark(
+            PendingInteraction(
+                runId = "run-1",
+                sessionId = "session-1",
+                kind = PendingInteractionKind.CEILING,
+                ceilingAxis = RunCeilingAxis.TOKENS,
+                ceilingLimit = 100_000,
+                ceilingSpent = 100_400,
+                requestedAt = 0L,
+            ),
+        )
+
+        coVerify {
+            pipelineRunRepository.finishRun("run-1", PipelineRunStatus.FAILED, any(), capture(reason))
+        }
+        assertEquals(RunTerminationReason.TokenCeiling(limit = 100_000, spent = 100_400), reason.captured)
+        // TIMED_OUT, not DENIED: the user was asked and the window closed, which
+        // is exactly what separates this from a deliberate "stop the run".
+        coVerify {
+            recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.TIMED_OUT))
+        }
+    }
+
+    @Test
+    fun `an unanswered approval still expires as an unanswered approval`() = runTest {
+        coEvery { pipelineRunRepository.getRootRunId("run-1") } returns "run-1"
+        val reason = slot<RunTerminationReason>()
+
+        resumer.failExpiredPark(parkedApproval(requestedAt = 0L))
+
+        coVerify {
+            pipelineRunRepository.finishRun(
+                "run-1",
+                PipelineRunStatus.FAILED,
+                ParkedRunResumer.APPROVAL_WINDOW_EXPIRED_MESSAGE,
+                capture(reason),
+            )
+        }
+        assertEquals(RunTerminationReason.HitlWindowExpired, reason.captured)
     }
 }

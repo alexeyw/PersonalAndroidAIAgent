@@ -49,6 +49,7 @@ import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.AgentOrchestratorUseCase
@@ -430,6 +431,8 @@ class BackgroundAutonomyCycleIntegrationTest {
             runRepository,
             traceRepository,
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingRepository,
+            mockk<CeilingNotifier>(relaxed = true),
         )
         val taskQueueManager = TaskQueueManagerImpl(
             chatRepository = chatRepository,
@@ -462,6 +465,7 @@ class BackgroundAutonomyCycleIntegrationTest {
             settingsRepository,
             approvalNotifier,
             clarificationNotifier,
+            mockk<CeilingNotifier>(relaxed = true),
             resumeRun,
             mockk<RecordTriggerHitlEventUseCase>(relaxed = true),
         )

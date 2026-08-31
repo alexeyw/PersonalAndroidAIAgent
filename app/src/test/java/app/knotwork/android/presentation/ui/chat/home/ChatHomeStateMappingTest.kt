@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.PipelineSamplePrompt
 import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunNoticeCause
@@ -51,6 +52,7 @@ class ChatHomeStateMappingTest {
         console: ChatHomeConsoleState = ChatHomeConsoleState(),
         activeSamplePrompts: List<PipelineSamplePrompt> = emptyList(),
         runNotice: RunNoticeCause? = null,
+        pending: ChatHomePendingState = ChatHomePendingState(),
     ): ChatHomeScreenState = ChatHomeScreenState(
         visual = visual,
         composer = ChatHomeComposerState(value = composerValue, typedConfirm = pendingTypedConfirm),
@@ -60,6 +62,7 @@ class ChatHomeStateMappingTest {
         messages = messages,
         activeSamplePrompts = activeSamplePrompts,
         runNotice = runNotice,
+        pending = pending,
     )
 
     // ─── Stopped runs: chosen vs unchosen ─────────────────────────────────────
@@ -401,5 +404,44 @@ class ChatHomeStateMappingTest {
         assertEquals(ConsoleSnap.Partial, debugConsoleSnapForId(DebugStateIds.CONSOLE_PARTIAL))
         assertEquals(ConsoleSnap.Full, debugConsoleSnapForId(DebugStateIds.CONSOLE_FULL))
         assertNull(debugConsoleSnapForId(DebugStateIds.EMPTY))
+    }
+
+    // ─── The ceiling pause ────────────────────────────────────────────────────
+
+    @Test
+    fun `a ceiling pause renders the pause card with the run's own numbers`() {
+        val view = screenState(
+            ChatHomeUiState.CeilingPause,
+            pending = ChatHomePendingState(
+                ceiling = CeilingPausePending(
+                    runId = "run-1",
+                    breach = HardCeilingBreach(RunCeilingAxis.STEPS, limit = 15, spent = 15),
+                    timestamp = "09:16",
+                ),
+            ),
+        ).toViewState()
+
+        assertEquals(ChatHomeVisualState.CeilingPause, view.visualState)
+        val card = view.messages.last().content as ChatContent.RunCeilingPause
+        // The stub resolver renders "res:<id>(args)", so the numbers being
+        // present at all is what this pins: the card states the limit that
+        // bound, which for an extended run is not the configured setting.
+        assertTrue("Expected the numbers in: ${card.model.meter}", card.model.meter.contains("15"))
+        assertTrue(card.model.continueLabel.contains("15"))
+        assertNotEquals(card.model.continueLabel, card.model.stopLabel)
+        // The pause is not a termination tile: nothing about it may read as a
+        // stop, or the composer banner and the tile would contradict the card.
+        assertNull(view.termination)
+    }
+
+    @Test
+    fun `a ceiling pause with no pending snapshot renders no card at all`() {
+        // Unlike the interrupted state, there is no debug-picker fallback row.
+        // A pause card without a snapshot behind it would offer Continue and
+        // Stop buttons wired to a run that does not exist.
+        val view = screenState(ChatHomeUiState.CeilingPause).toViewState()
+
+        assertEquals(ChatHomeVisualState.CeilingPause, view.visualState)
+        assertTrue(view.messages.none { it.content is ChatContent.RunCeilingPause })
     }
 }

@@ -53,6 +53,7 @@ import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.services.PipelineCompositionValidator
@@ -277,6 +278,8 @@ class ShowcaseCompositionIntegrationTest {
         val toolRepository = mockk<ToolRepository>(relaxed = true)
         val retrieveRelevantMemoryUseCase = mockk<RetrieveRelevantMemoryUseCase>()
         val runTraceRepository = mockk<RunTraceRepository>(relaxed = true)
+        val pendingInteractionRepository = mockk<PendingInteractionRepository>(relaxed = true)
+        val ceilingNotifier = mockk<CeilingNotifier>(relaxed = true)
         val localModelRepository = mockk<LocalModelRepository>(relaxed = true)
         val crashReportingRepository = mockk<CrashReportingRepository>(relaxed = true)
 
@@ -373,6 +376,8 @@ class ShowcaseCompositionIntegrationTest {
             pipelineRunRepository,
             runTraceRepository,
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
     }
 

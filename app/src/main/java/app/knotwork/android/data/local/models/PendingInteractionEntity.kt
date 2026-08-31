@@ -20,7 +20,8 @@ import androidx.room.PrimaryKey
  *   interaction per run at most.
  * @property sessionId Id of the owning chat session (indexed — the reattach
  *   protocol looks records up by session).
- * @property kind `PendingInteractionKind` name (`APPROVAL` / `CLARIFICATION`).
+ * @property kind `PendingInteractionKind` name (`APPROVAL` / `CLARIFICATION` /
+ *   `CEILING`).
  * @property toolName Name of the tool awaiting approval; `null` for clarifications.
  * @property toolArgs JSON argument string of the staged tool call; `null` for
  *   clarifications.
@@ -31,6 +32,12 @@ import androidx.room.PrimaryKey
  * @property decision `PendingDecision` name recorded after the park; `null`
  *   while unanswered.
  * @property answer The user's clarification answer; `null` while unanswered.
+ * @property ceilingAxis `RunCeilingAxis` name of the ceiling that bound; `null`
+ *   for approvals and clarifications.
+ * @property ceilingLimit The limit that bound, in that axis's unit; `null` for
+ *   the other two kinds.
+ * @property ceilingSpent What the run tree had charged when it bound; `null` for
+ *   the other two kinds.
  * @property requestedAt Epoch millis when the persistent waiting phase began.
  */
 @Entity(
@@ -51,5 +58,8 @@ data class PendingInteractionEntity(
     val optionsJson: String?,
     val decision: String?,
     val answer: String?,
+    val ceilingAxis: String? = null,
+    val ceilingLimit: Int? = null,
+    val ceilingSpent: Int? = null,
     val requestedAt: Long,
 )

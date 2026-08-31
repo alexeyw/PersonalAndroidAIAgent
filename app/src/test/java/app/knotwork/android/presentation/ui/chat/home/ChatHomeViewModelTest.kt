@@ -8,11 +8,14 @@ import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteraction
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
@@ -48,6 +51,7 @@ import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
+import app.knotwork.android.domain.usecases.SubmitCeilingDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
 import app.knotwork.android.domain.usecases.TranscriptionOutcome
@@ -131,6 +135,7 @@ class ChatHomeViewModelTest {
     private lateinit var resumePipelineRunUseCase: ResumePipelineRunUseCase
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
     private lateinit var submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase
+    private lateinit var submitCeilingDecisionUseCase: SubmitCeilingDecisionUseCase
     private lateinit var submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase
     private lateinit var attachmentStore: AttachmentStore
     private lateinit var resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase
@@ -179,6 +184,7 @@ class ChatHomeViewModelTest {
         pendingInteractionRepository = mockk(relaxed = true)
         coEvery { pendingInteractionRepository.getForSession(any()) } returns null
         submitApprovalDecisionUseCase = mockk(relaxed = true)
+        submitCeilingDecisionUseCase = mockk(relaxed = true)
         attachmentStore = mockk(relaxed = true)
         resolveEntryInferenceUseCase = mockk()
         audioRecorder = mockk(relaxed = true)
@@ -270,6 +276,7 @@ class ChatHomeViewModelTest {
         pendingInteractionRepository,
         submitApprovalDecisionUseCase,
         submitClarificationAnswerUseCase,
+        submitCeilingDecisionUseCase,
         attachmentStore,
         resolveEntryInferenceUseCase,
         audioRecorder,
@@ -2287,6 +2294,71 @@ class ChatHomeViewModelTest {
         }
 
     @Test
+    fun `given a run waiting on a ceiling when session opens then the pause is restored from the record`() =
+        runTest(testDispatcher) {
+            // The record IS the authority here, with no live snapshot to prefer:
+            // a ceiling pause has no in-process waiting phase at all, so the
+            // process that raised it is routinely gone by the time it is read.
+            val sessionId = "session-ceiling"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.WAITING_CEILING)
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+            coEvery { pendingInteractionRepository.getForSession(sessionId) } returns PendingInteraction(
+                runId = "child-run",
+                sessionId = sessionId,
+                kind = PendingInteractionKind.CEILING,
+                ceilingAxis = RunCeilingAxis.TOKENS,
+                ceilingLimit = 100_000,
+                ceilingSpent = 100_400,
+                requestedAt = 1_700_000_000_000L,
+            )
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.CeilingPause, viewModel.state.value.visual)
+            val pending = viewModel.state.value.pending.ceiling
+            // The run id comes off the record, not from the session's active
+            // run: a pause raised inside a sub-pipeline is recorded on the
+            // child, while the active run is the parent.
+            assertEquals("child-run", pending?.runId)
+            assertEquals(
+                HardCeilingBreach(RunCeilingAxis.TOKENS, limit = 100_000, spent = 100_400),
+                pending?.breach,
+            )
+        }
+
+    @Test
+    fun `given a ceiling park missing its numbers then no card is restored`() = runTest(testDispatcher) {
+        // A card with no numbers cannot state what continuing costs, and the
+        // decision turns on nothing else. Better to show none and let the
+        // maintenance window settle the run than to ask a question with a hole
+        // in it.
+        val sessionId = "session-ceiling-partial"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.WAITING_CEILING)
+        every { agentOrchestratorUseCase.observe(sessionId) } returns
+            flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+        coEvery { pendingInteractionRepository.getForSession(sessionId) } returns PendingInteraction(
+            runId = "run-1",
+            sessionId = sessionId,
+            kind = PendingInteractionKind.CEILING,
+            ceilingAxis = RunCeilingAxis.STEPS,
+            ceilingLimit = null,
+            ceilingSpent = null,
+            requestedAt = 1_700_000_000_000L,
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.pending.ceiling)
+    }
+
+    @Test
     fun `given waiting clarification run when session opens then clarification card restored from repository`() =
         runTest(testDispatcher) {
             val sessionId = "session-clar"
@@ -2953,5 +3025,85 @@ class ChatHomeViewModelTest {
         const val DEFAULT_TOKENS_MAX: Int = 4096
         const val ALT_TOKENS_MAX: Int = 8192
         const val AUDIO_LIMIT_SEC: Int = 30
+    }
+
+    @Test
+    fun `a ceiling pause surfaces the card with the run's own numbers`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.WaitingForCeilingRaise(RunCeilingAxis.STEPS, limit = 15, spent = 15))
+            delay(10_000)
+        }
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.CeilingPause, viewModel.state.value.visual)
+        val pending = viewModel.state.value.pending.ceiling
+        assertEquals(HardCeilingBreach(RunCeilingAxis.STEPS, limit = 15, spent = 15), pending?.breach)
+    }
+
+    @Test
+    fun `continuePastCeiling grants a portion and flips to Generating`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.WaitingForCeilingRaise(RunCeilingAxis.STEPS, limit = 15, spent = 15))
+            delay(10_000)
+        }
+        coEvery { submitCeilingDecisionUseCase(any(), any(), any()) } returns PendingSubmissionOutcome.Resumed
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        viewModel.hitl.continuePastCeiling()
+        advanceUntilIdle()
+
+        // No run id from the live path on purpose: a pause raised inside a
+        // sub-pipeline is recorded on the child, while the session's active run
+        // is the parent — so the submission looks the record up by session.
+        coVerify { submitCeilingDecisionUseCase(sessionId, true, null) }
+        // The card is dropped before the submission returns: leaving it up
+        // through a resume invites a second tap on a decision already made.
+        assertNull(viewModel.state.value.pending.ceiling)
+    }
+
+    @Test
+    fun `stopAtCeiling settles the run and leaves the surface at rest`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.WaitingForCeilingRaise(RunCeilingAxis.TOKENS, limit = 100, spent = 140))
+            delay(10_000)
+        }
+        coEvery { submitCeilingDecisionUseCase(any(), any(), any()) } returns
+            PendingSubmissionOutcome.NothingPending
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        viewModel.hitl.stopAtCeiling()
+        advanceUntilIdle()
+
+        coVerify { submitCeilingDecisionUseCase(sessionId, false, null) }
+        assertNull(viewModel.state.value.pending.ceiling)
+        // Not Generating: stopping ends the run, and a surface left spinning
+        // would wait for a stream that will never arrive.
+        assertNotEquals(ChatHomeUiState.Generating(), viewModel.state.value.visual)
+    }
+
+    @Test
+    fun `continuePastCeiling with no pause showing is a no-op`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.hitl.continuePastCeiling()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { submitCeilingDecisionUseCase(any(), any(), any()) }
     }
 }

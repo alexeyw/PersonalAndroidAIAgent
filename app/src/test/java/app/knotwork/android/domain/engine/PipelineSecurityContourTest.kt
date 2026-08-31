@@ -46,6 +46,7 @@ import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
@@ -134,6 +135,7 @@ class PipelineSecurityContourTest {
         val metricsRepository = mockk<MetricsRepository>(relaxed = true)
         val approvalNotifier = mockk<ApprovalNotifier>(relaxed = true)
         val pendingInteractionRepository = mockk<PendingInteractionRepository>(relaxed = true)
+        val ceilingNotifier = mockk<CeilingNotifier>(relaxed = true)
         val clarificationNotifier = mockk<ClarificationNotifier>(relaxed = true)
         val koogClientFactory = mockk<KoogClientFactory>(relaxed = true)
         val cloudLlmModelResolver = mockk<KoogCloudLlmModelResolver>(relaxed = true)
@@ -248,6 +250,8 @@ class PipelineSecurityContourTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
 
         // The arg-generation pass returns the per-tool JSON; everything else is irrelevant.

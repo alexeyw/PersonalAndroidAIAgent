@@ -61,6 +61,18 @@ sealed interface ChatHomeUiState {
     data object Interrupted : ChatHomeUiState
 
     /**
+     * A run has spent one of the limits the user set for it and is waiting to
+     * be told whether it may carry on. The tail of the conversation hosts the
+     * pause card with Continue / Stop actions; the payload lives in
+     * `ChatHomePendingState.ceiling`.
+     *
+     * Distinct from [Interrupted] because the run is not over: its checkpoint
+     * is intact and the engine is waiting on an answer, so offering Discard
+     * here would settle a run the user may simply want to let finish.
+     */
+    data object CeilingPause : ChatHomeUiState
+
+    /**
      * The run stopped without producing an answer, and the tail of the
      * conversation explains why.
      *

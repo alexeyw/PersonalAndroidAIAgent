@@ -5,6 +5,7 @@ import app.knotwork.android.data.local.models.PendingInteractionEntity
 import app.knotwork.android.domain.models.PendingDecision
 import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
+import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import kotlinx.coroutines.Dispatchers
@@ -115,6 +116,9 @@ private fun PendingInteraction.toEntity(): PendingInteractionEntity = PendingInt
     optionsJson = options?.let { list -> JSONArray(list).toString() },
     decision = decision?.name,
     answer = answer,
+    ceilingAxis = ceilingAxis?.name,
+    ceilingLimit = ceilingLimit,
+    ceilingSpent = ceilingSpent,
     requestedAt = requestedAt,
 )
 
@@ -140,5 +144,8 @@ private fun PendingInteractionEntity.toDomain(): PendingInteraction = PendingInt
     },
     decision = decision?.let { PendingDecision.valueOf(it) },
     answer = answer,
+    ceilingAxis = ceilingAxis?.let { RunCeilingAxis.valueOf(it) },
+    ceilingLimit = ceilingLimit,
+    ceilingSpent = ceilingSpent,
     requestedAt = requestedAt,
 )

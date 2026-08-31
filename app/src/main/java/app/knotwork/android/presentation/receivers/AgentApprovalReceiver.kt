@@ -8,8 +8,10 @@ import androidx.annotation.VisibleForTesting
 import app.knotwork.android.domain.constants.TimeAndIdConstants
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.ToolRisk
+import app.knotwork.android.domain.models.ceilingBreach
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
@@ -57,6 +59,10 @@ class AgentApprovalReceiver : BroadcastReceiver() {
     /** Re-posts persistent clarification notifications on [ApprovalAction.REPOST]. */
     @Inject
     lateinit var clarificationNotifier: ClarificationNotifier
+
+    /** Re-posts persistent ceiling-pause notifications on [ApprovalAction.REPOST]. */
+    @Inject
+    lateinit var ceilingNotifier: CeilingNotifier
 
     /**
      * Host scope of the suspending submission work bridged through
@@ -122,6 +128,17 @@ class AgentApprovalReceiver : BroadcastReceiver() {
                 sessionId = pending.sessionId,
                 question = pending.question.orEmpty(),
             )
+            // A record that cannot name its axis and numbers has nothing to
+            // re-post: the notification's whole content is those three facts.
+            // Silently dropping it is right — the pause itself survives on the
+            // record, and the chat still restores the card from it.
+            PendingInteractionKind.CEILING -> pending.ceilingBreach()?.let { breach ->
+                ceilingNotifier.sendCeilingPauseRequest(
+                    runId = pending.runId,
+                    sessionId = pending.sessionId,
+                    breach = breach,
+                )
+            }
         }
     }
 

@@ -7,6 +7,7 @@ import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.PipelineSamplePrompt
@@ -36,6 +37,7 @@ import app.knotwork.android.domain.usecases.ResolveEntryInferenceUseCase
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
+import app.knotwork.android.domain.usecases.SubmitCeilingDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
 import app.knotwork.android.domain.usecases.UnarchiveChatUseCase
@@ -139,6 +141,7 @@ constructor(
     private val pendingInteractionRepository: PendingInteractionRepository,
     private val submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase,
     private val submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase,
+    private val submitCeilingDecisionUseCase: SubmitCeilingDecisionUseCase,
     private val attachmentStore: AttachmentStore,
     private val resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase,
     private val audioRecorder: AudioRecorder,
@@ -353,6 +356,7 @@ constructor(
         replayTrace = console::replayTrace,
         restoreApproval = { hitl.handleWaitingForApproval(it) },
         restoreClarification = { hitl.handleAwaitingClarification(it) },
+        restoreCeilingPause = { hitl.restoreCeilingPause(it) },
     )
 
     /**
@@ -367,6 +371,7 @@ constructor(
         chatRepository = chatRepository,
         submitApprovalDecisionUseCase = submitApprovalDecisionUseCase,
         submitClarificationAnswerUseCase = submitClarificationAnswerUseCase,
+        submitCeilingDecisionUseCase = submitCeilingDecisionUseCase,
         attachToLiveRun = ::attachToLiveRun,
         emitResumeFeedback = reattach::emitResumeFeedback,
     )
@@ -1015,6 +1020,7 @@ constructor(
         when (state) {
             is AgentOrchestratorState.WaitingForApproval -> hitl.handleWaitingForApproval(state)
             is AgentOrchestratorState.AwaitingClarification -> hitl.handleAwaitingClarification(state.request)
+            is AgentOrchestratorState.WaitingForCeilingRaise -> hitl.handleCeilingPause(state)
             is AgentOrchestratorState.ConsoleLog -> console.onConsoleLog(state.events, state.runId)
             is AgentOrchestratorState.PipelineTrace -> console.onPipelineTrace(state.steps)
             is AgentOrchestratorState.NodeIO -> console.onNodeIo(state)
@@ -1300,6 +1306,30 @@ data class InterruptedRunPending(
     val timestamp: String,
     val resumable: Boolean = true,
 )
+
+/**
+ * Snapshot of a run paused at one of its own ceilings, exposed through
+ * [ChatHomePendingState.ceiling] so the mapping can render the trailing pause
+ * card (Continue / Stop) from real data.
+ *
+ * Carries the breach rather than a rendered sentence: the copy has one owner
+ * ([app.knotwork.android.presentation.ui.common.RunTerminationCopyMapper]), and
+ * a ViewModel holding resolved strings could not be the same words the
+ * notification and the run console use for the same event.
+ *
+ * @property runId Id of the paused run record — the decision settles exactly
+ *   this run, never "whatever is paused now". For a pause raised inside a
+ *   sub-pipeline this is the child run, which is where the record sits; the
+ *   submission path resolves the tree root itself.
+ * @property breach Which ceiling bound and by how much, exactly as it stood
+ *   when the run stopped. Read off the durable record on reattach, so a pause
+ *   answered after a restart states the same numbers it stated live.
+ * @property timestamp Pre-formatted time the run actually paused, captured once
+ *   here for the reason [InterruptedRunPending.timestamp] is: a pause answered
+ *   the next morning must still say when the run stopped, not what time it is
+ *   now.
+ */
+data class CeilingPausePending(val runId: String, val breach: HardCeilingBreach, val timestamp: String)
 
 /**
  * One-shot failure outcomes of a Resume tap on the interrupted-run card,

@@ -4,13 +4,17 @@ package app.knotwork.android.domain.models
  * Persistent record of one human-in-the-loop interaction a parked run is
  * waiting on.
  *
- * Created when the live in-process waiting phase of a HITL gate (tool
- * approval or clarification question) times out and the run transitions into
- * its persistent waiting phase: the engine coroutine ends, the foreground
- * service is released, and this record — together with the run record's
- * `WAITING_APPROVAL` / `WAITING_CLARIFICATION` status — is what survives
- * process death and lets the user answer hours later from a notification or
- * by reopening the chat.
+ * Created when a run stops to ask the user something and cannot hold the
+ * question in memory until it is answered: the engine coroutine ends, the
+ * foreground service is released, and this record — together with the run
+ * record's `WAITING_*` status — is what survives process death and lets the
+ * user answer hours later from a notification or by reopening the chat.
+ *
+ * The two HITL gates (tool approval, clarification question) reach that point
+ * by *timing out* of a live in-process waiting phase. The ceiling gate has no
+ * live phase: nothing is in flight when a ceiling binds — the walk is between
+ * nodes — so there is nothing a live wait would preserve that the checkpoint
+ * does not, and the record is written straight away.
  *
  * The record is strictly one-shot: the user's response ([decision] or
  * [answer]) is written onto it before the run is resumed, and the resumed
@@ -40,6 +44,17 @@ package app.knotwork.android.domain.models
  *   `null` while the interaction is still unanswered. See [PendingDecision].
  * @property answer The user's clarification answer recorded after the park;
  *   `null` while unanswered.
+ * @property ceilingAxis Which ceiling the run spent; `null` for approval and
+ *   clarification records. Persisted rather than re-derived because the answer
+ *   buys one more portion **of that axis**, and by the time it arrives the
+ *   ledger has been rebuilt in another process — possibly against settings the
+ *   user has since edited.
+ * @property ceilingLimit The limit that bound, in the axis's own unit; `null`
+ *   for the other two kinds. Persisted for the same reason [ceilingAxis] is,
+ *   and because the card the user answers has to state the number *that run*
+ *   was stopped at, not the number the setting holds today.
+ * @property ceilingSpent What the run tree had charged when the limit bound;
+ *   `null` for the other two kinds.
  * @property requestedAt Epoch millis when the persistent waiting phase began.
  *   The background approval window (`backgroundApprovalWindowHours` setting)
  *   counts from this moment.
@@ -55,8 +70,33 @@ data class PendingInteraction(
     val options: List<String>? = null,
     val decision: PendingDecision? = null,
     val answer: String? = null,
+    val ceilingAxis: RunCeilingAxis? = null,
+    val ceilingLimit: Int? = null,
+    val ceilingSpent: Int? = null,
     val requestedAt: Long,
 )
+
+/**
+ * Reads a parked record back as the ceiling breach it was raised for, or `null`
+ * when it is not a complete ceiling record.
+ *
+ * Every consumer of a ceiling pause — the card that asks it, the notification
+ * that carries it, the stop that settles it — needs the axis **and** both
+ * numbers, so the "all three or nothing" rule is stated once, here. A partial
+ * record is deliberately not repaired with defaults: a zero substituted for a
+ * missing spend would read as a run that had used nothing, which is the one
+ * thing that cannot be true of a run that just breached.
+ *
+ * @return The breach, or `null` when this is not a ceiling park or is missing
+ *   any of its three fields.
+ */
+fun PendingInteraction.ceilingBreach(): HardCeilingBreach? {
+    if (kind != PendingInteractionKind.CEILING) return null
+    val axis = ceilingAxis ?: return null
+    val limit = ceilingLimit ?: return null
+    val spent = ceilingSpent ?: return null
+    return HardCeilingBreach(axis = axis, limit = limit, spent = spent)
+}
 
 /**
  * The HITL gate a [PendingInteraction] is parked on.
@@ -67,6 +107,14 @@ enum class PendingInteractionKind {
 
     /** The run waits for the user to answer a clarifying question. */
     CLARIFICATION,
+
+    /**
+     * The run has spent a ceiling and waits for the user to say whether it may
+     * carry on. Unlike the other two this gate is not about a step the pipeline
+     * wants to take — the run is out of budget, and the answer buys it one more
+     * portion of the same allowance rather than removing the limit.
+     */
+    CEILING,
 }
 
 /**

@@ -36,12 +36,14 @@ import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.EngineImageInput
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.NodeContextConfig
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteraction
 import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
@@ -73,6 +75,7 @@ import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
@@ -117,6 +120,7 @@ class GraphExecutionEngineTest {
     private lateinit var metricsRepository: MetricsRepository
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var ceilingNotifier: CeilingNotifier
     private lateinit var clarificationNotifier: ClarificationNotifier
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var cloudLlmModelResolver: KoogCloudLlmModelResolver
@@ -160,6 +164,7 @@ class GraphExecutionEngineTest {
         metricsRepository = mockk(relaxed = true)
         approvalNotifier = mockk(relaxed = true)
         pendingInteractionRepository = mockk(relaxed = true)
+        ceilingNotifier = mockk(relaxed = true)
         coEvery { pendingInteractionRepository.getForRun(any()) } returns null
         coEvery { pendingInteractionRepository.save(any()) } returns true
         clarificationNotifier = mockk(relaxed = true)
@@ -292,6 +297,8 @@ class GraphExecutionEngineTest {
             pipelineRunRepository,
             runTraceRepository,
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
 
         coEvery { getContextWindowUseCase(sessionId) } returns ""
@@ -915,6 +922,8 @@ class GraphExecutionEngineTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
 
         engineWithMock.resumeWithApproval("session_id_123", true)
@@ -1546,6 +1555,8 @@ class GraphExecutionEngineTest {
             pipelineRunRepository,
             runTraceRepository,
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
 
         val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
@@ -1760,6 +1771,8 @@ class GraphExecutionEngineTest {
                 pipelineRunRepository,
                 runTraceRepository,
                 ResolveRunCeilingsUseCase(settingsRepository),
+                pendingInteractionRepository,
+                ceilingNotifier,
             )
 
             // Generate a question with two options; the first one is the default the
@@ -3625,6 +3638,8 @@ class GraphExecutionEngineTest {
             pipelineRunRepository,
             runTraceRepository,
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
         val graph = memoryAwareGraph("g-placeholder", declaredQuery = "journal entries around \$DATE")
 
@@ -4057,23 +4072,128 @@ class GraphExecutionEngineTest {
     }
 
     @Test
-    fun `given a previous attempt already spent the ceiling then the resumed run stops immediately`() = runTest {
-        // The regression this whole change exists for. Every answered background
+    fun `given a previous attempt already spent the ceiling then the resumed run does no further work`() = runTest {
+        // The regression the shared ledger exists for. Every answered background
         // approval comes back through the resume path, and a run can park an
         // unbounded number of times; with a per-attempt budget a nightly loop
         // received a full fresh ceiling after every answer and the ceiling never
         // bound. Mutate `getSpend` back to RunSpend() and this test passes while
-        // the defect is present.
+        // the defect is present — three nodes run and the pipeline completes.
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         coEvery { pipelineRunRepository.getSpend("run-resumed") } returns RunSpend(steps = 15, tokens = 0)
         every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
 
         val states = engine(sessionId, "prompt", ceilingGraph(), "run-resumed").toList()
 
+        // The ceiling now pauses rather than ends the run, so the guard is no
+        // longer "it failed" — it is that nothing further was spent.
+        assertEquals(
+            AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.CEILING),
+            states.last(),
+        )
+        verify(exactly = 0) { llmEngine.generateResponseStream(any()) }
+    }
+
+    @Test
+    fun `given a spent ceiling on a persisted run then it parks and asks instead of ending the run`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        coEvery { pipelineRunRepository.getSpend("run-pause") } returns RunSpend(steps = 15, tokens = 0)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph(), "run-pause").toList()
+
+        val pause = states.filterIsInstance<AgentOrchestratorState.WaitingForCeilingRaise>().single()
+        assertEquals(RunCeilingAxis.STEPS, pause.axis)
+        assertEquals(15, pause.limit)
+        assertEquals(15, pause.spent)
+        // A pause is not a failure: the run keeps its checkpoint and its record
+        // stays non-terminal, so nothing downstream may read it as a stop.
+        assertTrue(states.none { it is AgentOrchestratorState.Error })
+        coVerify { pipelineRunRepository.updateStatus("run-pause", PipelineRunStatus.WAITING_CEILING) }
+
+        val parked = slot<PendingInteraction>()
+        coVerify { pendingInteractionRepository.save(capture(parked)) }
+        assertEquals(PendingInteractionKind.CEILING, parked.captured.kind)
+        assertEquals(RunCeilingAxis.STEPS, parked.captured.ceilingAxis)
+        assertEquals(15, parked.captured.ceilingLimit)
+        assertEquals(15, parked.captured.ceilingSpent)
+        verify {
+            ceilingNotifier.sendCeilingPauseRequest(
+                "run-pause",
+                sessionId,
+                HardCeilingBreach(RunCeilingAxis.STEPS, 15, 15),
+            )
+        }
+    }
+
+    @Test
+    fun `given a spent ceiling on a non-persisted run then it stops, because no answer could reach it`() = runTest {
+        // An editor test run has no record to park on. A pause raised here would
+        // end with the coroutine and leave a card nothing can settle, so the
+        // old fail-fast behaviour is the honest one.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(2)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph(), runId = null).toList()
+
+        val error = states.last() as AgentOrchestratorState.Error
+        assertEquals(RunTerminationReason.StepCeiling(limit = 2, spent = 2), error.reason)
+        coVerify(exactly = 0) { pendingInteractionRepository.save(any()) }
+    }
+
+    @Test
+    fun `given the pending store refuses the park then the run stops rather than waiting silently`() = runTest {
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        coEvery { pipelineRunRepository.getSpend("run-nostore") } returns RunSpend(steps = 15, tokens = 0)
+        coEvery { pendingInteractionRepository.save(any()) } returns false
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph(), "run-nostore").toList()
+
         val error = states.last() as AgentOrchestratorState.Error
         assertEquals(RunTerminationReason.StepCeiling(limit = 15, spent = 15), error.reason)
-        // It stops before doing any work at all — the ceiling is already spent.
-        verify(exactly = 0) { llmEngine.generateResponseStream(any()) }
+        // No notification either: a shade entry deep-linking to a pause with no
+        // record behind it is worse than none.
+        verify(exactly = 0) { ceilingNotifier.sendCeilingPauseRequest(any(), any(), any()) }
+    }
+
+    @Test
+    fun `given a granted extension then the run continues past the base ceiling`() = runTest {
+        // The answer's whole effect. Drop `stepCeilingExtensions` from the seed
+        // and the run pauses again on its first node — re-asking the question
+        // the user has just answered.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
+        coEvery { pipelineRunRepository.getSpend("run-granted") } returns
+            RunSpend(steps = 15, tokens = 0, stepCeilingExtensions = 1)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        val states = engine(sessionId, "prompt", ceilingGraph(), "run-granted").toList()
+
+        assertTrue(states.none { it is AgentOrchestratorState.WaitingForCeilingRaise })
+        assertTrue(states.last() is AgentOrchestratorState.Completed)
+    }
+
+    @Test
+    fun `given a resumed run then the ceiling park it answered is consumed`() = runTest {
+        // Nothing else consumes it: the other two kinds are consumed by the node
+        // executor that raised them, and a ceiling belongs to no node. Left
+        // behind, the maintenance sweep would later fail a run that is running.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(50)
+        coEvery { pendingInteractionRepository.getForRun("run-consume") } returns PendingInteraction(
+            runId = "run-consume",
+            sessionId = sessionId,
+            kind = PendingInteractionKind.CEILING,
+            ceilingAxis = RunCeilingAxis.STEPS,
+            ceilingLimit = 15,
+            ceilingSpent = 15,
+            requestedAt = 0L,
+        )
+        every { llmEngine.generateResponseStream(any()) } returns flowOf("response")
+
+        engine(sessionId, "prompt", ceilingGraph(), "run-consume").toList()
+
+        coVerify { pendingInteractionRepository.delete("run-consume") }
+        verify { ceilingNotifier.cancelCeilingNotification(sessionId) }
     }
 
     @Test
