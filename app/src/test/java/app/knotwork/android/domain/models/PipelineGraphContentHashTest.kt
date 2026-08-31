@@ -160,6 +160,7 @@ class PipelineGraphContentHashTest {
         val hashedNodeFields = setOf(
             "id", "type", "label", "toolName", "targetPipelineId", "skillId", "modelPath", "conditionComplexity",
             "conditionKeywords", "conditionPrompt", "conditionHasImage", "systemPrompt", "cloudProvider",
+            "fallbackClass", "quickReplies", "alwaysConfirm", "maxSubtasks", "stopOnError",
             "clarificationTimeoutMs", "contextConfig", "configJson",
         )
         val excludedNodeFields = setOf("x", "y")

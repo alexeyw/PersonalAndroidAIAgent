@@ -354,10 +354,7 @@ object CookbookDocsGenerator {
         "IntentRouterConfig.classes" to
             Reach.Graph("which branches exist — one port per class, and the run follows the edge the model picks"),
         "IntentRouterConfig.classifierPrompt" to Reach.Runtime("systemPrompt"),
-        "IntentRouterConfig.fallbackClass" to Reach.EditorOnly(
-            "an answer matching no class takes whichever branch you connected first, not the class named " +
-                "here; connect the branch you want as the fallback before the others",
-        ),
+        "IntentRouterConfig.fallbackClass" to Reach.Runtime("fallbackClass"),
         "IntentRouterConfig.engineProvider" to Reach.Runtime("cloudProvider"),
         "IfConditionConfig.expression" to Reach.Runtime("conditionPrompt"),
         "IfConditionConfig.keywords" to Reach.Runtime("conditionKeywords"),
@@ -365,19 +362,15 @@ object CookbookDocsGenerator {
         "IfConditionConfig.branchOnImage" to Reach.Runtime("conditionHasImage"),
         "IfConditionConfig.engineProvider" to Reach.Runtime("cloudProvider"),
         "ClarificationConfig.questionTemplate" to Reach.Runtime("systemPrompt"),
-        "ClarificationConfig.quickReplies" to
-            Reach.EditorOnly("the answer options are produced by the model"),
+        "ClarificationConfig.quickReplies" to Reach.Runtime("quickReplies"),
         "ClarificationConfig.timeoutMs" to Reach.Runtime("clarificationTimeoutMs"),
         "ToolConfig.toolId" to Reach.Runtime("toolName"),
-        "ToolConfig.confirmOverride" to
-            Reach.EditorOnly("approval follows the tool's risk level and your settings"),
+        "ToolConfig.alwaysConfirm" to Reach.Runtime("alwaysConfirm"),
         "ToolConfig.engineProvider" to Reach.Runtime("cloudProvider"),
         "DecompositionConfig.planningPrompt" to Reach.Runtime("systemPrompt"),
-        "DecompositionConfig.maxSubtasks" to
-            Reach.EditorOnly("how many subtasks appear is decided by the prompt and the run's step ceiling"),
+        "DecompositionConfig.maxSubtasks" to Reach.Runtime("maxSubtasks"),
         "DecompositionConfig.engineProvider" to Reach.Runtime("cloudProvider"),
-        "QueueProcessorConfig.stopOnError" to
-            Reach.EditorOnly("what happens after a failed subtask is decided by the graph, not by this switch"),
+        "QueueProcessorConfig.stopOnError" to Reach.Runtime("stopOnError"),
         "EvaluationConfig.criteriaPrompt" to Reach.Runtime("systemPrompt"),
         "EvaluationConfig.maxRetries" to
             Reach.Graph("whether the node has a Retry branch at all — it does not cap how often that branch is taken"),
@@ -436,6 +429,12 @@ object CookbookDocsGenerator {
         ),
         "INTENT_ROUTER" to listOf(
             RuntimeInput("The instruction that sorts the message into a class", "systemPrompt", SetVia.Sheet),
+            RuntimeInput(
+                decides = "Where an answer matching no class goes. Unset, it takes the first branch you " +
+                    "connected; set, it takes that class's branch, and terminates when that branch is unwired",
+                property = "fallbackClass",
+                setVia = SetVia.Sheet,
+            ),
             RuntimeInput("Whether the sorting runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
         ),
         "IF_CONDITION" to listOf(
@@ -463,6 +462,12 @@ object CookbookDocsGenerator {
         ),
         "CLARIFICATION" to listOf(
             RuntimeInput("The question you are asked", "systemPrompt", SetVia.Sheet),
+            RuntimeInput(
+                decides = "The answers offered as chips. Left empty, the model writes them; filled in, yours " +
+                    "replace them and stay the same on every run",
+                property = "quickReplies",
+                setVia = SetVia.Sheet,
+            ),
             RuntimeInput("How long the run waits for your answer", "clarificationTimeoutMs", SetVia.Sheet),
         ),
         "TOOL" to listOf(
@@ -471,13 +476,27 @@ object CookbookDocsGenerator {
                 property = "toolName",
                 setVia = SetVia.Sheet,
             ),
+            RuntimeInput(
+                decides = "Whether every call through this node is confirmed, on top of whatever the tool's " +
+                    "risk and your settings already require",
+                property = "alwaysConfirm",
+                setVia = SetVia.Sheet,
+            ),
             RuntimeInput("Whether the call is composed on-device or in the cloud", "cloudProvider", SetVia.Sheet),
         ),
         "DECOMPOSITION" to listOf(
             RuntimeInput("The instruction that produces the subtask list", "systemPrompt", SetVia.Sheet),
+            RuntimeInput("How many of the produced subtasks are kept", "maxSubtasks", SetVia.Sheet),
             RuntimeInput("Whether the planning runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),
         ),
-        "QUEUE_PROCESSOR" to emptyList(),
+        "QUEUE_PROCESSOR" to listOf(
+            RuntimeInput(
+                decides = "What a failing subtask does to the run: end it, or become that subtask's result " +
+                    "and let the next one start",
+                property = "stopOnError",
+                setVia = SetVia.Sheet,
+            ),
+        ),
         "EVALUATION" to listOf(
             RuntimeInput("The instruction that judges the result", "systemPrompt", SetVia.Sheet),
             RuntimeInput("Whether the judgement runs on-device or in the cloud", "cloudProvider", SetVia.Sheet),

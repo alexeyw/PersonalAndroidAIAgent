@@ -237,13 +237,14 @@ class ClarificationNodeExecutorTest {
         assertTrue("Thinking must precede AwaitingClarification", thinkingIdx < awaitingIdx)
     }
 
-    private fun clarificationNode(timeoutMs: Long? = null) = NodeModel(
+    private fun clarificationNode(timeoutMs: Long? = null, quickReplies: String? = null) = NodeModel(
         id = "node-1",
         type = NodeType.CLARIFICATION,
         x = 0f,
         y = 0f,
         systemPrompt = "Ask the user for clarification.",
         clarificationTimeoutMs = timeoutMs,
+        quickReplies = quickReplies,
     )
 
     // ─── Two-phase background waiting ───────────────────────────────────────
@@ -428,4 +429,38 @@ class ClarificationNodeExecutorTest {
                 recordTriggerHitlEvent("run-1", TriggerHitlEvent.Resolved(TriggerHitlResolution.ANSWERED))
             }
         }
+
+    @Test
+    fun `given configured quick replies then they replace the ones the model produced`() = runTest {
+        val node = clarificationNode(quickReplies = "Yes, No, Later")
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Pick a color\",\"options\":[\"red\",\"blue\"]}",
+        )
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("Yes")
+
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
+
+        // The model still writes the question — only the answers are pinned.
+        // An author who needs a fixed set to branch on cannot have them
+        // re-invented on every run.
+        val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
+        assertEquals("Pick a color", awaiting.request.question)
+        assertEquals(listOf("Yes", "No", "Later"), awaiting.request.options)
+    }
+
+    @Test
+    fun `given blank quick replies then the model's own options stand`() = runTest {
+        val node = clarificationNode(quickReplies = "   ,  ")
+        coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
+        every { llmEngine.generateResponseStream(any()) } returns flowOf(
+            "{\"question\":\"Pick a color\",\"options\":[\"red\",\"blue\"]}",
+        )
+        coEvery { clarificationRepository.requestAnswer(any()) } returns ClarificationOutcome.Answered("red")
+
+        val states = executor.execute(node, "ctx", "session", "prompt").toList().unwrap()
+
+        val awaiting = states.filterIsInstance<AgentOrchestratorState.AwaitingClarification>().single()
+        assertEquals(listOf("red", "blue"), awaiting.request.options)
+    }
 }

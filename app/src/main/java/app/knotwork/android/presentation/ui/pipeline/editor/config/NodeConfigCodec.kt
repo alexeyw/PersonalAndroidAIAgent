@@ -7,7 +7,6 @@ import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.design.components.pipelineeditor.ClarificationConfig
 import app.knotwork.design.components.pipelineeditor.CloudConfig
-import app.knotwork.design.components.pipelineeditor.ConfirmPolicy
 import app.knotwork.design.components.pipelineeditor.DecompositionConfig
 import app.knotwork.design.components.pipelineeditor.EvaluationConfig
 import app.knotwork.design.components.pipelineeditor.IfConditionConfig
@@ -145,6 +144,10 @@ internal object NodeConfigCodec {
             )
             is ToolConfig -> withJson.copy(
                 toolName = config.toolId.takeIf { it.isNotBlank() },
+                // `false` stored as `null`: the flat field's absence and its
+                // `false` mean the same thing to the gate, and `null` is what an
+                // exported file should carry for "not set".
+                alwaysConfirm = config.alwaysConfirm.takeIf { it },
                 cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
             )
             is IfConditionConfig -> withJson.copy(
@@ -159,6 +162,14 @@ internal object NodeConfigCodec {
             )
             is ClarificationConfig -> withJson.copy(
                 clarificationTimeoutMs = config.timeoutMs?.toLong(),
+                // Joined rather than stored as JSON, matching `conditionKeywords`:
+                // the column is a list the user typed, and blank means "let the
+                // model write the options" rather than "no options".
+                quickReplies = config.quickReplies
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(", "),
                 systemPrompt = config.questionTemplate,
             )
             // OUTPUT mirrors `systemPrompt` onto the domain row so the
@@ -196,10 +207,12 @@ internal object NodeConfigCodec {
             // through `PipelineJsonSerializer`, whose `optStringOrNull` maps an
             // empty string to `null` — so the two editors agree in effect.
             is IntentRouterConfig -> withJson.copy(
+                fallbackClass = config.fallbackClass?.takeIf { it.isNotBlank() },
                 systemPrompt = config.classifierPrompt.takeIf { it.isNotBlank() },
                 cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
             )
             is DecompositionConfig -> withJson.copy(
+                maxSubtasks = config.maxSubtasks,
                 systemPrompt = config.planningPrompt.takeIf { it.isNotBlank() },
                 cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
             )
@@ -213,9 +226,8 @@ internal object NodeConfigCodec {
             is SummaryConfig -> withJson.copy(
                 systemPrompt = config.customPrompt?.takeIf { it.isNotBlank() },
             )
-            is QueueProcessorConfig,
-            is InputConfig,
-            -> withJson
+            is QueueProcessorConfig -> withJson.copy(stopOnError = config.stopOnError)
+            is InputConfig -> withJson
         }
     }
 
@@ -328,7 +340,7 @@ internal object NodeConfigCodec {
             CatalogNodeType.CLARIFICATION -> decodeClarification(payload, title, description, fallback)
             CatalogNodeType.TOOL -> decodeTool(payload, title, description, fallback)
             CatalogNodeType.DECOMPOSITION -> decodeDecomposition(payload, title, description, fallback)
-            CatalogNodeType.QUEUE_PROCESSOR -> decodeQueueProcessor(payload, title, description)
+            CatalogNodeType.QUEUE_PROCESSOR -> decodeQueueProcessor(payload, title, description, fallback)
             CatalogNodeType.EVALUATION -> decodeEvaluation(payload, title, description, fallback)
             CatalogNodeType.SUMMARY -> decodeSummary(payload, title, description, fallback)
             CatalogNodeType.PIPELINE -> decodePipeline(payload, title, description, fallback)
@@ -373,6 +385,7 @@ internal object NodeConfigCodec {
             CatalogNodeType.INTENT_ROUTER -> IntentRouterConfig(
                 title = title,
                 classifierPrompt = systemPromptOrDefault,
+                fallbackClass = node.fallbackClass,
                 engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.IF_CONDITION -> IfConditionConfig(
@@ -390,19 +403,27 @@ internal object NodeConfigCodec {
             CatalogNodeType.CLARIFICATION -> ClarificationConfig(
                 title = title,
                 questionTemplate = systemPromptOrDefault,
+                quickReplies = node.quickReplies?.split(",").orEmpty()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() },
                 timeoutMs = node.clarificationTimeoutMs?.toInt(),
             )
             CatalogNodeType.TOOL -> ToolConfig(
                 title = title,
                 toolId = node.toolName.orEmpty(),
+                alwaysConfirm = node.alwaysConfirm == true,
                 engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.DECOMPOSITION -> DecompositionConfig(
                 title = title,
                 planningPrompt = systemPromptOrDefault,
+                maxSubtasks = node.maxSubtasks ?: DEFAULT_MAX_SUBTASKS,
                 engineProvider = engineProviderFromWire(node.cloudProvider),
             )
-            CatalogNodeType.QUEUE_PROCESSOR -> QueueProcessorConfig(title = title)
+            CatalogNodeType.QUEUE_PROCESSOR -> QueueProcessorConfig(
+                title = title,
+                stopOnError = node.stopOnError ?: true,
+            )
             CatalogNodeType.EVALUATION -> EvaluationConfig(
                 title = title,
                 criteriaPrompt = systemPromptOrDefault,
@@ -482,7 +503,7 @@ internal object NodeConfigCodec {
 
     private fun encodeTool(json: JSONObject, c: ToolConfig) {
         json.put("toolId", c.toolId)
-        c.confirmOverride?.let { json.put("confirmOverride", it.name) }
+        json.put("alwaysConfirm", c.alwaysConfirm)
         c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
 
@@ -587,7 +608,7 @@ internal object NodeConfigCodec {
             }
         }.orEmpty(),
         classifierPrompt = p.optString("classifierPrompt").ifBlank { fb.systemPrompt.orEmpty() },
-        fallbackClass = p.optStringOrNull("fallbackClass"),
+        fallbackClass = p.optStringOrNull("fallbackClass") ?: fb.fallbackClass,
         engineProvider = decodeEngineProvider(p, fb),
     )
 
@@ -620,7 +641,8 @@ internal object NodeConfigCodec {
         title = title,
         description = description,
         questionTemplate = p.optString("questionTemplate").ifBlank { fb.systemPrompt.orEmpty() },
-        quickReplies = p.optStringList("quickReplies"),
+        quickReplies = p.optStringList("quickReplies")
+            .ifEmpty { fb.quickReplies?.split(",").orEmpty().map { it.trim() }.filter { it.isNotEmpty() } },
         timeoutMs = if (p.has("timeoutMs")) p.optInt("timeoutMs") else fb.clarificationTimeoutMs?.toInt(),
     )
 
@@ -628,7 +650,7 @@ internal object NodeConfigCodec {
         title = title,
         description = description,
         toolId = p.optString("toolId").ifBlank { fb.toolName.orEmpty() },
-        confirmOverride = enumOrNull<ConfirmPolicy>(p.optStringOrNull("confirmOverride")),
+        alwaysConfirm = p.optBoolean("alwaysConfirm", fb.alwaysConfirm == true),
         engineProvider = decodeEngineProvider(p, fb),
     )
 
@@ -641,16 +663,20 @@ internal object NodeConfigCodec {
         title = title,
         description = description,
         planningPrompt = p.optString("planningPrompt").ifBlank { fb.systemPrompt.orEmpty() },
-        maxSubtasks = p.optInt("maxSubtasks", DEFAULT_MAX_SUBTASKS),
+        maxSubtasks = p.optInt("maxSubtasks", fb.maxSubtasks ?: DEFAULT_MAX_SUBTASKS),
         engineProvider = decodeEngineProvider(p, fb),
     )
 
-    private fun decodeQueueProcessor(p: JSONObject, title: String, description: String?): QueueProcessorConfig =
-        QueueProcessorConfig(
-            title = title,
-            description = description,
-            stopOnError = p.optBoolean("stopOnError", true),
-        )
+    private fun decodeQueueProcessor(
+        p: JSONObject,
+        title: String,
+        description: String?,
+        fb: NodeModel,
+    ): QueueProcessorConfig = QueueProcessorConfig(
+        title = title,
+        description = description,
+        stopOnError = p.optBoolean("stopOnError", fb.stopOnError ?: true),
+    )
 
     private fun decodeEvaluation(p: JSONObject, title: String, description: String?, fb: NodeModel): EvaluationConfig =
         EvaluationConfig(

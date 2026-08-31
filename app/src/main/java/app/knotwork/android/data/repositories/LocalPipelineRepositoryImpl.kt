@@ -79,6 +79,11 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
             systemPrompt = it.systemPrompt,
             cloudProvider = it.cloudProvider,
             clarificationTimeoutMs = it.clarificationTimeoutMs,
+            fallbackClass = it.fallbackClass,
+            quickReplies = it.quickReplies,
+            alwaysConfirm = it.alwaysConfirm,
+            maxSubtasks = it.maxSubtasks,
+            stopOnError = it.stopOnError,
             contextConfig = it.contextConfig,
             configJson = it.configJson,
         )
@@ -124,6 +129,11 @@ class LocalPipelineRepositoryImpl @Inject constructor(private val pipelineDao: P
                     ),
                 cloudProvider = it.cloudProvider,
                 clarificationTimeoutMs = it.clarificationTimeoutMs,
+                fallbackClass = it.fallbackClass,
+                quickReplies = it.quickReplies,
+                alwaysConfirm = it.alwaysConfirm,
+                maxSubtasks = it.maxSubtasks,
+                stopOnError = it.stopOnError,
                 contextConfig = it.contextConfig,
                 configJson = it.configJson,
             )

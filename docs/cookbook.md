@@ -167,12 +167,9 @@ Sorts the incoming text into one of the classes you declare and sends the run do
 | What it decides | Where the value comes from |
 |---|---|
 | The instruction that sorts the message into a class | the sheet's `classifierPrompt` — a new node arrives with this type's shipped default in it |
+| Where an answer matching no class goes. Unset, it takes the first branch you connected; set, it takes that class's branch, and terminates when that branch is unwired | the sheet's `fallbackClass` |
 | Whether the sorting runs on-device or in the cloud | the sheet's `engineProvider` |
 | Which branches exist — one port per class, and the run follows the edge the model picks | the sheet's `classes` |
-
-**Also on the sheet, and ignored by the run:**
-
-- `fallbackClass` — an answer matching no class takes whichever branch you connected first, not the class named here; connect the branch you want as the fallback before the others
 
 ### If Condition — `IF_CONDITION`
 
@@ -203,11 +200,8 @@ Pauses the run to ask you a question and waits for the answer, which then become
 | What it decides | Where the value comes from |
 |---|---|
 | The question you are asked | the sheet's `questionTemplate` — a new node arrives with this type's shipped default in it |
+| The answers offered as chips. Left empty, the model writes them; filled in, yours replace them and stay the same on every run | the sheet's `quickReplies` |
 | How long the run waits for your answer | the sheet's `timeoutMs` |
-
-**Also on the sheet, and ignored by the run:**
-
-- `quickReplies` — the answer options are produced by the model
 
 ### Tool — `TOOL`
 
@@ -221,11 +215,8 @@ Calls one tool — a built-in, an AppFunction from another app, or one published
 | What it decides | Where the value comes from |
 |---|---|
 | Which tool is called — or, left empty, that the model picks one | the sheet's `toolId` |
+| Whether every call through this node is confirmed, on top of whatever the tool's risk and your settings already require | the sheet's `alwaysConfirm` |
 | Whether the call is composed on-device or in the cloud | the sheet's `engineProvider` |
-
-**Also on the sheet, and ignored by the run:**
-
-- `confirmOverride` — approval follows the tool's risk level and your settings
 
 ### Decomposition — `DECOMPOSITION`
 
@@ -239,11 +230,8 @@ Turns one instruction into a list of subtasks. On its own it only produces the l
 | What it decides | Where the value comes from |
 |---|---|
 | The instruction that produces the subtask list | the sheet's `planningPrompt` — a new node arrives with this type's shipped default in it |
+| How many of the produced subtasks are kept | the sheet's `maxSubtasks` |
 | Whether the planning runs on-device or in the cloud | the sheet's `engineProvider` |
-
-**Also on the sheet, and ignored by the run:**
-
-- `maxSubtasks` — how many subtasks appear is decided by the prompt and the run's step ceiling
 
 ### Queue Processor — `QUEUE_PROCESSOR`
 
@@ -252,11 +240,11 @@ Walks a list of subtasks one at a time, sending each down the Item branch and ta
 - **Ports.** One inbound port; outbound ports **Item**, **Done**.
 - **Context on a new node.** This type ignores the context configuration — it forwards the upstream text unchanged.
 
-**Nothing on this node changes a run.** What it does is fixed; what happens around it is decided by the graph.
+**What decides what it does**
 
-**Also on the sheet, and ignored by the run:**
-
-- `stopOnError` — what happens after a failed subtask is decided by the graph, not by this switch
+| What it decides | Where the value comes from |
+|---|---|
+| What a failing subtask does to the run: end it, or become that subtask's result and let the next one start | the sheet's `stopOnError` |
 
 ### Evaluation — `EVALUATION`
 
@@ -510,25 +498,27 @@ which as well as what the engine does with each one.
   pipeline, exported with it, never read during a run. The bracket says what to
   do instead.
 
-The `No` rows are a defect list, not a design. Each one is being resolved the
-only two ways it can be — the control is wired up to the setting it names, or it
-leaves the sheet — and this table shrinks as that happens. Until then it is here
-so you do not spend an evening tuning one.
+**There are no `No` rows left.** There used to be twenty-five, and they were a
+defect list rather than a design: a control you could change that changed
+nothing. Each was resolved the only two ways it could be.
 
-Most of them have now gone. Four prompt fields were *required* by the sheet and
-still never reached the run; they were wired up. Ten more named things the engine
-has no concept of — a typed pipeline input, an output format, a parallel queue,
-hand-mapped tool arguments — and those controls were removed rather than
-explained, so the app's sheets no longer offer them. (The browser editor still
-does; it is being brought in line separately.) Eight became **Not a control**:
-they had already lost their controls and were only ever listed here because the
-verdict column had no word for "kept for compatibility". This page is generated
-from the code that defines a node, so each repair corrects its own entry.
+Nine were wired up — four prompt fields that the sheet *required* and the run
+never read, then the intent-router fallback class, the clarification quick
+replies, the per-node confirmation, the sub-task cap and the queue's
+stop-on-error switch. Twelve were removed, because the engine has no matching
+concept: a typed pipeline input, an output format, a parallel queue, hand-mapped
+tool arguments, renamed branch labels. Eight became **Not a control** — they had
+already lost their controls and were only ever listed here because the verdict
+column had no word for "kept for compatibility".
 
-Two fields went the other way. `IF_CONDITION` reads a keyword list and a length
-threshold *before* it asks the model anything, and until now neither had a
-control at all — an imported pipeline could decide every branch on a keyword and
-the sheet said nothing about it. Both are now on the sheet.
+Two fields went the other way, from invisible to editable. `IF_CONDITION` reads a
+keyword list and a length threshold *before* it asks the model anything, and
+neither had a control at all — an imported pipeline could decide every branch on
+a keyword while the sheet said nothing about it.
+
+This page is generated from the code that defines a node, so the count above is
+not a promise anyone has to keep by hand: a control that stops reaching the run
+grows its own row back.
 
 <!-- AUTO-GEN:FIELD_TABLE -->
 | Node | Field | Default | Reaches the run |
@@ -549,7 +539,7 @@ the sheet said nothing about it. Both are now on the sheet.
 | `CLOUD` | `timeoutMs` | `30_000` | **Not a control** — no sheet shows it; kept so an older pipeline file round-trips (the cloud client is configured from the provider's own settings) |
 | `INTENT_ROUTER` | `classes` | `emptyList()` | **Shapes the graph** — which branches exist — one port per class, and the run follows the edge the model picks |
 | `INTENT_ROUTER` | `classifierPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
-| `INTENT_ROUTER` | `fallbackClass` | `null` | **No** — stored and exported, but nothing reads it during a run (an answer matching no class takes whichever branch you connected first, not the class named here; connect the branch you want as the fallback before the others) |
+| `INTENT_ROUTER` | `fallbackClass` | `null` | **Yes** — saved as the node's `fallbackClass` |
 | `INTENT_ROUTER` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
 | `IF_CONDITION` | `expression` | `""` | **Yes** — saved as the node's `conditionPrompt` |
 | `IF_CONDITION` | `keywords` | `""` | **Yes** — saved as the node's `conditionKeywords` |
@@ -557,15 +547,15 @@ the sheet said nothing about it. Both are now on the sheet.
 | `IF_CONDITION` | `branchOnImage` | `false` | **Yes** — saved as the node's `conditionHasImage` |
 | `IF_CONDITION` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
 | `CLARIFICATION` | `questionTemplate` | `""` | **Yes** — saved as the node's `systemPrompt` |
-| `CLARIFICATION` | `quickReplies` | `emptyList()` | **No** — stored and exported, but nothing reads it during a run (the answer options are produced by the model) |
+| `CLARIFICATION` | `quickReplies` | `emptyList()` | **Yes** — saved as the node's `quickReplies` |
 | `CLARIFICATION` | `timeoutMs` | `null` | **Yes** — saved as the node's `clarificationTimeoutMs` |
 | `TOOL` | `toolId` | `""` | **Yes** — saved as the node's `toolName` |
-| `TOOL` | `confirmOverride` | `null` | **No** — stored and exported, but nothing reads it during a run (approval follows the tool's risk level and your settings) |
+| `TOOL` | `alwaysConfirm` | `false` | **Yes** — saved as the node's `alwaysConfirm` |
 | `TOOL` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
 | `DECOMPOSITION` | `planningPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
-| `DECOMPOSITION` | `maxSubtasks` | `5` | **No** — stored and exported, but nothing reads it during a run (how many subtasks appear is decided by the prompt and the run's step ceiling) |
+| `DECOMPOSITION` | `maxSubtasks` | `5` | **Yes** — saved as the node's `maxSubtasks` |
 | `DECOMPOSITION` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |
-| `QUEUE_PROCESSOR` | `stopOnError` | `true` | **No** — stored and exported, but nothing reads it during a run (what happens after a failed subtask is decided by the graph, not by this switch) |
+| `QUEUE_PROCESSOR` | `stopOnError` | `true` | **Yes** — saved as the node's `stopOnError` |
 | `EVALUATION` | `criteriaPrompt` | `""` | **Yes** — saved as the node's `systemPrompt` |
 | `EVALUATION` | `maxRetries` | `2` | **Shapes the graph** — whether the node has a Retry branch at all — it does not cap how often that branch is taken |
 | `EVALUATION` | `engineProvider` | `null` | **Yes** — saved as the node's `cloudProvider` |

@@ -5,7 +5,6 @@ import app.knotwork.android.domain.models.NodeType
 import app.knotwork.design.components.pipelineeditor.ClarificationConfig
 import app.knotwork.design.components.pipelineeditor.CloudConfig
 import app.knotwork.design.components.pipelineeditor.CloudProvider
-import app.knotwork.design.components.pipelineeditor.ConfirmPolicy
 import app.knotwork.design.components.pipelineeditor.DecompositionConfig
 import app.knotwork.design.components.pipelineeditor.EvaluationConfig
 import app.knotwork.design.components.pipelineeditor.IfConditionConfig
@@ -160,6 +159,11 @@ class CookbookRuntimeReachTest {
         "systemPrompt" to node.systemPrompt,
         "cloudProvider" to node.cloudProvider,
         "clarificationTimeoutMs" to node.clarificationTimeoutMs,
+        "fallbackClass" to node.fallbackClass,
+        "quickReplies" to node.quickReplies,
+        "alwaysConfirm" to node.alwaysConfirm,
+        "maxSubtasks" to node.maxSubtasks,
+        "stopOnError" to node.stopOnError,
     )
 
     /** A freshly created node of [type], exactly as the editor would place it. */
@@ -236,7 +240,7 @@ class CookbookRuntimeReachTest {
             title = TITLE,
             description = NOTE,
             toolId = "mutated_tool",
-            confirmOverride = ConfirmPolicy.ALWAYS_CONFIRM,
+            alwaysConfirm = true,
             engineProvider = CloudProvider.ANTHROPIC,
         )
 

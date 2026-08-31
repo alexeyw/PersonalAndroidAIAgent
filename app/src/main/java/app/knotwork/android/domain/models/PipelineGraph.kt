@@ -236,6 +236,11 @@ data class PipelineGraph(
                 append(node.systemPrompt.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.cloudProvider.orEmpty()).append(FIELD_SEPARATOR)
                 append(node.clarificationTimeoutMs?.toString().orEmpty()).append(FIELD_SEPARATOR)
+                append(node.fallbackClass.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.quickReplies.orEmpty()).append(FIELD_SEPARATOR)
+                append(node.alwaysConfirm?.toString().orEmpty()).append(FIELD_SEPARATOR)
+                append(node.maxSubtasks?.toString().orEmpty()).append(FIELD_SEPARATOR)
+                append(node.stopOnError?.toString().orEmpty()).append(FIELD_SEPARATOR)
                 append(node.contextConfig.toString()).append(FIELD_SEPARATOR)
                 append(node.configJson.orEmpty()).append(RECORD_SEPARATOR)
             }

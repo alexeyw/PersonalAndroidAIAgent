@@ -15,6 +15,39 @@ details.
 
 ### Added
 
+- **Nine node settings that did nothing now do what their names say.** The
+  reference listed twenty-five configuration fields the run never read; there
+  are none left. Four prompt fields were repaired earlier in this cycle; the
+  five here are the ones that needed a place to be stored:
+
+  - **Intent Router → Fallback class.** An answer the router could not place
+    used to take whichever branch you happened to connect first. Name a class
+    and it takes that one — and stops rather than guessing when that branch is
+    not wired, the same call the If node already makes. Leave it empty and
+    nothing changes for pipelines written before this, which is deliberate: a
+    graph whose author never made this decision must not be silently re-routed.
+  - **Clarify → Quick replies.** Yours now replace the answers the model would
+    have invented. The model still writes the question; only the choices are
+    pinned, which is what a pipeline branching on the answer needs.
+  - **Tool → Always ask before this call.** Adds a confirmation to every call
+    this node makes, on top of whatever the tool's risk and your settings
+    already require. It can only add one. A node cannot waive a confirmation —
+    a pipeline file is a document that can be shared, and one able to say "do
+    not ask about this deletion" would walk somebody else's document straight
+    past the gate.
+  - **Decompose → Max subtasks.** Now a cap rather than a suggestion. The list
+    is trimmed after the model answers, because the prompt is the thing least
+    able to hold a number.
+  - **Each subtask → Stop on first error.** Turn it off and a failing subtask
+    becomes that subtask's result instead of the end of the run; the next one
+    starts. On (and unset) keeps today's behaviour exactly.
+
+  Twelve more fields named things the engine has no concept of and were removed
+  instead — including the If node's branch labels, which read like a missing
+  feature and are not: the engine identifies a branch by the literal words
+  `True` and `False` on the edge, so renaming one would change what routes
+  where in every graph already saved.
+
 - **The three sampling sliders now reach the on-device model.**
   **Temperature**, **Top-K** and **Top-P** were read by the settings screen and
   by nothing else: the engine opened every conversation with no sampler

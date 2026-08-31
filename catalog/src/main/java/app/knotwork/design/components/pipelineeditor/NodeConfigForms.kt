@@ -1177,17 +1177,12 @@ private fun ToolFormBody(
         onChange = onChange,
     )
     FieldCaption(text = stringResource(R.string.knotwork_node_tool_arguments_help))
-    SegmentedChipRow(
-        label = stringResource(R.string.knotwork_node_field_confirm_override),
-        values = listOf<Pair<ConfirmPolicy?, String>>(
-            null to "<inherit>",
-            ConfirmPolicy.ALWAYS_CONFIRM to "Always confirm",
-            ConfirmPolicy.ALLOW_READONLY to "Allow read-only",
-            ConfirmPolicy.ALLOW_SENSITIVE to "Allow sensitive",
-        ),
-        selected = config.confirmOverride,
-        onSelect = { next -> onChange(config.copy(confirmOverride = next)) },
+    ToggleRowField(
+        label = stringResource(R.string.knotwork_node_field_always_confirm),
+        checked = config.alwaysConfirm,
+        onChange = { next -> onChange(config.copy(alwaysConfirm = next)) },
     )
+    FieldCaption(text = stringResource(R.string.knotwork_node_field_always_confirm_help))
     EngineProviderRow(config.engineProvider) { next -> onChange(config.copy(engineProvider = next)) }
 }
 

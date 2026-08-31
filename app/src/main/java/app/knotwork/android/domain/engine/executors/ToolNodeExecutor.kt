@@ -144,6 +144,7 @@ class ToolNodeExecutor @Inject constructor(
             runId = runId,
             resolvedToolName = resolved.first,
             resolvedToolArgs = resolved.second,
+            alwaysConfirm = node.alwaysConfirm == true,
         )
     }
 

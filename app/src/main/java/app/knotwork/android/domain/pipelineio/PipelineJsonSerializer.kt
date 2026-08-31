@@ -40,6 +40,11 @@ import org.json.JSONObject
  *         "conditionPrompt": "",
  *         "conditionKeywords": "",
  *         "conditionComplexity": null,
+ *         "fallbackClass": null,
+ *         "quickReplies": null,
+ *         "alwaysConfirm": null,
+ *         "maxSubtasks": null,
+ *         "stopOnError": null,
  *         "conditionHasImage": null
  *       },
  *       "contextConfig": { "chatHistory": true, ... },
@@ -145,6 +150,7 @@ object PipelineJsonSerializer {
     private val CONFIG_KEYS = setOf(
         "systemPrompt", "cloudProvider", "modelPath", "toolName", "targetPipelineId", "skillId",
         "clarificationTimeoutMs", "conditionPrompt", "conditionKeywords", "conditionComplexity",
+        "fallbackClass", "quickReplies", "alwaysConfirm", "maxSubtasks", "stopOnError",
         "conditionHasImage",
     )
     private val CONTEXT_CONFIG_KEYS = setOf(
@@ -215,6 +221,11 @@ object PipelineJsonSerializer {
             .put("clarificationTimeoutMs", node.clarificationTimeoutMs ?: JSONObject.NULL)
             .put("conditionPrompt", node.conditionPrompt ?: JSONObject.NULL)
             .put("conditionKeywords", node.conditionKeywords ?: JSONObject.NULL)
+            .put("fallbackClass", node.fallbackClass ?: JSONObject.NULL)
+            .put("quickReplies", node.quickReplies ?: JSONObject.NULL)
+            .put("alwaysConfirm", node.alwaysConfirm ?: JSONObject.NULL)
+            .put("maxSubtasks", node.maxSubtasks ?: JSONObject.NULL)
+            .put("stopOnError", node.stopOnError ?: JSONObject.NULL)
             .put("conditionComplexity", node.conditionComplexity ?: JSONObject.NULL)
             .put("conditionHasImage", node.conditionHasImage ?: JSONObject.NULL)
 
@@ -444,6 +455,11 @@ object PipelineJsonSerializer {
             modelPath = config.optStringOrNull("modelPath"),
             conditionComplexity = config.optIntOrNull("conditionComplexity"),
             conditionKeywords = config.optStringOrNull("conditionKeywords"),
+            fallbackClass = config.optStringOrNull("fallbackClass"),
+            quickReplies = config.optStringOrNull("quickReplies"),
+            alwaysConfirm = config.optBooleanOrNull("alwaysConfirm"),
+            maxSubtasks = config.optIntOrNull("maxSubtasks"),
+            stopOnError = config.optBooleanOrNull("stopOnError"),
             conditionPrompt = config.optStringOrNull("conditionPrompt"),
             conditionHasImage = config.optBooleanOrNull("conditionHasImage"),
             systemPrompt = config.optStringOrNull("systemPrompt"),

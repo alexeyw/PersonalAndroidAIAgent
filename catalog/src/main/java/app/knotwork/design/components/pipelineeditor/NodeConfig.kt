@@ -42,9 +42,6 @@ data class LocalModelOption(val id: String, val displayName: String, val isActiv
  */
 enum class CloudProvider { OPEN_AI, ANTHROPIC, GOOGLE, COMPATIBLE, AUTO }
 
-/** Tool-call confirmation override for [ToolConfig]. `null` = inherit declared risk. */
-enum class ConfirmPolicy { ALWAYS_CONFIRM, ALLOW_READONLY, ALLOW_SENSITIVE }
-
 /**
  * Configuration for [NodeType.INPUT] — pipeline entry contract.
  *
@@ -230,8 +227,11 @@ data class ClarificationConfig(
  * @property title display title.
  * @property description optional one-line note.
  * @property toolId fully-qualified tool identifier (e.g. `fs.write_file`).
- * @property confirmOverride optional override of the tool's declared risk
- * policy; `null` inherits the tool's declared risk.
+ * @property alwaysConfirm ask for approval on every call through this node,
+ * whatever the tool's risk. `false` inherits the tool's risk and the user's
+ * settings. One-directional on purpose: the node can add a prompt, never remove
+ * one — a pipeline file is a document that can be shared, and a node able to
+ * waive approval would let somebody else's document past the gate.
  * @property engineProvider optional cloud provider backing this node's
  * structured tool-selection / argument inference; `null` runs on-device.
  */
@@ -239,7 +239,7 @@ data class ToolConfig(
     override val title: String,
     override val description: String? = null,
     val toolId: String = "",
-    val confirmOverride: ConfirmPolicy? = null,
+    val alwaysConfirm: Boolean = false,
     val engineProvider: CloudProvider? = null,
 ) : NodeConfig {
     override val type: NodeType get() = NodeType.TOOL
