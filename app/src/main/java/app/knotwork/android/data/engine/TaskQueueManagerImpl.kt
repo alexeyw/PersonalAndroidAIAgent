@@ -318,7 +318,13 @@ class TaskQueueManagerImpl @Inject constructor(
             // A task cancelled before it ever ran still owns a QUEUED record.
             // Left alone it would sit there until the next launch swept it as an
             // orphan and blamed a dead process for something the user did.
-            dropped.forEach { task -> pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED) }
+            dropped.forEach { task ->
+                // The message first, then the outcome: they land in the thread in
+                // that order, and a line saying the run was stopped needs the
+                // question it answers to be above it.
+                persistUserMessage(task)
+                pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED)
+            }
 
             // Re-read rather than captured before the launch: by now the worker
             // may have moved on to another session, and that run is not ours to
@@ -335,6 +341,37 @@ class TaskQueueManagerImpl @Inject constructor(
                 getOrCreateStateFlow(sessionId).emit(AgentOrchestratorState.Idle)
             }
         }
+    }
+
+    /**
+     * Writes the task's user message into its chat, unless the task is a re-run
+     * whose row already exists.
+     *
+     * Shared with [cancelRun] rather than living inside the execution path,
+     * because a task cancelled while still queued never reaches that path — and
+     * the composer has already cleared. Without this the user's text is simply
+     * gone, and the line explaining that the run was stopped stands over no
+     * question at all.
+     *
+     * @param task The task whose message should be recorded.
+     */
+    private suspend fun persistUserMessage(task: AgentTask) {
+        // Skipped when the turn is being re-run after a failure: the user row is
+        // written before the pipeline starts, so it survived the failed attempt,
+        // and writing it again would show the same message twice.
+        if (!task.persistUserMessage) return
+        chatRepository.saveMessage(
+            ChatMessage(
+                sessionId = task.sessionId,
+                role = Role.USER,
+                // For an image-only message `displayContent` is the empty caption so
+                // the bubble shows just the thumbnail; `prompt` (the internal default
+                // instruction) still travels the graph.
+                content = task.displayContent ?: task.prompt,
+                timestamp = System.currentTimeMillis(),
+                attachment = task.attachment,
+            ),
+        )
     }
 
     /**
@@ -370,19 +407,7 @@ class TaskQueueManagerImpl @Inject constructor(
         // Skipped when the turn is being re-run after a failure: the user row is
         // written before the pipeline starts, so it survived the failed attempt,
         // and writing it again would show the same message twice.
-        if (task.persistUserMessage) {
-            val userMessage = ChatMessage(
-                sessionId = task.sessionId,
-                role = Role.USER,
-                // For an image-only message `displayContent` is the empty caption so
-                // the bubble shows just the thumbnail; `prompt` (the internal default
-                // instruction) still travels the graph.
-                content = task.displayContent ?: task.prompt,
-                timestamp = System.currentTimeMillis(),
-                attachment = task.attachment,
-            )
-            chatRepository.saveMessage(userMessage)
-        }
+        persistUserMessage(task)
 
         // 2. Load pipeline. Resolution is a deterministic chain that never
         // depends on the order pipelines come back from the repository:

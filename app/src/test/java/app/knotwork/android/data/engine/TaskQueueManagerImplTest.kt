@@ -14,6 +14,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
+import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
@@ -928,6 +929,54 @@ class TaskQueueManagerImplTest {
                 graphExecutionEngine.invoke("session_q", "second", any(), any())
             }
         }
+
+    @Test
+    fun `given a queued task is cancelled then the user's message is still in the thread`() = testScope.runTest {
+        // Found on the device, not here. The message is written when a task
+        // starts running, so a task cancelled while queued never wrote one —
+        // and the composer had already cleared. The user's text simply vanished
+        // and the line explaining the stop stood over no question at all.
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.Loading)
+            awaitCancellation()
+        }
+        taskQueueManager.enqueueTask(AgentTask(sessionId = "session_keep", prompt = "first"))
+        runCurrent()
+        val queued = AgentTask(sessionId = "session_keep", prompt = "the message I typed")
+        taskQueueManager.enqueueTask(queued)
+        runCurrent()
+
+        taskQueueManager.cancelRun("session_keep")
+        advanceUntilIdle()
+
+        coVerify {
+            chatRepository.saveMessage(
+                match { it.sessionId == "session_keep" && it.content == "the message I typed" && it.role == Role.USER },
+            )
+        }
+    }
+
+    @Test
+    fun `given a cancelled re-run then its message is not written a second time`() = testScope.runTest {
+        // `persistUserMessage = false` marks a turn re-run after a failure: the
+        // row survived the failed attempt, so writing it again would show the
+        // same message twice. The cancel path has to honour that too.
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.Loading)
+            awaitCancellation()
+        }
+        taskQueueManager.enqueueTask(AgentTask(sessionId = "session_rerun", prompt = "first"))
+        runCurrent()
+        taskQueueManager.enqueueTask(
+            AgentTask(sessionId = "session_rerun", prompt = "retried", persistUserMessage = false),
+        )
+        runCurrent()
+
+        taskQueueManager.cancelRun("session_rerun")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { chatRepository.saveMessage(match { it.content == "retried" }) }
+    }
 
     @Test
     fun `given nothing in flight when a session is cancelled then nothing is settled`() = testScope.runTest {
