@@ -291,6 +291,9 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `PipelineLibraryContent.kt` - pipeline list with sort/filter, per-row overflow, default/active badges, swipe-reveal.
     - `PipelineLibraryPreview.kt` - deterministic preview fixtures (4 sample pipelines) for snapshots.
     - `PipelineLibraryViewState.kt` - visual-state enum + filter enum + pipeline-row model.
+    - `PresetManagerContent.kt` - The preset manager: bundled and saved presets, filtered by category, each with rename / export / delete.
+    - `PresetManagerPreview.kt` - Fixtures for the preset manager's states.
+    - `PresetManagerViewState.kt` - Everything the preset manager renders, already resolved.
   - `prompts/` - Prompt-library page and the prompt-preset picker sheet.
     - `PromptLibraryContent.kt` - prompt library (tabbed categories, card list, FAB, optional edit-sheet overlay, snackbar host slot). The top bar carries the **import** action; each card's footer line carries `used by N` plus Preview · Duplicate · Edit · overflow (Export + Delete), or Preview · Duplicate · Export on a read-only row. Two layout rules are load-bearing: the caption yields and the icon cluster never does, so the overflow — and with it the only route to Delete — survives font scale 200 %; and the top bar drops its subtitle rather than clipping its title at the same scale. An empty **library** (as opposed to an empty category) hides the tabs and the FAB and offers Import / New instead.
     - `PromptLibraryViewState.kt` - visual-state enum + prompt-row / editor state + category / variable tracking + the import/export callbacks.
@@ -306,6 +309,10 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `ModelsSettingsContent.kt` - local model + inference backend and the cloud-provider list.
     - `PipelinesSettingsContent.kt` - pipeline / structured-output controls. Basic tier is the **Run limits** entry row, carrying the current step and token limits as its subtitle.
     - `PrivacySettingsContent.kt` - privacy, retention and telemetry controls (links out to the usage-statistics surface).
+    - `ProviderDetailContent.kt` - Everything the provider detail screen renders, with every string already resolved by `:app`.
+    - `ProviderDetailViewState.kt` - Everything the provider detail surface needs, already resolved.
+    - `ProviderPickerContent.kt` - The list of cloud providers a user can configure.
+    - `ProviderPickerViewState.kt` - The provider picker's contents, already resolved.
     - `RunLimitsContent.kt` - the run-limits screen: four ceilings plus the spend statement. Carries two components of its own. `LimitSliderRow` is a slider with a description and an optional state qualifier, laid out in a `FlowRow` rather than a `Row` — at a 200 % font scale a title and a trailing chip cannot share one line, and a `Row` resolves that by clipping the chip off the screen. `StatementRow` is an axis the product *states* rather than controls, deliberately not a disabled slider: a disabled control implies something could enable it, and nothing will.
     - `RunLimitsViewState.kt` - `RunLimitsViewState`, `LimitSliderRowState`, `StatementRowState` and `RunLimitsCallbacks`. Every axis has a *move* and a *commit*, because writing a background limit is what stops it following the interactive one.
     - `SettingsCallbacks.kt` - the single typed callback bundle shared by the hub and every sub-screen.

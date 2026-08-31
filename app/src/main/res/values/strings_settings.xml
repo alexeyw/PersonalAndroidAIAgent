@@ -123,7 +123,7 @@
     <string name="settings_memory_import_failed">Import failed: %1$s</string>
 
     <!-- Restart-required banner -->
-    <string name="settings_restart_required_message">Backend change requires restart.</string>
+    <string name="settings_restart_required_message">This change needs a restart to take effect.</string>
 
     <!-- Destructive typed-confirm dialog -->
     <string name="settings_destructive_clear_memory_title">Clear all memory?</string>

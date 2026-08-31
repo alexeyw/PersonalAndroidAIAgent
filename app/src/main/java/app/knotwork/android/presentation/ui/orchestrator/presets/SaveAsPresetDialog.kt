@@ -8,8 +8,6 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -22,6 +20,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import app.knotwork.android.R
 import app.knotwork.android.domain.models.PresetCategory
+import app.knotwork.design.components.chips.KnotworkChipSize
+import app.knotwork.design.components.chips.KnotworkFilterChip
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.theme.KnotworkTheme
@@ -85,12 +85,18 @@ fun SaveAsPresetDialog(initialName: String, onDismiss: () -> Unit, onConfirm: (S
                         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
                         verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
                     ) {
+                        // The Knotwork chip, not Material's. With
+                        // `filterChipColors()` the only difference selection made
+                        // was *losing* the outline every other chip had, so the
+                        // chosen category read as the one that was not chosen.
+                        // This is also the component the preset manager and the
+                        // picker already use for the same categories.
                         PresetCategory.entries.forEach { entry ->
-                            FilterChip(
+                            KnotworkFilterChip(
+                                label = presetCategoryLabelText(entry),
                                 selected = category == entry,
                                 onClick = { category = entry },
-                                label = { Text(presetCategoryLabelText(entry)) },
-                                colors = FilterChipDefaults.filterChipColors(),
+                                size = KnotworkChipSize.Sm,
                             )
                         }
                     }

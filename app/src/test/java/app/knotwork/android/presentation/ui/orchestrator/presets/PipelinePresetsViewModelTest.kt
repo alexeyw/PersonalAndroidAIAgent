@@ -66,6 +66,7 @@ class PipelinePresetsViewModelTest {
         pipelinePresetRepository,
         loadPipelineFromPresetUseCase,
         savePipelineAsPresetUseCase,
+        mockk(relaxed = true),
     )
 
     @Test
