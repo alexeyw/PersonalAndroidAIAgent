@@ -263,6 +263,16 @@ details.
 
 ### Fixed
 
+- **Stop now stops the run.** The button had only detached the screen from it:
+  the work carried on in the background, spending steps, tokens and battery, and
+  its answer still arrived in the conversation — so a control labelled *stop*
+  told you the opposite of what was happening. It now ends the run, and the
+  conversation gets a line saying the run was stopped before it could answer.
+  Anything of that chat's still queued behind it is dropped too.
+
+  Only that button ends a run. Switching to another chat leaves its run going,
+  which is what makes it safe to come back to.
+
 - **A run that ends without an answer now says so, in the conversation.** A
   failure, a stop, an approval window that elapsed, or the app being killed
   mid-run reached you only as a banner on the chat screen — state held in

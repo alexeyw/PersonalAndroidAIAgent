@@ -416,8 +416,6 @@ would change it.
   addition. Revisited on the first external report of a real server's missing
   tool; `elicitation` would come first, being the only one that reuses the
   existing confirmation path.
-- **No per-run cancel.** Stop detaches the view; the run finishes. This is
-  deferred to the work that owns run lifecycle end to end, not overlooked.
 - **Third-party apps cannot expose tools.** A platform restriction, not a
   decision, and nothing on the roadmap changes it.
 - **Seven settings say "Not wired up yet".** They are stored but reach no engine

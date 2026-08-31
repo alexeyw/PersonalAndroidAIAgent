@@ -23,6 +23,7 @@ import app.knotwork.android.domain.services.AttachmentStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -40,7 +41,9 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
 import java.util.PriorityQueue
+import java.util.concurrent.atomic.AtomicReference
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -88,6 +91,17 @@ class TaskQueueManagerImpl @Inject constructor(
     override val globalState: StateFlow<AgentOrchestratorState> = _globalState.asStateFlow()
 
     // Priority queue for tasks
+    /**
+     * The task currently executing, or `null` between tasks.
+     *
+     * The worker is serial, so there is at most one — which is why this is a
+     * single reference rather than a map. Held in an [AtomicReference] because
+     * it is written by the worker and read by [cancelRun] on whatever thread
+     * pressed Stop; the queue's own [queueMutex] is not involved, so a cancel
+     * never waits behind a task being polled.
+     */
+    private val activeRun = AtomicReference<ActiveRun?>(null)
+
     private val queueMutex = Mutex()
     private val taskQueue = PriorityQueue<AgentTask> { t1, t2 ->
         val p1 = t1.priority.ordinal
@@ -267,11 +281,106 @@ class TaskQueueManagerImpl @Inject constructor(
                         taskQueue.poll()
                     } ?: break // Exit inner loop when queue is empty
 
-                    processTask(task)
+                    // Each task runs in its own child job so [cancelRun] can end
+                    // one run without taking the worker down with it — and the
+                    // worker is the only thing driving every other chat, so
+                    // cancelling it would freeze the app rather than stop a run.
+                    // `join` (not `await`) because a cancelled child is not a
+                    // failure to propagate: the loop must go straight on to the
+                    // next task.
+                    val job = launch { processTask(task) }
+                    activeRun.set(ActiveRun(sessionId = task.sessionId, job = job))
+                    job.join()
+                    // Compare-and-set, never a bare clear: by the time this runs
+                    // the reference may already describe the *next* task if a
+                    // cancel raced the handover, and clearing that would leave a
+                    // live run nothing could stop.
+                    activeRun.compareAndSet(ActiveRun(sessionId = task.sessionId, job = job), null)
                 }
             }
         }
     }
+
+    override fun cancelRun(sessionId: String) {
+        scope.launch {
+            // The queue is drained BEFORE the running job is cancelled, and the
+            // order is load-bearing rather than tidy. The worker sits in
+            // `job.join()` for as long as that job lives, so draining first
+            // happens while it provably cannot poll. Cancelling first and
+            // draining after leaves a window: the join returns, the worker takes
+            // this session's next task, and the drain then finds a queue that no
+            // longer holds it — a Stop that stopped one run and started another.
+            val dropped = queueMutex.withLock {
+                val matching = taskQueue.filter { it.sessionId == sessionId }
+                taskQueue.removeAll(matching.toSet())
+                matching
+            }
+            // A task cancelled before it ever ran still owns a QUEUED record.
+            // Left alone it would sit there until the next launch swept it as an
+            // orphan and blamed a dead process for something the user did.
+            dropped.forEach { task ->
+                // The message first, then the outcome: they land in the thread in
+                // that order, and a line saying the run was stopped needs the
+                // question it answers to be above it.
+                persistUserMessage(task)
+                pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED)
+            }
+
+            // Re-read rather than captured before the launch: by now the worker
+            // may have moved on to another session, and that run is not ours to
+            // end.
+            val active = activeRun.get()?.takeIf { it.sessionId == sessionId }
+            if (active != null) {
+                Timber.d("Cancelling the active run of session %s", sessionId)
+                active.job.cancel()
+            } else if (dropped.isNotEmpty()) {
+                // Only when nothing was running: a cancelled run settles the
+                // session itself from `executeRun`'s `finally`, and a second
+                // Idle racing that would settle the surface before the run has
+                // finished unwinding.
+                getOrCreateStateFlow(sessionId).emit(AgentOrchestratorState.Idle)
+            }
+        }
+    }
+
+    /**
+     * Writes the task's user message into its chat, unless the task is a re-run
+     * whose row already exists.
+     *
+     * Shared with [cancelRun] rather than living inside the execution path,
+     * because a task cancelled while still queued never reaches that path — and
+     * the composer has already cleared. Without this the user's text is simply
+     * gone, and the line explaining that the run was stopped stands over no
+     * question at all.
+     *
+     * @param task The task whose message should be recorded.
+     */
+    private suspend fun persistUserMessage(task: AgentTask) {
+        // Skipped when the turn is being re-run after a failure: the user row is
+        // written before the pipeline starts, so it survived the failed attempt,
+        // and writing it again would show the same message twice.
+        if (!task.persistUserMessage) return
+        chatRepository.saveMessage(
+            ChatMessage(
+                sessionId = task.sessionId,
+                role = Role.USER,
+                // For an image-only message `displayContent` is the empty caption so
+                // the bubble shows just the thumbnail; `prompt` (the internal default
+                // instruction) still travels the graph.
+                content = task.displayContent ?: task.prompt,
+                timestamp = System.currentTimeMillis(),
+                attachment = task.attachment,
+            ),
+        )
+    }
+
+    /**
+     * A task being executed, paired with the job driving it.
+     *
+     * @property sessionId Session the task belongs to.
+     * @property job The coroutine running it, cancelled by [cancelRun].
+     */
+    private data class ActiveRun(val sessionId: String, val job: Job)
 
     private suspend fun processTask(task: AgentTask) {
         if (task.isResume) {
@@ -298,19 +407,7 @@ class TaskQueueManagerImpl @Inject constructor(
         // Skipped when the turn is being re-run after a failure: the user row is
         // written before the pipeline starts, so it survived the failed attempt,
         // and writing it again would show the same message twice.
-        if (task.persistUserMessage) {
-            val userMessage = ChatMessage(
-                sessionId = task.sessionId,
-                role = Role.USER,
-                // For an image-only message `displayContent` is the empty caption so
-                // the bubble shows just the thumbnail; `prompt` (the internal default
-                // instruction) still travels the graph.
-                content = task.displayContent ?: task.prompt,
-                timestamp = System.currentTimeMillis(),
-                attachment = task.attachment,
-            )
-            chatRepository.saveMessage(userMessage)
-        }
+        persistUserMessage(task)
 
         // 2. Load pipeline. Resolution is a deterministic chain that never
         // depends on the order pipelines come back from the repository:

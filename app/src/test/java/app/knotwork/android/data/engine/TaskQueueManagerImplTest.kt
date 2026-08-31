@@ -14,6 +14,7 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
+import app.knotwork.android.domain.models.Role
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
@@ -842,6 +843,150 @@ class TaskQueueManagerImplTest {
             val state = taskQueueManager.observeTaskState(sessionId).first()
             assertTrue("Expected Idle after park, got $state", state is AgentOrchestratorState.Idle)
         }
+
+    // endregion
+
+    // region Stopping one run
+
+    /**
+     * The property the whole design turns on. The worker is a single serial
+     * loop, so cancelling a run by cancelling the worker would not stop one
+     * chat — it would freeze every chat in the app, permanently. The run dies;
+     * the loop goes straight on to the next task.
+     */
+    @Test
+    fun `given a running task when cancelled then it settles CANCELLED and the next task still runs`() =
+        testScope.runTest {
+            every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+                emit(AgentOrchestratorState.Loading)
+                awaitCancellation()
+            }
+            val victim = AgentTask(sessionId = "session_cancel", prompt = "p")
+            taskQueueManager.enqueueTask(victim)
+            // `runCurrent`, not `advanceUntilIdle`: the run is deliberately
+            // silent, and skipping virtual time forward lets the no-progress
+            // valve settle it as FAILED before the cancel under test lands.
+            runCurrent()
+
+            taskQueueManager.cancelRun("session_cancel")
+            runCurrent()
+
+            coVerify { pipelineRunRepository.finishRun(victim.id, PipelineRunStatus.CANCELLED) }
+            coVerify(exactly = 0) { pipelineRunRepository.finishRun(victim.id, PipelineRunStatus.FAILED, any()) }
+
+            // The worker survived: a task enqueued afterwards is picked up.
+            every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns
+                flowOf(AgentOrchestratorState.Completed("ok"))
+            val next = AgentTask(sessionId = "session_after_cancel", prompt = "p")
+            taskQueueManager.enqueueTask(next)
+            advanceUntilIdle()
+
+            coVerify { pipelineRunRepository.finishRun(next.id, PipelineRunStatus.COMPLETED) }
+        }
+
+    @Test
+    fun `given another session's run when cancelled then the running one is untouched`() = testScope.runTest {
+        // Per-session rather than a scope teardown precisely so this holds: a
+        // Stop in one chat must not end a background run in another.
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.Loading)
+            emit(AgentOrchestratorState.Completed("ok"))
+        }
+        val task = AgentTask(sessionId = "session_a", prompt = "p")
+        taskQueueManager.enqueueTask(task)
+        runCurrent()
+
+        taskQueueManager.cancelRun("session_b")
+        advanceUntilIdle()
+
+        coVerify { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.COMPLETED) }
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun(task.id, PipelineRunStatus.CANCELLED) }
+    }
+
+    @Test
+    fun `given a task still queued when its session is cancelled then it never runs and its record settles`() =
+        testScope.runTest {
+            // A task cancelled before it ever started still owns a QUEUED
+            // record. Left behind it would sit there until the next launch
+            // swept it as an orphan and blamed a dead process for something the
+            // user did.
+            every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+                emit(AgentOrchestratorState.Loading)
+                awaitCancellation()
+            }
+            val running = AgentTask(sessionId = "session_q", prompt = "first")
+            val queued = AgentTask(sessionId = "session_q", prompt = "second")
+            taskQueueManager.enqueueTask(running)
+            runCurrent()
+            taskQueueManager.enqueueTask(queued)
+            runCurrent()
+
+            taskQueueManager.cancelRun("session_q")
+            advanceUntilIdle()
+
+            coVerify { pipelineRunRepository.finishRun(queued.id, PipelineRunStatus.CANCELLED) }
+            verify(exactly = 0) {
+                graphExecutionEngine.invoke("session_q", "second", any(), any())
+            }
+        }
+
+    @Test
+    fun `given a queued task is cancelled then the user's message is still in the thread`() = testScope.runTest {
+        // Found on the device, not here. The message is written when a task
+        // starts running, so a task cancelled while queued never wrote one —
+        // and the composer had already cleared. The user's text simply vanished
+        // and the line explaining the stop stood over no question at all.
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.Loading)
+            awaitCancellation()
+        }
+        taskQueueManager.enqueueTask(AgentTask(sessionId = "session_keep", prompt = "first"))
+        runCurrent()
+        val queued = AgentTask(sessionId = "session_keep", prompt = "the message I typed")
+        taskQueueManager.enqueueTask(queued)
+        runCurrent()
+
+        taskQueueManager.cancelRun("session_keep")
+        advanceUntilIdle()
+
+        coVerify {
+            chatRepository.saveMessage(
+                match { it.sessionId == "session_keep" && it.content == "the message I typed" && it.role == Role.USER },
+            )
+        }
+    }
+
+    @Test
+    fun `given a cancelled re-run then its message is not written a second time`() = testScope.runTest {
+        // `persistUserMessage = false` marks a turn re-run after a failure: the
+        // row survived the failed attempt, so writing it again would show the
+        // same message twice. The cancel path has to honour that too.
+        every { graphExecutionEngine.invoke(any(), any(), any(), any()) } returns flow {
+            emit(AgentOrchestratorState.Loading)
+            awaitCancellation()
+        }
+        taskQueueManager.enqueueTask(AgentTask(sessionId = "session_rerun", prompt = "first"))
+        runCurrent()
+        taskQueueManager.enqueueTask(
+            AgentTask(sessionId = "session_rerun", prompt = "retried", persistUserMessage = false),
+        )
+        runCurrent()
+
+        taskQueueManager.cancelRun("session_rerun")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { chatRepository.saveMessage(match { it.content == "retried" }) }
+    }
+
+    @Test
+    fun `given nothing in flight when a session is cancelled then nothing is settled`() = testScope.runTest {
+        // A Stop pressed as the last token lands must not resurrect a finished
+        // run, nor write a second terminal record over it.
+        taskQueueManager.cancelRun("session_idle")
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { pipelineRunRepository.finishRun(any(), PipelineRunStatus.CANCELLED) }
+    }
 
     // endregion
 

@@ -740,16 +740,23 @@ constructor(
     }
 
     /**
-     * Detaches the UI from the active generation stream. This does NOT
-     * cancel the execution itself: there is no cancel-task API on
-     * [app.knotwork.android.domain.engine.TaskQueueManager], and the run is
-     * driven by the queue's own process-lifetime scope — cancelling the
-     * VM-side collector only stops the screen from rendering its progress.
-     * The run keeps executing in the background (the drawer's in-progress
-     * indicator stays honest about that), its final answer still lands in
-     * the conversation, and reopening the session re-attaches to it via the
-     * reattach protocol. A real cancel path is deliberately deferred to the
-     * background-execution work that owns run lifecycle end-to-end.
+     * Stops the active run: the execution itself, not just the screen's view of
+     * it.
+     *
+     * This used to only detach the collector. The run carried on in the queue's
+     * own scope and its answer still landed in the conversation, so a control
+     * labelled `stop` did something the word does not mean — the user was told
+     * the work had ended while it went on spending steps, tokens and battery.
+     *
+     * The order matters. The collector and the pending "load then send" are cut
+     * first so the surface settles immediately, then the run is cancelled
+     * through the queue, which settles it as
+     * [app.knotwork.android.domain.models.PipelineRunStatus.CANCELLED] and
+     * leaves a line in the conversation saying so.
+     *
+     * Reached only from the composer's Stop button. Switching threads cancels
+     * [generationJob] directly and deliberately does **not** come through here:
+     * leaving a chat is not a decision to end its run.
      */
     fun stopGeneration() {
         generationJob?.cancel()
@@ -758,6 +765,7 @@ constructor(
         // it fire once the load completes.
         modelLoadJob?.cancel()
         reattach.cancel()
+        agentOrchestratorUseCase.cancelRun(_state.value.thread.currentSessionId)
         _state.update { current ->
             // The advisory belongs to the run. Stopping the run ends it — a
             // strip still saying "nearing the step limit" above a composer

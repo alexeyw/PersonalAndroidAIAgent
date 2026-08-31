@@ -1281,6 +1281,29 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
+        // The screen settling is not the point — it always did that. Stop has to
+        // reach the run, or the control goes on meaning something other than
+        // what it says.
+        verify { agentOrchestratorUseCase.cancelRun(sessionId) }
+    }
+
+    @Test
+    fun `selectThread does not stop the run it is leaving`() = runTest(testDispatcher) {
+        // Leaving a chat is not a decision to end its run — the whole reattach
+        // protocol exists because a background run outlives the screen. Stop is
+        // the only control that ends one.
+        val target = "thread-other"
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val leaving = viewModel.state.value.thread.currentSessionId
+        sessionsFlow.value = sessionsFlow.value + ChatSession(id = target, name = "Other", updatedAt = 0)
+        every { chatRepository.getDisplayMessagesForSession(target) } returns
+            MutableStateFlow<List<ChatMessage>>(emptyList())
+
+        viewModel.selectThread(target)
+        advanceUntilIdle()
+
+        verify(exactly = 0) { agentOrchestratorUseCase.cancelRun(leaving) }
     }
 
     @Test

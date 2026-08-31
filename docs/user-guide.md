@@ -196,9 +196,11 @@ now built on the Knotwork design system and shows, top to bottom:
 - A pinned **composer** at the bottom — type a message or dictate with
   the microphone. The send button morphs into a **stop** button while
   the agent is generating, and into a **retry** button after an error.
-  **Stop detaches the screen from the run rather than ending it** — the
-  run carries on in the background and its answer still arrives in the
-  conversation. There is no per-run cancel yet.
+  **Stop ends the run**, not just the screen's view of it: the work
+  stops and the conversation gets a line saying the run was stopped
+  before it could answer. Only that button ends a run — switching to
+  another chat leaves its run going, which is why you can come back
+  to it.
   Anything you type but do not send is **kept per chat**: switch to
   another conversation and back and your half-written message is still
   there (drafts live for the session and are not kept across an app
