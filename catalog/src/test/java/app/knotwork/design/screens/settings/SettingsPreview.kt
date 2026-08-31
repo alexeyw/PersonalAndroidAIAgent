@@ -24,7 +24,6 @@ internal object SettingsPreview {
         backendLabel = "NPU (QNN) · auto-fallback to GPU then CPU.",
         selectedBackend = "NPU · auto",
         backendOptions = listOf("NPU · auto", "GPU", "CPU"),
-        longRunningEnabled = true,
         crashReportingEnabled = false,
     )
 
@@ -52,7 +51,7 @@ internal object SettingsPreview {
                 synonym = "max",
             ),
             searchRow("MAX_MEMORY_CHUNKS", SettingsCategoryId.Memory, "Max memory chunks", 0, 3),
-            searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Workspace max file size", 10, 3),
+            searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Largest file", 10, 3),
             searchRow("RESUME_MAX_AGE_HOURS", SettingsCategoryId.Background, "Resume max age", 7, 3),
         ),
     )
@@ -95,19 +94,10 @@ internal object SettingsPreview {
 
     fun generation(): GenerationSettingsViewState = GenerationSettingsViewState(
         systemInstructions = systemInstructions(),
-        toolUsageValue = "Prefer the workspace file tools over inlining large outputs into chat.",
         advancedSliders = listOf(
             SettingSliderRow(SLIDER_TEMPERATURE, "Temperature", "0.7", 0.7f, 0f..2f),
             SettingSliderRow(SLIDER_TOP_K, "Top-K", "40", 40f, 1f..100f, steps = 99),
             SettingSliderRow(SLIDER_TOP_P, "Top-P", "0.90", 0.9f, 0f..1f),
-            SettingSliderRow(
-                SLIDER_REPETITION_PENALTY,
-                "Repetition penalty",
-                "1.10",
-                1.10f,
-                1f..2f,
-                anchorKey = "REPETITION_PENALTY",
-            ),
             SettingSliderRow(
                 SLIDER_MAX_CONTEXT,
                 "Max context",
@@ -291,12 +281,55 @@ internal object SettingsPreview {
         approveNeverLabel = "Never",
         blockDestructive = true,
         blockNetwork = true,
+        advancedSliders = toolsSliders(),
+    )
+
+    private fun toolsSliders(): List<SettingSliderRow> = listOf(
+        SettingSliderRow(
+            SLIDER_TOOL_CALL_TIMEOUT,
+            "Approval wait",
+            "60 s",
+            60f,
+            5f..300f,
+            anchorKey = "TOOL_CALL_TIMEOUT_MS",
+        ),
+        SettingSliderRow(
+            SLIDER_WORKSPACE_MAX_FILE_SIZE,
+            "Largest file",
+            "5 MB",
+            5f,
+            1f..50f,
+            anchorKey = "WORKSPACE_MAX_FILE_SIZE_BYTES",
+        ),
+        SettingSliderRow(
+            SLIDER_WORKSPACE_MAX_TOTAL,
+            "Workspace size limit",
+            "100 MB",
+            100f,
+            10f..1024f,
+            anchorKey = "WORKSPACE_MAX_TOTAL_BYTES",
+        ),
+        SettingSliderRow(
+            SLIDER_WORKSPACE_READ_TOKEN_BUDGET,
+            "Single read budget",
+            "2000 tok",
+            2000f,
+            200f..8000f,
+            anchorKey = "WORKSPACE_READ_TOKEN_BUDGET",
+        ),
+        SettingSliderRow(
+            SLIDER_HTTP_TOOL_MAX_RESPONSE,
+            "Largest web response",
+            "1024 KB",
+            1024f,
+            64f..8192f,
+            anchorKey = "HTTP_TOOL_MAX_RESPONSE_BYTES",
+        ),
     )
 
     // ─── Background ──────────────────────────────────────────────────────────
 
     fun background(): BackgroundSettingsViewState = BackgroundSettingsViewState(
-        longRunningEnabled = true,
         scheduledResultsEnabled = true,
         shareTargetPipelineLabel = "Default System Pipeline",
         shareReuseSessionEnabled = true,
@@ -446,14 +479,6 @@ internal object SettingsPreview {
     )
 
     private fun memorySliders(): List<SettingSliderRow> = listOf(
-        SettingSliderRow(
-            SLIDER_MEMORY_AUTO_SUMMARIZE,
-            "Auto-summarize threshold",
-            "80 %",
-            80f,
-            0f..100f,
-            anchorKey = "AUTO_SUMMARIZE_THRESHOLD",
-        ),
         SettingSliderRow(
             SLIDER_MEMORY_SEARCH_TOP_K,
             "Search results (top-K)",

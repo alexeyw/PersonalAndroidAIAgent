@@ -8,7 +8,7 @@ package app.knotwork.design.screens.settings
  * (Generation → … → About).
  */
 enum class SettingsCategoryId {
-    /** System prompt, tool-usage guidance, sampling and voice input. */
+    /** System prompt, sampling and voice input. */
     Generation,
 
     /** Local-model backend, providers and the active-model card. */

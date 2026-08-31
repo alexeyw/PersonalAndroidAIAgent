@@ -112,7 +112,6 @@ Only Kotlin files appear inside the generated blocks.
       - `OllamaEmbeddingProviderTest.kt` - Unit tests for `OllamaEmbeddingProvider`.
       - `UseEmbeddingProviderTest.kt` - Unit tests for `UseEmbeddingProvider`.
     - `ExternalAutomationCallbackSenderTest.kt` - Robolectric coverage for `ExternalAutomationCallbackSender` — the outbound half of the contract.
-    - `LongRunningTaskNotifierImplTest.kt` - Robolectric coverage for `LongRunningTaskNotifierImpl` — the notifier that surfaces "still running" status updates for pipelines that take a noticeable amount of wall-clock time.
     - `MemoryCompactionSchedulerTest.kt` - Unit tests for `MemoryCompactionScheduler`.
     - `MemoryCompactionWorkerTest.kt` - Robolectric coverage for the `@HiltWorker`-annotated `MemoryCompactionWorker`.
     - `MemoryReembedWorkerTest.kt` - Robolectric coverage for the `@HiltWorker`-annotated `MemoryReembedWorker`.
@@ -462,6 +461,7 @@ Only Kotlin files appear inside the generated blocks.
       - `SettingsSearchAnchorSyncTest.kt` - Drift guard tying the deep-link highlight anchors back to the settings registry.
       - `SettingsSearchCatalogTest.kt` - Drift guard for the settings-search index bridge.
       - `SettingsViewModelTest.kt` - Tests for SettingsViewModel.
+      - `ToolCeilingUnitsTest.kt` - Round-trip guard for the tool / workspace ceiling unit conversions.
       - `usage/` - Tests for the on-device usage-statistics surface.
         - `UsageTelemetryViewModelTest.kt` - Verifies the `UsageTelemetryViewModel` state aggregation, opt-in, export and reset wiring.
     - `skills/` - Tests for the skill library.
@@ -474,6 +474,7 @@ Only Kotlin files appear inside the generated blocks.
     - `tools/` - Tests for the Tools surface, the MCP server editor and the domain allowlist.
       - `AllowedDomainsViewModelTest.kt` - Unit tests for `AllowedDomainsViewModel` — the add-field feedback computation (delegated to `HttpRequestPolicy.normalizeDomain`) and the add / remove persistence gestures.
       - `McpServerConfigViewModelTest.kt` - Unit tests for `McpServerConfigViewModel`.
+      - `ToolRiskResolutionTest.kt` - Guards the one rule the Tools list and the tool-detail screen must agree on: which tools the approval gate resolves from an override, and which it resolves from the code.
       - `ToolsViewModelTest.kt` - Tests for ToolsViewModel.
     - `triggers/` - Tests for the triggers surface.
       - `TriggerConditionFormatterTest.kt` - Unit tests for `TriggerConditionFormatter` — the pure mapping from a domain `TriggerCondition` to a `TriggerConditionLabel`.

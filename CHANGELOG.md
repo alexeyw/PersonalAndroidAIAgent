@@ -15,6 +15,35 @@ details.
 
 ### Added
 
+- **The three sampling sliders now reach the on-device model.**
+  **Temperature**, **Top-K** and **Top-P** were read by the settings screen and
+  by nothing else: the engine opened every conversation with no sampler
+  configuration at all, leaving the model's own defaults in place. They take
+  effect together, because the engine's sampler is set as a whole or not at
+  all — which is why all three had gone unread rather than one of them. Cloud
+  providers are unaffected; they use their own defaults. The structured-output
+  repair pass still overrides all three, deliberately: that pass exists to get
+  well-formed output back, not interesting output.
+
+- **The tool and workspace ceilings have controls.** **Tool call timeout**,
+  **Largest file**, **Workspace size limit**, **Single read budget** and
+  **Largest web response** are five sliders under **Settings → Tools &
+  workspace → Advanced**. All five were already enforced by the app — they
+  bounded MCP round-trips, workspace writes, file reads and web responses the
+  whole time — and all five were findable by search, which took you to a screen
+  that did not have them. Each is now also clamped to its own range on the way
+  in, so a ceiling cannot be stored at a value that would refuse every call.
+
+- **A tool's risk level can be changed where that decision is yours.** Open a
+  tool from the **Tools** screen and its detail page shows **Risk level**. For a
+  tool from an MCP server, or one discovered on the device, it is a choice: they
+  start at *Sensitive* because the app cannot tell what they do, and only you
+  can say that a particular one is read-only. For a tool built into the app the
+  level is stated and not offered, because the approval gate resolves that from
+  the code before it reads anything you could set. The choice is remembered per
+  tool and, for MCP tools, per server — the same tool name on two servers stays
+  two decisions. A server's own hints about its tools are still not consulted.
+
 - **Both journals can now leave the phone — on a release build.** The Triggers
   list and the External automation request journal each carry two actions:
   share the journal as a JSON file, or save it to a folder you pick. Until now
@@ -82,6 +111,15 @@ details.
 
 ### Changed
 
+- **One toggle was described in search as doing the opposite of what it does.**
+  Searching for **Block destructive tools** offered "always require a typed
+  confirm for destructive calls"; the toggle refuses those calls outright,
+  without asking, which is what its own explanation said. Two opposite
+  descriptions of one control lived side by side because the search description
+  was the single piece of settings copy under no check at all — it could be
+  absent, stale or wrong and the build stayed green. It is now required and its
+  text is verified, the same way the explanations already were.
+
 - **The file maps are generated, and now cover the whole tree.** `FILE_MAP.md`
   used to be kept current by hand, by a checklist item that names one map while
   the repository holds several. Measured before the change: the `:catalog` map
@@ -128,14 +166,15 @@ details.
   glyph, and the reason each one carries none is recorded rather than left
   implicit.
 
-- **Seven settings carry no explanation at all, rather than a plausible one.** Writing an explanation for each row turned out to be a way of
-  auditing it, and seven rows failed the audit: the four sampling sliders
-  (**Temperature**, **Top-K**, **Top-P**, **Repetition penalty**) never reach
+- **Writing an explanation for each row turned out to be a way of auditing
+  it**, and seven rows failed the audit: the four sampling sliders
+  (**Temperature**, **Top-K**, **Top-P**, **Repetition penalty**) never reached
   the on-device engine, **Tool-usage instruction** and **Auto-summarize
-  threshold** are read by nothing, and **Long-running task alerts** gates a
-  notification that is never posted. Each is recorded as *behaviour not shipped*
-  rather than given a fluent sentence about behaviour the build does not have.
-  The defects are filed; the rows will either start working or be removed.
+  threshold** were read by nothing, and **Long-running task alerts** gated a
+  notification that was never posted. Rather than give each a fluent sentence
+  about behaviour the build did not have, they were recorded as *behaviour not
+  shipped* — and then closed, before this release, by wiring them up or removing
+  them. See the two entries below.
 
 - **The explanations that used to sit under a row are gone from that slot.**
   Small muted text under a label is where the app shows what a row is *set to*
@@ -225,6 +264,16 @@ details.
   still finds the category.
 
 ### Removed
+
+- **Four settings that could not be made true are gone.** **Repetition
+  penalty** has no equivalent in the on-device engine — its sampler is exactly
+  top-K, top-P, temperature and a seed, checked against the shipped library
+  rather than assumed — so there was nothing to connect it to. **Tool-usage
+  instruction** and **Auto-summarize threshold** had no reader anywhere.
+  **Long-running task alerts** gated a notification nothing ever posted; the
+  toggle, its notification channel and the code behind it are all removed. A
+  control that does nothing is worse than a missing one, because it invites you
+  to tune it.
 
 - **Controls that could not act have been removed rather than disabled or
   explained.** A control that does nothing reads from outside as a broken app,

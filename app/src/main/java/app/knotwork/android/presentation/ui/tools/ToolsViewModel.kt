@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import app.knotwork.android.domain.models.McpConnectionStatus
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTool
+import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.repositories.McpServerRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
@@ -71,6 +72,15 @@ class ToolsViewModel @Inject constructor(
         settingsRepository.disabledMcpTools
             .onEach { disabled ->
                 _uiState.update { it.copy(disabledMcpTools = disabled) }
+            }
+            .launchIn(viewModelScope)
+
+        // Drives the risk segmented control on the tool-detail screen. Read even
+        // when no override exists: an absent entry is not "no risk", it is the
+        // conservative SENSITIVE default the approval gate itself falls back to.
+        settingsRepository.toolRiskOverrides
+            .onEach { overrides ->
+                _uiState.update { it.copy(toolRiskOverrides = overrides) }
             }
             .launchIn(viewModelScope)
 
@@ -218,6 +228,22 @@ class ToolsViewModel @Inject constructor(
             if (isEnabled) current.remove(toolId) else current.add(toolId)
             settingsRepository.setDisabledMcpTools(toolIds = current)
         }
+    }
+
+    /**
+     * Persists the user's risk decision for one tool.
+     *
+     * [toolKey] is whatever `ToolRepository.getRisk` will look up later: the
+     * bare tool name for a discovered AppFunction, the `mcp:<sha8(url)>:<name>`
+     * id for an MCP tool. Passing a built-in tool's name would persist an entry
+     * the gate never reads, which is why the screen only offers the control
+     * where the override applies.
+     *
+     * @param toolKey Override key, matching the gate's lookup.
+     * @param risk The level the user chose.
+     */
+    fun setToolRisk(toolKey: String, risk: ToolRisk) {
+        viewModelScope.launch { settingsRepository.setToolRiskOverride(toolKey = toolKey, risk = risk) }
     }
 
     /**

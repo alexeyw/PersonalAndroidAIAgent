@@ -174,7 +174,6 @@ class ExternalAutomationBackgroundRunIntegrationTest {
         every { settingsRepository.chatHistoryCompressionThresholdTokens } returns flowOf(3_500)
         every { settingsRepository.chatHistoryLiveWindowSize } returns flowOf(10)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns blockDestructiveTools
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)

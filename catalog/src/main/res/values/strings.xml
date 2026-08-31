@@ -351,6 +351,9 @@
     <string name="knotwork_tools_add_form_submit">Add server</string>
     <string name="knotwork_tools_detail_back">Back to tools</string>
     <string name="knotwork_tools_detail_schema">JSON Schema</string>
+    <string name="knotwork_tools_detail_risk">Risk level</string>
+    <string name="knotwork_tools_detail_risk_fixed_note">Built into the app, so this level is fixed.</string>
+    <string name="knotwork_tools_detail_risk_editable_note">Only you know what this tool really does. Read only stops the approval prompt; destructive can be refused outright.</string>
     <string name="knotwork_tools_detail_schema_error">Schema unavailable — the server returned malformed JSON.</string>
     <!-- ContentDescription for the expand/collapse chevron on an MCP server row. -->
     <string name="knotwork_tools_expand_server_cd">Toggle MCP tool list</string>
@@ -468,7 +471,6 @@
     <!-- Settings hints: the entry glyph's action, and the state it announces. -->
     <!-- Titles for the two settings textareas, which had no label of their own. -->
     <string name="knotwork_settings_system_instructions_title">System instructions</string>
-    <string name="knotwork_settings_tool_usage_title">Tool-usage instruction</string>
     <string name="knotwork_settings_memory_actions_title">Memory data</string>
     <string name="knotwork_settings_hint_open_cd">Explain: %1$s</string>
     <string name="knotwork_settings_hint_state_collapsed">collapsed</string>
@@ -531,7 +533,6 @@
     <string name="knotwork_settings_providers_lan">LAN</string>
     <string name="knotwork_settings_providers_not_configured">Not configured · tap to add API key</string>
 
-    <string name="knotwork_settings_notifications_long_running">Long-running tasks</string>
     <string name="knotwork_settings_notifications_scheduled_results">Scheduled task results</string>
     <string name="knotwork_settings_share_pipeline_title">Pipeline for sharing</string>
     <string name="knotwork_settings_share_reuse_title">Keep shares in one chat</string>

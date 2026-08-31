@@ -8,7 +8,6 @@ import app.knotwork.android.data.logging.CrashlyticsTimberTree
 import app.knotwork.android.data.tools.local.appfunctions.SearchAppFunction
 import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
-import app.knotwork.android.domain.services.LongRunningTaskNotifier
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.presentation.theme.KnotworkFontsBootstrap
 import dagger.hilt.android.HiltAndroidApp
@@ -58,9 +57,6 @@ class App :
     lateinit var crashReportingRepository: CrashReportingRepository
 
     @Inject
-    lateinit var longRunningTaskNotifier: LongRunningTaskNotifier
-
-    @Inject
     lateinit var scheduledTaskNotifier: ScheduledTaskNotifier
 
     /**
@@ -101,7 +97,6 @@ class App :
         // design-system typography sheet before the first Compose composition
         // so screens render against the brand fonts on the very first frame.
         KnotworkFontsBootstrap.install()
-        longRunningTaskNotifier.registerChannel()
         scheduledTaskNotifier.registerChannel()
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())

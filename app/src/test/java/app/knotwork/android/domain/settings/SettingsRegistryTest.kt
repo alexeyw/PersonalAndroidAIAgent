@@ -69,13 +69,13 @@ class SettingsRegistryTest {
     fun `registry covers exactly the expected user-facing setting keys`() {
         val expected = setOf(
             // Generation
-            "SYSTEM_PROMPT_PREFIX", "TOOL_USAGE_INSTRUCTION", "TEMPERATURE", "TOP_K", "TOP_P",
-            "REPETITION_PENALTY", "MAX_CONTEXT_LENGTH", "AUDIO_MAX_DURATION_SEC",
+            "SYSTEM_PROMPT_PREFIX", "TEMPERATURE", "TOP_K", "TOP_P",
+            "MAX_CONTEXT_LENGTH", "AUDIO_MAX_DURATION_SEC",
             // Models
             "LOCAL_MODEL_BACKEND", "DEFAULT_PIPELINE_ID",
             // Memory
             "AUTO_EXTRACT_ENABLED", "MEMORY_COMPACTION_ENABLED", "CHAT_HISTORY_COMPRESSION_ENABLED",
-            "AUTO_SUMMARIZE_THRESHOLD", "MEMORY_SEARCH_TOP_K", "MEMORY_SEARCH_THRESHOLD",
+            "MEMORY_SEARCH_TOP_K", "MEMORY_SEARCH_THRESHOLD",
             "MEMORY_RECENCY_HALF_LIFE_DAYS", "MEMORY_COMPACTION_AGE_DAYS", "MAX_MEMORY_CHUNKS",
             "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS", "CHAT_HISTORY_LIVE_WINDOW_SIZE",
             "MEMORY_SUMMARY_DEFAULT_LIMIT", "ACTIVE_EMBEDDING_PROVIDER_ID", "VERBOSE_MEMORY_LOGGING_ENABLED",
@@ -90,7 +90,7 @@ class SettingsRegistryTest {
             "TOOL_CALL_TIMEOUT_MS", "WORKSPACE_MAX_FILE_SIZE_BYTES", "WORKSPACE_MAX_TOTAL_BYTES",
             "WORKSPACE_READ_TOKEN_BUDGET", "HTTP_TOOL_MAX_RESPONSE_BYTES",
             // Background & triggers
-            "LONG_RUNNING_TASKS_NOTIFICATIONS", "SCHEDULED_TASK_NOTIFICATIONS",
+            "SCHEDULED_TASK_NOTIFICATIONS",
             "SHARE_TARGET_PIPELINE_ID", "SHARE_REUSE_SESSION", "QUICK_SETTINGS_TILE_PIPELINE_ID",
             "EXTERNAL_AUTOMATION_ENABLED", "EXTERNAL_AUTOMATION_PIPELINE_ID",
             "RESUME_MAX_AGE_HOURS", "BACKGROUND_APPROVAL_WINDOW_HOURS",
@@ -101,7 +101,7 @@ class SettingsRegistryTest {
     }
 
     @Test
-    fun `hub-basic set is exactly the ratified six and all are basic-tier`() {
+    fun `hub-basic set is exactly the ratified five and all are basic-tier`() {
         val hubBasic = SettingsRegistry.hubBasicEntries()
         assertEquals(
             listOf(
@@ -109,7 +109,6 @@ class SettingsRegistryTest {
                 "LOCAL_MODEL_BACKEND",
                 "TOOL_APPROVAL_POLICY",
                 "BLOCK_DESTRUCTIVE_TOOLS",
-                "LONG_RUNNING_TASKS_NOTIFICATIONS",
                 "CRASH_REPORTING_ENABLED",
             ),
             hubBasic.map { it.key },

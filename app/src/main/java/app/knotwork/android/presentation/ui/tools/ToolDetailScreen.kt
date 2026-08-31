@@ -14,6 +14,7 @@ import app.knotwork.design.screens.tools.ToolDetailCallbacks
 import app.knotwork.design.screens.tools.ToolDetailContent
 import app.knotwork.design.screens.tools.ToolDetailViewState
 import app.knotwork.design.screens.tools.ToolDetailVisualState
+import app.knotwork.design.screens.tools.ToolRiskUi
 import org.json.JSONException
 import org.json.JSONObject
 
@@ -64,6 +65,10 @@ fun ToolDetailScreen(
             schemaJson = mcpTool?.inputSchemaJson,
             lastUsed = null,
             enabled = enabled,
+            // Keyed per server, exactly as `ToolRepositoryImpl.getRisk` looks it
+            // up: the id already carries the server hash, so two servers
+            // advertising the same tool name stay two separate decisions.
+            risk = ToolRiskUi.Editable(ToolRiskResolution.forOverridable(toolId, uiState.toolRiskOverrides)),
         )
     } else {
         val tool = remember(toolId, uiState.localTools) {
@@ -80,6 +85,15 @@ fun ToolDetailScreen(
             schemaJson = tool?.parameters?.takeIf { it.isNotBlank() } ?: "{}",
             lastUsed = null,
             enabled = enabled,
+            // A built-in's risk is resolved from code before any override is
+            // read (`ToolRepositoryImpl.getRisk` returns on `builtinRisk`), so
+            // only a discovered AppFunction gets a control here. Offering one
+            // for a built-in would be a control that cannot act.
+            risk = if (ToolRiskResolution.isOverridable(tool)) {
+                ToolRiskUi.Editable(ToolRiskResolution.forOverridable(toolId, uiState.toolRiskOverrides))
+            } else {
+                ToolRiskUi.Fixed(ToolRiskResolution.forLocalTool(tool, uiState.toolRiskOverrides))
+            },
         )
     }
 
@@ -91,6 +105,9 @@ fun ToolDetailScreen(
             } else {
                 viewModel.toggleLocalTool(toolName = toolId, isEnabled = isEnabled)
             }
+        },
+        onRiskChange = { chosen ->
+            viewModel.setToolRisk(toolKey = toolId, risk = with(ToolRiskResolution) { chosen.toDomain() })
         },
     )
 

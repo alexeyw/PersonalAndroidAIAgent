@@ -34,16 +34,12 @@ class SettingsSearchAnchorSyncTest {
     fun `row and slider anchors cover every registry row except the known UI-less rows`() {
         val rendered = SettingsRowAnchors.ALL + SLIDER_TO_ANCHOR.values
         // Registry rows that are deliberately searchable but have no on-screen
-        // control to highlight (links shown elsewhere, workspace/HTTP caps not yet
-        // surfaced on the Tools sub-screen). Adding a row here is a conscious act.
+        // control to highlight — both are links whose target screen is the
+        // control. Adding a row here is a conscious act; the five tool /
+        // workspace ceilings that used to sit here now have sliders.
         val knownUiLess = setOf(
             "DEFAULT_PIPELINE_ID",
             "LINK_PROVIDER_DETAIL",
-            "TOOL_CALL_TIMEOUT_MS",
-            "WORKSPACE_MAX_FILE_SIZE_BYTES",
-            "WORKSPACE_MAX_TOTAL_BYTES",
-            "WORKSPACE_READ_TOKEN_BUDGET",
-            "HTTP_TOOL_MAX_RESPONSE_BYTES",
         )
         assertEquals(
             "registry rows with no highlight anchor must be exactly the known UI-less set",

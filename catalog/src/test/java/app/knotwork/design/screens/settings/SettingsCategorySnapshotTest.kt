@@ -116,6 +116,19 @@ class SettingsCategorySnapshotTest {
         ToolsSettingsContent(state = SettingsPreview.tools())
     }
 
+    // The 2x shot below opens the same disclosure, but a settings capture only
+    // holds the top viewport — at that scale the five ceilings are already past
+    // the bottom edge. These two are what actually photograph them.
+    @Test
+    fun tools_advanced_light() = snapshot("tools_advanced", dark = false) {
+        ToolsSettingsContent(state = SettingsPreview.tools(), advancedExpanded = true)
+    }
+
+    @Test
+    fun tools_advanced_dark() = snapshot("tools_advanced", dark = true) {
+        ToolsSettingsContent(state = SettingsPreview.tools(), advancedExpanded = true)
+    }
+
     @Test
     fun tools_advanced_font_scale_2x_light() = snapshot("tools_advanced_font_scale_2x", dark = false, fontScale = 2f) {
         ToolsSettingsContent(state = SettingsPreview.tools(), advancedExpanded = true)

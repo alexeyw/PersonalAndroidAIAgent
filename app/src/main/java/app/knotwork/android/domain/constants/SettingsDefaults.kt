@@ -34,8 +34,30 @@ object SettingsDefaults {
     /** Default `top-p` (nucleus sampling) parameter for local LLM generation. */
     const val TOP_P_DEFAULT: Float = 0.9f
 
-    /** Default wall-clock timeout for a single tool invocation, in milliseconds. */
+    /**
+     * Default length of the **live** phase of a tool-approval gate, in
+     * milliseconds. `ToolInvocationGate` waits this long in-process for the
+     * user's answer, then parks the run on a durable pending record.
+     *
+     * The name is historical and the DataStore key it backs cannot be renamed
+     * without a migration for nothing; it does **not** bound the tool call
+     * itself. The MCP round-trip has its own deadline in `KoogMcpClient`.
+     */
     const val TOOL_CALL_TIMEOUT_MS_DEFAULT: Long = 60_000L
+
+    /**
+     * Lower bound of the live-approval slider, in milliseconds (5 s).
+     *
+     * Not a taste value: this window is how long the run holds an approval
+     * request in-process before parking it durably, and a person answering from
+     * a notification needs time to unlock the phone. Below roughly this, every
+     * approval would park before it could be answered — which works, but turns
+     * the fastest path into the slowest one.
+     */
+    const val TOOL_CALL_TIMEOUT_MS_MIN: Long = 5_000L
+
+    /** Upper bound of the live-approval slider, in milliseconds (5 min). */
+    const val TOOL_CALL_TIMEOUT_MS_MAX: Long = 300_000L
 
     /**
      * Default per-file size ceiling for the agent workspace, in bytes (5 MB).
@@ -44,12 +66,24 @@ object SettingsDefaults {
      */
     const val WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT: Long = 5L * 1024 * 1024
 
+    /** Lower bound of the per-file workspace ceiling, in bytes (1 MB). */
+    const val WORKSPACE_MAX_FILE_SIZE_BYTES_MIN: Long = 1L * 1024 * 1024
+
+    /** Upper bound of the per-file workspace ceiling, in bytes (50 MB). */
+    const val WORKSPACE_MAX_FILE_SIZE_BYTES_MAX: Long = 50L * 1024 * 1024
+
     /**
      * Default workspace-wide total-size ceiling, in bytes (100 MB). A write that
      * would push the workspace past this is refused, bounding how much device
      * storage a runaway pipeline can consume.
      */
     const val WORKSPACE_MAX_TOTAL_BYTES_DEFAULT: Long = 100L * 1024 * 1024
+
+    /** Lower bound of the workspace-wide ceiling, in bytes (10 MB). */
+    const val WORKSPACE_MAX_TOTAL_BYTES_MIN: Long = 10L * 1024 * 1024
+
+    /** Upper bound of the workspace-wide ceiling, in bytes (1 GB). */
+    const val WORKSPACE_MAX_TOTAL_BYTES_MAX: Long = 1024L * 1024 * 1024
 
     /**
      * Default budget, in **tokens**, of file content the `read_file` tool will
@@ -60,6 +94,12 @@ object SettingsDefaults {
      * the prompt, chat history and other context blocks.
      */
     const val WORKSPACE_READ_TOKEN_BUDGET_DEFAULT: Int = 2_000
+
+    /** Lower bound of the single-read token budget. */
+    const val WORKSPACE_READ_TOKEN_BUDGET_MIN: Int = 200
+
+    /** Upper bound of the single-read token budget. */
+    const val WORKSPACE_READ_TOKEN_BUDGET_MAX: Int = 8_000
 
     /**
      * Default wall-clock timeout for a `CLARIFICATION` node's outstanding question,
@@ -302,28 +342,6 @@ object SettingsDefaults {
     const val MEMORY_SUMMARY_LIMIT_MAX: Int = 50
 
     /**
-     * Default repetition-penalty applied to local LLM generation. `1.0f` is the
-     * neutral identity. The Settings slider exposes the documented `1.0..2.0`
-     * range so the user can dial up an anti-repetition bias without ever
-     * crossing into the divergence band above `2.0`.
-     */
-    const val REPETITION_PENALTY_DEFAULT: Float = 1.1f
-
-    /** Lower bound enforced when the user edits the repetition-penalty slider. */
-    const val REPETITION_PENALTY_MIN: Float = 1.0f
-
-    /** Upper bound enforced when the user edits the repetition-penalty slider. */
-    const val REPETITION_PENALTY_MAX: Float = 2.0f
-
-    /**
-     * Default fraction of the memory context budget at which automatic
-     * summarization kicks in. Range `0f..1f`. `0.8f` corresponds to 80 %.
-     * Lower values trigger summarisation sooner at the cost of more
-     * embedding work; higher values keep raw chunks around longer.
-     */
-    const val AUTO_SUMMARIZE_THRESHOLD_DEFAULT: Float = 0.8f
-
-    /**
      * Maximum length (in characters) of the user-editable system instructions
      * block. Mirrors the `218 / 4 000 chars` counter shown in the System
      * instructions card. The bound exists so a runaway paste cannot inflate
@@ -402,6 +420,12 @@ object SettingsDefaults {
      * can inject into the local model's context.
      */
     const val HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT: Long = 1L * 1024 * 1024
+
+    /** Lower bound of the `http_request` response ceiling, in bytes (64 KB). */
+    const val HTTP_TOOL_MAX_RESPONSE_BYTES_MIN: Long = 64L * 1024
+
+    /** Upper bound of the `http_request` response ceiling, in bytes (8 MB). */
+    const val HTTP_TOOL_MAX_RESPONSE_BYTES_MAX: Long = 8L * 1024 * 1024
 
     /**
      * Wall-clock connect / read timeout, in milliseconds, applied to every
@@ -491,13 +515,6 @@ object SettingsDefaults {
     const val USAGE_TELEMETRY_ENABLED_DEFAULT: Boolean = true
 
     /**
-     * Default for the "Long-running tasks" notification toggle. `true` so a
-     * pipeline run that outlives the foreground surface can still surface a
-     * progress notification out of the box.
-     */
-    const val LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT: Boolean = true
-
-    /**
      * Default for the "Scheduled task results" notification toggle. `true` so a
      * scheduled background run announces its outcome (and deep-links into its
      * session) without the user having to enable anything first.
@@ -540,10 +557,4 @@ object SettingsDefaults {
      * it up to [MEMORY_SUMMARY_LIMIT_MAX] in Settings → Memory.
      */
     const val MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT: Int = 5
-
-    /** Lower bound (inclusive) of the auto-summarize trigger fraction. */
-    const val AUTO_SUMMARIZE_THRESHOLD_MIN: Float = 0f
-
-    /** Upper bound (inclusive) of the auto-summarize trigger fraction. */
-    const val AUTO_SUMMARIZE_THRESHOLD_MAX: Float = 1f
 }

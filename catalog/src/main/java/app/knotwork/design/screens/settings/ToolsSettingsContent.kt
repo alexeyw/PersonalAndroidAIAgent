@@ -21,7 +21,8 @@ import app.knotwork.design.tokens.KnotworkTextStyles
 /**
  * Tools-&-workspace category sub-screen. Basic tier surfaces the tool-approval
  * policy, the two safety guardrail toggles and the "Manage tools / MCP" link;
- * the Advanced disclosure links to the allowed-HTTP-domains surface.
+ * the Advanced disclosure links to the allowed-HTTP-domains surface and holds
+ * the tool / workspace ceilings.
  *
  * @param state Immutable Tools state.
  * @param modifier Layout modifier.
@@ -37,7 +38,10 @@ fun ToolsSettingsContent(
 ) {
     CategoryScaffold(
         title = stringResource(R.string.knotwork_settings_cat_tools_title),
-        subtitle = stringResource(R.string.knotwork_settings_count, TOOLS_SETTINGS_COUNT),
+        subtitle = stringResource(
+            R.string.knotwork_settings_count,
+            TOOLS_BASIC_ROW_COUNT + state.advancedSliders.size,
+        ),
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
@@ -110,9 +114,14 @@ fun ToolsSettingsContent(
                         onClick = callbacks.onOpenAllowedDomains,
                     )
                 }
+                SettingSliderList(
+                    sliders = state.advancedSliders,
+                    tagPrefix = TOOLS_SLIDER_TAG_PREFIX,
+                    onChange = callbacks.onToolsSliderChange,
+                )
             }
         }
     }
 }
 
-private const val TOOLS_SETTINGS_COUNT = 3
+private const val TOOLS_BASIC_ROW_COUNT = 3

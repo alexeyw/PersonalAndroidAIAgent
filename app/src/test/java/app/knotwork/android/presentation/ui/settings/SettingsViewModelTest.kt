@@ -108,16 +108,23 @@ class SettingsViewModelTest {
         every { settings.systemPromptPrefix } returns MutableStateFlow("")
         every { settings.toolApprovalPolicy } returns MutableStateFlow(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settings.blockDestructiveTools } returns MutableStateFlow(false)
+        every { settings.toolCallTimeoutMs } returns MutableStateFlow(SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT)
+        every { settings.workspaceMaxFileSizeBytes } returns
+            MutableStateFlow(SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT)
+        every { settings.workspaceMaxTotalBytes } returns
+            MutableStateFlow(SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_DEFAULT)
+        every { settings.workspaceReadTokenBudget } returns
+            MutableStateFlow(SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT)
+        every { settings.httpToolMaxResponseBytes } returns
+            MutableStateFlow(SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT)
         every { settings.blockNetworkFromLocalModel } returns MutableStateFlow(false)
         every { settings.pipelineMaxSteps } returns MutableStateFlow(20)
         every { settings.temperature } returns MutableStateFlow(0.7f)
         every { settings.topK } returns MutableStateFlow(40)
         every { settings.topP } returns MutableStateFlow(0.9f)
-        every { settings.repetitionPenalty } returns MutableStateFlow(1.1f)
         every { settings.maxContextLength } returns MutableStateFlow(4096)
         every { settings.localModelBackend } returns MutableStateFlow("CPU")
         every { settings.lastTestProbeResult } returns MutableStateFlow<TestProbeResult?>(null)
-        every { settings.autoSummarizeThreshold } returns MutableStateFlow(0.8f)
         every { settings.autoExtractEnabled } returns MutableStateFlow(true)
         every { settings.memorySearchTopK } returns MutableStateFlow(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT)
         every { settings.memorySearchThreshold } returns
@@ -130,7 +137,6 @@ class SettingsViewModelTest {
         every { settings.maxMemoryChunks } returns MutableStateFlow(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT)
         every { settings.activeEmbeddingProviderId } returns MutableStateFlow(EmbeddingProvider.ID_USE)
         every { settings.lastReembedProviderId } returns MutableStateFlow<String?>(null)
-        every { settings.longRunningTaskNotificationsEnabled } returns MutableStateFlow(true)
         every { settings.scheduledTaskNotificationsEnabled } returns MutableStateFlow(true)
         every { settings.crashReportingEnabled } returns MutableStateFlow(false)
         every { settings.verboseMemoryLoggingEnabled } returns MutableStateFlow(false)
@@ -194,27 +200,44 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `every tool ceiling is observed into state`() = runTest {
+        advanceUntilIdle()
+
+        // The five ceilings were registered, searchable and consumed by real
+        // code while no screen rendered them, so nothing observed them into
+        // state either. This is the observation half of that repair.
+        val state = viewModel.uiState.value
+        assertEquals(SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT, state.toolCallTimeoutMs)
+        assertEquals(SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT, state.workspaceMaxFileSizeBytes)
+        assertEquals(SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_DEFAULT, state.workspaceMaxTotalBytes)
+        assertEquals(SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT, state.workspaceReadTokenBudget)
+        assertEquals(SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT, state.httpToolMaxResponseBytes)
+    }
+
+    @Test
+    fun `every tool ceiling edit routes through repository`() = runTest {
+        advanceUntilIdle()
+
+        viewModel.setToolCallTimeoutMs(30_000L)
+        viewModel.setWorkspaceMaxFileSizeBytes(2L * 1024 * 1024)
+        viewModel.setWorkspaceMaxTotalBytes(200L * 1024 * 1024)
+        viewModel.setWorkspaceReadTokenBudget(1_500)
+        viewModel.setHttpToolMaxResponseBytes(512L * 1024)
+        advanceUntilIdle()
+
+        coVerify { settings.setToolCallTimeoutMs(30_000L) }
+        coVerify { settings.setWorkspaceMaxFileSizeBytes(2L * 1024 * 1024) }
+        coVerify { settings.setWorkspaceMaxTotalBytes(200L * 1024 * 1024) }
+        coVerify { settings.setWorkspaceReadTokenBudget(1_500) }
+        coVerify { settings.setHttpToolMaxResponseBytes(512L * 1024) }
+    }
+
+    @Test
     fun `setBlockNetworkFromLocalModel routes through repository`() = runTest {
         advanceUntilIdle()
         viewModel.setBlockNetworkFromLocalModel(true)
         advanceUntilIdle()
         coVerify { settings.setBlockNetworkFromLocalModel(true) }
-    }
-
-    @Test
-    fun `setRepetitionPenalty routes through repository`() = runTest {
-        advanceUntilIdle()
-        viewModel.setRepetitionPenalty(1.5f)
-        advanceUntilIdle()
-        coVerify { settings.setRepetitionPenalty(1.5f) }
-    }
-
-    @Test
-    fun `updateToolUsageInstruction routes through repository`() = runTest {
-        advanceUntilIdle()
-        viewModel.updateToolUsageInstruction("Prefer file tools.")
-        advanceUntilIdle()
-        coVerify { settings.setToolUsageInstruction("Prefer file tools.") }
     }
 
     @Test
@@ -247,14 +270,6 @@ class SettingsViewModelTest {
         viewModel.setMemorySummaryDefaultLimit(12)
         advanceUntilIdle()
         coVerify { settings.setMemorySummaryDefaultLimit(12) }
-    }
-
-    @Test
-    fun `setAutoSummarizeThreshold converts percent to fraction`() = runTest {
-        advanceUntilIdle()
-        viewModel.setAutoSummarizeThreshold(75)
-        advanceUntilIdle()
-        coVerify { settings.setAutoSummarizeThreshold(0.75f) }
     }
 
     // ─── Memory tuning: observation ────────────────────────────────────────
@@ -557,14 +572,6 @@ class SettingsViewModelTest {
         viewModel.cancelDestructive()
         assertNull(viewModel.uiState.value.pendingDestructive)
         assertEquals("", viewModel.uiState.value.destructiveTypedInput)
-    }
-
-    @Test
-    fun `setLongRunningTaskNotificationsEnabled routes through repository`() = runTest {
-        advanceUntilIdle()
-        viewModel.setLongRunningTaskNotificationsEnabled(false)
-        advanceUntilIdle()
-        coVerify { settings.setLongRunningTaskNotificationsEnabled(false) }
     }
 
     @Test

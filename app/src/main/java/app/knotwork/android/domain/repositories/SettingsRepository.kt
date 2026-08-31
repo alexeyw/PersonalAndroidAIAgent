@@ -150,18 +150,6 @@ interface SettingsRepository {
     suspend fun setSystemPromptPrefix(prompt: String)
 
     /**
-     * A [Flow] representing the tool usage instruction prompt.
-     */
-    val toolUsageInstruction: Flow<String>
-
-    /**
-     * Updates the tool usage instruction prompt.
-     *
-     * @param instruction The new instruction to set.
-     */
-    suspend fun setToolUsageInstruction(instruction: String)
-
-    /**
      * Configured MCP servers, ordered by user insertion order.
      *
      * Each entry carries the URL plus optional display name, transport
@@ -1044,52 +1032,6 @@ interface SettingsRepository {
     suspend fun setBlockNetworkFromLocalModel(blocked: Boolean)
 
     /**
-     * Repetition-penalty parameter applied to local generation. Range
-     * `1.0..2.0`. `1.0f` is the neutral identity; higher values penalise
-     * recent tokens.
-     */
-    val repetitionPenalty: Flow<Float>
-
-    /**
-     * Updates the repetition-penalty value. The implementation coerces the
-     * argument into the documented `1.0..2.0` range so a misbehaving
-     * slider cannot persist out-of-bounds values.
-     *
-     * @param value New penalty.
-     */
-    suspend fun setRepetitionPenalty(value: Float)
-
-    /**
-     * Fraction of the memory context budget at which automatic
-     * summarisation triggers. Range `0f..1f`. Default
-     * [app.knotwork.android.domain.constants.SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT].
-     */
-    val autoSummarizeThreshold: Flow<Float>
-
-    /**
-     * Updates the auto-summarize threshold. Coerced into `0f..1f`.
-     *
-     * @param threshold Fraction triggering summarisation.
-     */
-    suspend fun setAutoSummarizeThreshold(threshold: Float)
-
-    /**
-     * `true` when the user has opted into long-running task notifications.
-     * Drives the "Long-running tasks" toggle in the Notifications card —
-     * gates the runtime watcher that fires a system notification when a
-     * pipeline run exceeds the wall-clock threshold while the app is in the
-     * background. Defaults to `true`.
-     */
-    val longRunningTaskNotificationsEnabled: Flow<Boolean>
-
-    /**
-     * Persists the long-running task notifications toggle.
-     *
-     * @param enabled `true` to allow background notifications.
-     */
-    suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean)
-
-    /**
      * `true` when the user wants a system notification announcing the outcome
      * of a scheduled background run ("Task completed" / "Task failed").
      * Drives the "Scheduled task results" toggle in the Notifications card —
@@ -1283,8 +1225,8 @@ interface SettingsRepository {
      * user-entered content or configuration: long-term memory, chats,
      * pipelines, presets, skills, secrets (API keys / HuggingFace token),
      * MCP servers, the `http_request` domain allowlist, per-tool enable/disable
-     * and risk overrides, the user-authored system-instructions prefix and
-     * tool-usage instruction, the active embedding provider (and its re-embed
+     * and risk overrides, the user-authored system-instructions prefix, the
+     * active embedding provider (and its re-embed
      * marker), the default-pipeline binding, the per-surface entry-point
      * pipeline bindings (share target, Quick Settings tile), the selected local
      * backend, and onboarding / transient state. Everything it resets has a documented

@@ -59,8 +59,8 @@ import app.knotwork.design.screens.settings.PrivacySettingsContent
 import app.knotwork.design.screens.settings.SLIDER_AUDIO_MAX_DURATION
 import app.knotwork.design.screens.settings.SLIDER_BACKGROUND_APPROVAL_WINDOW
 import app.knotwork.design.screens.settings.SLIDER_BACKGROUND_RESUME_MAX_AGE
+import app.knotwork.design.screens.settings.SLIDER_HTTP_TOOL_MAX_RESPONSE
 import app.knotwork.design.screens.settings.SLIDER_MAX_CONTEXT
-import app.knotwork.design.screens.settings.SLIDER_MEMORY_AUTO_SUMMARIZE
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_COMPACTION_AGE
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_COMPRESSION_THRESHOLD
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_LIVE_WINDOW
@@ -73,10 +73,13 @@ import app.knotwork.design.screens.settings.SLIDER_PIPELINE_NESTING_DEPTH
 import app.knotwork.design.screens.settings.SLIDER_PIPELINE_STRUCTURED_REPAIRS
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_AGE
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_RUNS
-import app.knotwork.design.screens.settings.SLIDER_REPETITION_PENALTY
 import app.knotwork.design.screens.settings.SLIDER_TEMPERATURE
+import app.knotwork.design.screens.settings.SLIDER_TOOL_CALL_TIMEOUT
 import app.knotwork.design.screens.settings.SLIDER_TOP_K
 import app.knotwork.design.screens.settings.SLIDER_TOP_P
+import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_MAX_FILE_SIZE
+import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_MAX_TOTAL
+import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_READ_TOKEN_BUDGET
 import app.knotwork.design.screens.settings.SettingsCallbacks
 import app.knotwork.design.screens.settings.SettingsCategoryId
 import app.knotwork.design.screens.settings.SettingsHubContent
@@ -117,7 +120,7 @@ data class SettingsNavActions(
     val onOpenRunLimits: () -> Unit,
 )
 
-/** Settings hub: search field, the six inline Basic controls and the category list. */
+/** Settings hub: search field, the five inline Basic controls and the category list. */
 @Composable
 fun SettingsHubScreen(viewModel: SettingsViewModel, nav: SettingsNavActions) {
     val uiState by viewModel.uiState.collectAsState()
@@ -488,12 +491,12 @@ private fun rememberSettingsCallbacks(
         onOpenLicenses = nav.onOpenLicenses,
         onSystemInstructionsChange = viewModel::updateSystemInstructions,
         onChipInsert = viewModel::insertVariable,
-        onToolUsageInstructionChange = viewModel::updateToolUsageInstruction,
         onGenerationSliderChange = { id, value -> routeGenerationSlider(viewModel, id, value) },
         onResetSamplingDefaults = viewModel::resetSamplingDefaults,
         onApproveSelectionChange = { option -> viewModel.setToolApprovalPolicy(option.toPolicy()) },
         onBlockDestructiveChange = viewModel::setBlockDestructiveTools,
         onBlockNetworkChange = viewModel::setBlockNetworkFromLocalModel,
+        onToolsSliderChange = { id, value -> routeToolsSlider(viewModel, id, value) },
         onPipelinesSliderChange = { id, value -> routePipelinesSlider(viewModel, id, value) },
         onBackendSelected = viewModel::setLocalModelBackend,
         onTestBackendClick = viewModel::runBackendProbe,
@@ -515,7 +518,6 @@ private fun rememberSettingsCallbacks(
         onImportMemoryClick = { importLauncher.launch(arrayOf(MIME_JSON)) },
         onReembedClick = viewModel::runReembed,
         onClearMemoryClick = viewModel::stageClearMemory,
-        onLongRunningToggle = viewModel::setLongRunningTaskNotificationsEnabled,
         onScheduledResultsToggle = viewModel::setScheduledTaskNotificationsEnabled,
         onBackgroundSliderChange = { id, value -> routeBackgroundSlider(viewModel, id, value) },
         onShareTargetPipelineClick = onShareTargetPipelineClick,
@@ -540,9 +542,26 @@ private fun routeGenerationSlider(viewModel: SettingsViewModel, id: String, valu
         SLIDER_TEMPERATURE -> viewModel.setTemperature(value)
         SLIDER_TOP_K -> viewModel.setTopK(value.roundToInt())
         SLIDER_TOP_P -> viewModel.setTopP(value)
-        SLIDER_REPETITION_PENALTY -> viewModel.setRepetitionPenalty(value)
         SLIDER_MAX_CONTEXT -> viewModel.setMaxContextLength(value.roundToInt())
         SLIDER_AUDIO_MAX_DURATION -> viewModel.setAudioMaxDurationSec(value.roundToInt())
+    }
+}
+
+/**
+ * Dispatches a Tools-&-workspace slider back to the ViewModel, converting the
+ * human-facing unit shown on the row (seconds, MB, KB, tokens) into the unit the
+ * setting is stored in — through [ToolCeilingUnits], the same object
+ * `buildToolsViewState` reads the value out with.
+ */
+private fun routeToolsSlider(viewModel: SettingsViewModel, id: String, value: Float) {
+    when (id) {
+        SLIDER_TOOL_CALL_TIMEOUT -> viewModel.setToolCallTimeoutMs(ToolCeilingUnits.secondsToMillis(value))
+        SLIDER_WORKSPACE_MAX_FILE_SIZE ->
+            viewModel.setWorkspaceMaxFileSizeBytes(ToolCeilingUnits.megabytesToBytes(value))
+        SLIDER_WORKSPACE_MAX_TOTAL -> viewModel.setWorkspaceMaxTotalBytes(ToolCeilingUnits.megabytesToBytes(value))
+        SLIDER_WORKSPACE_READ_TOKEN_BUDGET -> viewModel.setWorkspaceReadTokenBudget(value.roundToInt())
+        SLIDER_HTTP_TOOL_MAX_RESPONSE ->
+            viewModel.setHttpToolMaxResponseBytes(ToolCeilingUnits.kilobytesToBytes(value))
     }
 }
 
@@ -555,7 +574,6 @@ private fun routePipelinesSlider(viewModel: SettingsViewModel, id: String, value
 
 private fun routeMemorySlider(viewModel: SettingsViewModel, id: String, value: Float) {
     when (id) {
-        SLIDER_MEMORY_AUTO_SUMMARIZE -> viewModel.setAutoSummarizeThreshold(value.roundToInt())
         SLIDER_MEMORY_SEARCH_TOP_K -> viewModel.setMemorySearchTopK(value.roundToInt())
         SLIDER_MEMORY_SEARCH_THRESHOLD -> viewModel.setMemorySearchThreshold(value)
         SLIDER_MEMORY_RECENCY_HALF_LIFE -> viewModel.setMemoryRecencyHalfLifeDays(value.roundToInt())

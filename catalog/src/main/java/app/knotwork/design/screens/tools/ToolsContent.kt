@@ -72,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.R
 import app.knotwork.design.components.buttons.KnotworkPrimaryButton
 import app.knotwork.design.components.buttons.KnotworkTextButton
+import app.knotwork.design.components.controls.KnotworkSegmentedControl
 import app.knotwork.design.components.lists.KnotworkSectionHeader
 import app.knotwork.design.components.misc.EmptyState
 import app.knotwork.design.components.misc.KnotworkWarningBanner
@@ -535,16 +536,67 @@ private fun AllowedDomainsEntryRow(hostCount: Int, onClick: () -> Unit) {
     }
 }
 
+/**
+ * The tool's risk level: a segmented control when the approval gate will
+ * actually read the user's choice, a stated pill when it will not.
+ *
+ * Both branches say the level out loud. The screen used to say nothing about
+ * risk at all, which left the one number the approval prompt turns on invisible
+ * on the very screen dedicated to the tool.
+ *
+ * @param risk Whether the level is the user's to set, and its current value.
+ * @param onRiskChange Invoked with the newly chosen level (editable branch only).
+ */
+@Composable
+private fun ToolRiskSection(risk: ToolRiskUi, onRiskChange: (BuiltInToolRisk) -> Unit) {
+    Text(
+        text = stringResource(R.string.knotwork_tools_detail_risk),
+        style = KnotworkTextStyles.TitleMd,
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    when (risk) {
+        is ToolRiskUi.Fixed -> {
+            RiskOutlinePill(risk = risk.risk)
+            Text(
+                text = stringResource(R.string.knotwork_tools_detail_risk_fixed_note),
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+
+        is ToolRiskUi.Editable -> {
+            KnotworkSegmentedControl(
+                options = RISK_ORDER.map { stringResource(riskLabelRes(it)) },
+                selectedIndex = RISK_ORDER.indexOf(risk.risk),
+                onSelect = { index -> onRiskChange(RISK_ORDER[index]) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                text = stringResource(R.string.knotwork_tools_detail_risk_editable_note),
+                style = KnotworkTextStyles.BodySm,
+                color = KnotworkTheme.extended.onSurfaceMuted,
+            )
+        }
+    }
+}
+
+/**
+ * Risk levels in increasing severity — the order the segmented control renders
+ * and the order the index round-trips through.
+ */
+private val RISK_ORDER = listOf(BuiltInToolRisk.ReadOnly, BuiltInToolRisk.Sensitive, BuiltInToolRisk.Destructive)
+
+/** The localized label for one risk level, shared by the pill and the control. */
+private fun riskLabelRes(risk: BuiltInToolRisk): Int = when (risk) {
+    BuiltInToolRisk.ReadOnly -> R.string.knotwork_tools_pill_readonly
+    BuiltInToolRisk.Sensitive -> R.string.knotwork_tools_pill_sensitive
+    BuiltInToolRisk.Destructive -> R.string.knotwork_tools_pill_destructive
+}
+
 @Composable
 private fun RiskOutlinePill(risk: BuiltInToolRisk) {
     val accent = riskAccent(risk)
-    val label = stringResource(
-        when (risk) {
-            BuiltInToolRisk.ReadOnly -> R.string.knotwork_tools_pill_readonly
-            BuiltInToolRisk.Sensitive -> R.string.knotwork_tools_pill_sensitive
-            BuiltInToolRisk.Destructive -> R.string.knotwork_tools_pill_destructive
-        },
-    )
+    val label = stringResource(riskLabelRes(risk))
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
@@ -1105,6 +1157,7 @@ fun ToolDetailContent(
                     modifier = Modifier.scale(SWITCH_SCALE),
                 )
             }
+            ToolRiskSection(risk = state.risk, onRiskChange = callbacks.onRiskChange)
             Text(
                 text = stringResource(R.string.knotwork_tools_detail_schema),
                 style = KnotworkTextStyles.TitleMd,

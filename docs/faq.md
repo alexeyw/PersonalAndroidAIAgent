@@ -281,12 +281,17 @@ which explains why and what it means for the missing tool.
 ### Why does it ask me before every tool call?
 
 Because the tool is classed as sensitive or destructive, and that gate is
-enforced where the tool executes rather than suggested to the model. What you
-can change today is only in the strict direction: **Approve tool calls** can be
-widened to ask about *every* call, and **Block destructive tools** refuses them
-outright instead of offering approval. Both live in **Settings → Tools &
-workspace**. Lowering an individual tool's risk is not offered — see [Known
-limitations](#known-limitations). See [Risk levels and
+enforced where the tool executes rather than suggested to the model. Two
+settings widen or tighten it for everything at once — **Approve tool calls** can
+be set to ask about *every* call, and **Block destructive tools** refuses
+destructive ones outright instead of offering approval — and both live in
+**Settings → Tools & workspace**.
+
+To stop the prompt for **one** tool, open it from the **Tools** screen and set
+its **Risk level** to *Read only*. That works for MCP tools and for tools
+discovered on the device, which start at *Sensitive* precisely because the app
+cannot tell what they do; a tool built into the app states its level instead,
+since the gate resolves that from the code. See [Risk levels and
 human-in-the-loop](user-guide.md#risk-levels-and-human-in-the-loop).
 
 ### Can other apps on my phone expose tools to the agent?
@@ -403,11 +408,12 @@ would change it.
   report of a real server that cannot be reached any other way.
 - **No connection test for an MCP server.** You add it and read the resulting
   health row. Revisited alongside the MCP screen's next rework.
-- **A tool's risk level cannot be changed.** The approval gate reads a per-tool
-  override, but nothing in the app writes one, so a tool classed sensitive
-  stays sensitive. The controls that do exist only tighten the gate. Revisited
-  when a real catalogue makes a specific tool's classification wrong in
-  practice, rather than in principle.
+- **A built-in tool's risk level cannot be changed.** MCP tools and tools
+  discovered on the device now have a **Risk level** control on their detail
+  page; a tool written into the app does not, because its level is resolved from
+  the code before any setting of yours is read. Revisited if a built-in's
+  classification turns out to be wrong for a real pipeline rather than in
+  principle.
 - **One image per message.** Attaching a second replaces the first, and the app
   says so when it happens. Collages and multi-image comparisons are out.
 - **MCP client features are parked** — `roots`, `sampling` and `elicitation` are
@@ -418,10 +424,6 @@ would change it.
   existing confirmation path.
 - **Third-party apps cannot expose tools.** A platform restriction, not a
   decision, and nothing on the roadmap changes it.
-- **Seven settings say "Not wired up yet".** They are stored but reach no engine
-  — four sampling sliders among them. The label is deliberate: knowing a control
-  does nothing beats discovering it. Each is fixed by wiring it up or removing
-  it. See [What every setting means](user-guide.md#what-every-setting-means).
 - **The node picker in the visual editor is hard to read** at the current number
   of node types, where labels overlap. Replacing it is accepted as needed, with
   no date attached; the browser editor is the workaround in the meantime.

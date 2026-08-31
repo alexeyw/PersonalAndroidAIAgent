@@ -21,13 +21,15 @@ import app.knotwork.design.screens.settings.HubSearchResultRow
  * @property identity Current identity snapshot; `null` while the first
  *   read is in flight.
  * @property systemInstructions Live textarea content (user-editable).
- * @property toolUsageInstruction Extra guidance, prepended to tool-enabled
- *   prompts, on when and how the agent should call tools (Generation →
- *   Advanced).
  * @property variableCatalog Catalog of `$VARIABLE` placeholders surfaced
  *   in the chip row beneath the textarea.
  * @property toolApprovalPolicy Currently selected HITL policy.
  * @property blockDestructiveTools Mirror of the persisted toggle.
+ * @property toolCallTimeoutMs Wall-clock deadline for one tool invocation.
+ * @property workspaceMaxFileSizeBytes Per-file ceiling for the workspace.
+ * @property workspaceMaxTotalBytes Workspace-wide size ceiling.
+ * @property workspaceReadTokenBudget Token budget one `read_file` call returns.
+ * @property httpToolMaxResponseBytes Ceiling on an `http_request` response body.
  * @property blockNetworkFromLocalModel Mirror of the persisted toggle.
  * @property runMaxTokens Interactive token ceiling. Held here only to build the
  *   run-limits entry-row summary — the limits themselves are owned by the
@@ -40,8 +42,8 @@ import app.knotwork.design.screens.settings.HubSearchResultRow
  * @property backgroundApprovalWindowHours Window (hours) during which a run
  *   parked on an unanswered background HITL request waits for the user's
  *   response before failing.
- * @property temperature / [topK] / [topP] / [repetitionPenalty] /
- *   [maxContextLength] Sampling parameters mirrored from DataStore.
+ * @property temperature / [topK] / [topP] / [maxContextLength] Sampling
+ *   parameters mirrored from DataStore.
  * @property audioMaxDurationSec Maximum voice-input capture length (seconds)
  *   before recording auto-stops (Generation → Advanced).
  * @property pipelineMaxNestingDepth Maximum nesting depth allowed for
@@ -61,8 +63,6 @@ import app.knotwork.design.screens.settings.HubSearchResultRow
  * @property averageSimilarityScore Rolling average of recent similarity-search
  *   scores (session-scoped, from `MemorySearchStatsTracker`); `null` until a
  *   search has been recorded — the AVG SCORE cell then renders a dash.
- * @property autoSummarizeThreshold Fraction (0..1) for the threshold
- *   slider.
  * @property memorySearchTopK How many ranked chunks a single retrieval
  *   returns into a node's context block.
  * @property memorySearchThreshold Minimum cosine-similarity score a chunk
@@ -93,7 +93,6 @@ import app.knotwork.design.screens.settings.HubSearchResultRow
  *   the last edit was accepted.
  * @property reembedProgress `null` when no re-embed job is in flight;
  *   otherwise `0f..1f`.
- * @property longRunningTaskNotificationsEnabled Mirror of the toggle.
  * @property scheduledTaskNotificationsEnabled Mirror of the "Scheduled task
  *   results" notifications toggle.
  * @property crashReportingEnabled Mirror of the toggle.
@@ -144,10 +143,14 @@ import app.knotwork.design.screens.settings.HubSearchResultRow
 data class SettingsUiState(
     val identity: Identity? = null,
     val systemInstructions: String = "",
-    val toolUsageInstruction: String = "",
     val variableCatalog: List<VariableCatalogChip> = emptyList(),
     val toolApprovalPolicy: ToolApprovalPolicy = ToolApprovalPolicy.DEFAULT,
     val blockDestructiveTools: Boolean = false,
+    val toolCallTimeoutMs: Long = SettingsDefaults.TOOL_CALL_TIMEOUT_MS_DEFAULT,
+    val workspaceMaxFileSizeBytes: Long = SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT,
+    val workspaceMaxTotalBytes: Long = SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_DEFAULT,
+    val workspaceReadTokenBudget: Int = SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_DEFAULT,
+    val httpToolMaxResponseBytes: Long = SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT,
     val blockNetworkFromLocalModel: Boolean = false,
     val capAutonomousSteps: Int = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT,
     val runMaxTokens: Int = SettingsDefaults.RUN_MAX_TOKENS_DEFAULT,
@@ -156,7 +159,6 @@ data class SettingsUiState(
     val temperature: Float = SettingsDefaults.TEMPERATURE_DEFAULT,
     val topK: Int = SettingsDefaults.TOP_K_DEFAULT,
     val topP: Float = SettingsDefaults.TOP_P_DEFAULT,
-    val repetitionPenalty: Float = SettingsDefaults.REPETITION_PENALTY_DEFAULT,
     val maxContextLength: Int = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT,
     val audioMaxDurationSec: Int = SettingsDefaults.AUDIO_MAX_DURATION_SEC_DEFAULT,
     val pipelineMaxNestingDepth: Int = SettingsDefaults.PIPELINE_MAX_NESTING_DEPTH_DEFAULT,
@@ -170,7 +172,6 @@ data class SettingsUiState(
     val memoryStats: MemoryStats = MemoryStats.EMPTY,
     val averageSimilarityScore: Float? = null,
     val autoExtractEnabled: Boolean = SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT,
-    val autoSummarizeThreshold: Float = SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT,
     val memorySearchTopK: Int = SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT,
     val memorySearchThreshold: Float = SettingsDefaults.MEMORY_SEARCH_THRESHOLD_DEFAULT,
     val memoryRecencyHalfLifeDays: Int = SettingsDefaults.MEMORY_RECENCY_HALF_LIFE_DAYS_DEFAULT,
@@ -186,7 +187,6 @@ data class SettingsUiState(
     val embeddingProviderOptions: List<EmbeddingProviderOption> = emptyList(),
     val memoryValidationError: MemoryValidationError? = null,
     val reembedProgress: Float? = null,
-    val longRunningTaskNotificationsEnabled: Boolean = true,
     val scheduledTaskNotificationsEnabled: Boolean = true,
     val shareTargetPipelineId: String? = null,
     val shareReuseSession: Boolean = SettingsDefaults.SHARE_REUSE_SESSION_DEFAULT,

@@ -48,11 +48,10 @@ class InitializeAppUseCaseTest {
         // When
         useCase()
 
-        // Then — default prompts are persisted, the seed is materialised from
+        // Then — the default prompt is persisted, the seed is materialised from
         // the showcase preset (not the code-level factory), the returned id
         // becomes the application default, and first launch is cleared.
         coVerify { settingsRepository.setSystemPromptPrefix(DefaultPrompts.SYSTEM_PROMPT_PREFIX) }
-        coVerify { settingsRepository.setToolUsageInstruction(DefaultPrompts.TOOL_USAGE_INSTRUCTION) }
         coVerify { loadPipelineFromPresetUseCase(SHOWCASE_PRESET_ID) }
         coVerify { settingsRepository.setDefaultPipelineId(SEEDED_ID) }
         coVerify { settingsRepository.setFirstLaunch(false) }
@@ -87,7 +86,6 @@ class InitializeAppUseCaseTest {
         useCase()
 
         coVerify(exactly = 0) { settingsRepository.setSystemPromptPrefix(any()) }
-        coVerify(exactly = 0) { settingsRepository.setToolUsageInstruction(any()) }
         coVerify(exactly = 0) { loadPipelineFromPresetUseCase(any()) }
         coVerify(exactly = 0) { pipelineRepository.savePipeline(any()) }
         coVerify(exactly = 0) { settingsRepository.setDefaultPipelineId(any()) }

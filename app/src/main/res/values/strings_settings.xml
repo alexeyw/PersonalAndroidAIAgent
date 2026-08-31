@@ -23,11 +23,15 @@
     <string name="settings_row_temperature_title">Temperature</string>
     <string name="settings_row_top_k_title">Top-K</string>
     <string name="settings_row_top_p_title">Top-P</string>
-    <string name="settings_row_repetition_penalty_title">Repetition penalty</string>
     <string name="settings_row_max_context_title">Max context</string>
     <string name="settings_row_resume_window_title">Resume window</string>
     <string name="settings_row_approval_window_title">Approval window</string>
     <string name="settings_row_voice_length_title">Voice input length</string>
+    <string name="settings_row_tool_call_timeout_title">Approval wait</string>
+    <string name="settings_row_workspace_max_file_size_title">Largest file</string>
+    <string name="settings_row_workspace_max_total_title">Workspace size limit</string>
+    <string name="settings_row_workspace_read_budget_title">Single read budget</string>
+    <string name="settings_row_http_tool_max_response_title">Largest web response</string>
     <string name="settings_pipeline_nesting_depth_title">Max nesting depth</string>
     <string name="settings_pipeline_structured_repairs_title">Structured-output repairs</string>
     <string name="settings_memory_summary_limit_title">Memory summary size</string>
@@ -58,7 +62,6 @@
     <string name="settings_memory_stat_avg_score">Avg score</string>
     <string name="settings_memory_stat_dash">—</string>
     <string name="settings_memory_auto_extract_title">Auto-extract from conversations</string>
-    <string name="settings_memory_auto_summarize_title">Auto-summarize threshold</string>
 
     <!-- Memory tuning sliders. -->
     <string name="settings_memory_param_top_k_title">Search results (top-K)</string>
@@ -134,9 +137,6 @@
     <string name="settings_reset_button">Settings reset to defaults.</string>
 
     <!-- Notification channel copy -->
-    <string name="notifications_long_running_channel_name">Long-running tasks</string>
-    <string name="notifications_long_running_channel_description">Background pipeline-runtime updates.</string>
-    <string name="notifications_long_running_body" tools:ignore="PluralsCandidate">Still running · %1$d s elapsed.</string>
     <!-- Mirrors the hardcoded channel name registered by AgentForegroundService so a
          headless-process registration by AgentWorker does not rename the user-visible channel. -->
     <string name="notifications_agent_foreground_channel_name">Agent Service</string>

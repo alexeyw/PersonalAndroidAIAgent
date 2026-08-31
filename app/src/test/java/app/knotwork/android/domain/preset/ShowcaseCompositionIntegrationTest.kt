@@ -179,7 +179,6 @@ class ShowcaseCompositionIntegrationTest {
         every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
         coEvery { pipelineRunRepository.getSpend(any()) } returns RunSpend()
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)

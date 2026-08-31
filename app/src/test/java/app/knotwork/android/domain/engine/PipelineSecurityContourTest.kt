@@ -266,7 +266,6 @@ class PipelineSecurityContourTest {
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
         every { settingsRepository.pipelineMaxStepsBackground } returns flowOf(15)

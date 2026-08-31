@@ -102,10 +102,6 @@ class MemorySettingsDelegate(
             state.update { it.copy(autoExtractEnabled = value) }
         }.launchIn(scope)
 
-        settingsRepository.autoSummarizeThreshold.onEach { value ->
-            state.update { it.copy(autoSummarizeThreshold = value) }
-        }.launchIn(scope)
-
         settingsRepository.memorySearchTopK.onEach { value ->
             state.update { it.copy(memorySearchTopK = value) }
         }.launchIn(scope)
@@ -176,13 +172,6 @@ class MemorySettingsDelegate(
     /** Persists the verbose memory-logging toggle (logs every memory retrieval to the console). */
     fun setVerboseMemoryLoggingEnabled(enabled: Boolean) {
         scope.launch { settingsRepository.setVerboseMemoryLoggingEnabled(enabled) }
-    }
-
-    /** Persists the auto-summarize threshold; the [percent] is coerced into 0..100 and stored as a fraction. */
-    fun setAutoSummarizeThreshold(percent: Int) {
-        scope.launch {
-            settingsRepository.setAutoSummarizeThreshold(percent.coerceIn(0, MAX_PERCENT).toFloat() / MAX_PERCENT)
-        }
     }
 
     /**
@@ -457,9 +446,5 @@ class MemorySettingsDelegate(
 
     private fun emitSnackbar(message: String) {
         state.update { it.copy(snackbarMessage = message) }
-    }
-
-    private companion object {
-        const val MAX_PERCENT = 100
     }
 }

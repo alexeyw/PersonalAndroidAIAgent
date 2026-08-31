@@ -150,11 +150,11 @@ class SettingsHintBehaviourTest {
      * The assertion the app-side completeness gate cannot make: that a control
      * which is not one of the standard rows still *renders* an affordance.
      *
-     * Six settings are drawn by bespoke Composables — the two textareas, the two
-     * dropdown rows, the approval segmented control and the memory action strip
-     * — and every one of them shipped its explanation with no way to open it
-     * until this was asserted. A hint nobody can reach is the same defect as a
-     * hint that is wrong, one step removed.
+     * Five settings are drawn by bespoke Composables — the system-instructions
+     * textarea, the two dropdown rows, the approval segmented control and the
+     * memory action strip — and every one of them shipped its explanation with
+     * no way to open it until this was asserted. A hint nobody can reach is the
+     * same defect as a hint that is wrong, one step removed.
      */
     @Test
     fun `bespoke settings controls render a help glyph too`() {
@@ -172,9 +172,7 @@ class SettingsHintBehaviourTest {
         // panel beneath it: it rendered, TalkBack announced it, it took the
         // one-open-at-a-time slot from whatever was open — and showed nothing.
         // So every bespoke control is opened and its panel demanded.
-        listOf("System instructions", "Tool-usage instruction").forEach { name ->
-            composeTestRule.onNodeWithContentDescription("Explain: $name").assertIsDisplayed()
-        }
+        composeTestRule.onNodeWithContentDescription("Explain: System instructions").assertIsDisplayed()
         composeTestRule.onNodeWithContentDescription("Explain: System instructions").performClick()
         composeTestRule.onNodeWithText(BESPOKE_HINT).assertIsDisplayed()
     }

@@ -1636,6 +1636,28 @@ The **Approve tool calls** control in **Settings → Tools & workspace** lets
 you require approval for **every** tool call (`All`), regardless of its risk
 level. Choose it if you want to confirm even read-only lookups.
 
+#### Changing a tool's risk level
+
+Open a tool from the **Tools** screen and its detail page shows a **Risk level**
+control. Which form it takes depends on where the tool came from, and that is
+the honest distinction rather than a cosmetic one:
+
+- **A tool built into the app** states its level and does not offer a choice.
+  Its risk is decided in the code, and the gate reads that before it looks at
+  anything you could set — a control here would not act.
+- **A tool from an MCP server**, or one discovered on the device, offers the
+  three levels. It starts at **Sensitive**, because a tool the app cannot
+  inspect is treated conservatively until you say otherwise. Only you know what
+  a given server's tool actually does: setting it to **Read only** stops the
+  approval prompt for it, and **Destructive** brings it under **Block
+  destructive tools** as well as the prompt.
+
+The choice is remembered per tool, and for MCP tools per *server* — the same
+tool name on two servers stays two separate decisions, because they are two
+different tools. A server's own hints about its tools are deliberately not
+consulted: a server that could declare itself read-only could walk straight past
+the gate.
+
 ### Adding an MCP server
 
 The **Tools** screen groups your own **MCP Servers** — external **Model
@@ -1745,7 +1767,7 @@ budget is used out of its limit, with a fill bar. As the workspace fills
 it ramps from neutral to amber (near the limit) to red. If it is full,
 a banner explains that the agent's writes are being refused until space
 is freed; delete files or raise the limit (Settings → Tools & workspace →
-Advanced → Workspace max total size) to recover.
+Advanced → Workspace size limit) to recover.
 
 Pull down to refresh the listing.
 
@@ -2025,11 +2047,10 @@ Every category leads with its **Basic** settings — the ones that change everyd
 behaviour and are safe to adjust. The **Advanced** disclosure holds tuning
 parameters (sampling internals, retrieval thresholds, workspace and HTTP limits,
 retention windows) that have sensible defaults and rarely need changing; the
-"change deliberately" label is a reminder, not a lock. Six cross-category Basic
+"change deliberately" label is a reminder, not a lock. Five cross-category Basic
 controls are also surfaced inline on the hub so you never have to open a
 sub-screen for them: **System instructions**, **Inference backend**, **Approve
-tool calls**, **Block destructive tools**, **Long-running tasks** notifications
-and **Send anonymous crash reports**.
+tool calls**, **Block destructive tools** and **Send anonymous crash reports**.
 
 ### Search the settings
 
@@ -2062,19 +2083,19 @@ changing it has an effect somewhere other than that row. Links to another
 screen, the identity and version rows, and plain actions like *Export memories*
 carry none, and the table below says which and why.
 
-Seven explanations begin with *"Not wired up yet"*. That is not a placeholder:
-those rows store a value that nothing currently reads — the **sampling sliders**
-(Temperature, Top-K, Top-P, Repetition penalty) never reach the on-device
-engine, **Long-running task alerts** posts no notification, and **Tool-usage
-instruction** and **Auto-summarize threshold** are read by nothing at all. The
-setting says so where you would look for it, which is the honest answer to "I
-moved this and nothing changed". Each is a filed defect; the wording changes as
-soon as the row does something.
+No explanation begins with *"Not wired up yet"* any more. Seven once did — they
+were rows that stored a value nothing read — and each was closed the only two
+honest ways there are. **Temperature**, **Top-K** and **Top-P** now reach the
+on-device model; they had to arrive together, because the engine's sampler is
+set as a whole or not at all, which is why all three sat unread for so long.
+**Repetition penalty**, **Tool-usage instruction**, **Auto-summarize threshold**
+and **Long-running task alerts** were removed: the first has no equivalent in
+the on-device engine, and the other three had no reader at all. A setting that
+does nothing is worse than a missing one, because it invites you to tune it.
 
-Five rows in the table — the **tool-call timeout** and the four **workspace and
-HTTP ceilings** — are settings the app stores and searches but does not yet
-render on any screen. Their explanations are documented here because the
-settings are real; there is no ⓘ to open, because there is no row.
+The **tool-call timeout** and the four **workspace and HTTP ceilings** used to be
+in the same table with no screen to open them on — findable by search, drawn by
+nothing. They are now five sliders under **Tools & workspace → Advanced**.
 
 The table is **generated from the very strings the app shows**, so it cannot
 drift from them: where a row has a ⓘ, what you read here is word-for-word what
@@ -2089,11 +2110,9 @@ repeated here.
 | Setting | What it means |
 |---|---|
 | **System instructions** | Goes in front of every Local LLM, Cloud and Skill step, wherever it runs — chats, triggers, background. Other node types skip it. |
-| **Tool-usage instruction** | Not wired up yet: this text is saved but reaches no prompt. Put tool rules in System instructions until it does. |
-| **Temperature** | Not wired up yet: the on-device engine runs with the model's own sampler, so moving this changes nothing today. |
-| **Top-K** | Not wired up yet — the on-device engine keeps the model's own sampler, so this slider has no effect on answers. |
-| **Top-P** | Not wired up yet, like the other sampling sliders: the value is stored, but no engine reads it when answering. |
-| **Repetition penalty** | Not wired up yet. Stored, but nothing applies it — if answers repeat themselves, this slider will not stop them. |
+| **Temperature** | Higher values make the on-device model's answers more varied and surprising; lower values keep them predictable. |
+| **Top-K** | Caps how many candidate words the on-device model may choose between at each step. Smaller keeps it on the obvious choice. |
+| **Top-P** | Narrows each step to the likeliest words that together reach this share of the probability. Lower is safer, higher roams. |
 | **Max context length** | The working window of the on-device model. Larger holds more at once and runs slower; cloud models use their own window. |
 | **Voice input length** | Recording stops on its own at this point and sends what it has. |
 
@@ -2112,7 +2131,6 @@ repeated here.
 | **Auto-extract memories** | On, durable facts from your chats — names, preferences, project details — are saved and reused later. |
 | **Memory compaction** | Old memories get merged into shorter summaries once there are many. Frees room; loses the exact wording. |
 | **Compress chat history** | Long threads are summarised past the live window, so the agent keeps the gist instead of forgetting the start. |
-| **Auto-summarize threshold** | Not wired up yet. Summarising is driven by the compression threshold below; this value is stored and unused. |
 | **Memory search top-K** | How many memories are pulled into a reply at most. More context, slower start, and more room for noise. |
 | **Memory search threshold** | Higher recalls only close matches, so less is pulled in; lower recalls more, including memories that miss the point. |
 | **Recency half-life** | How fast old memories lose to new ones when both match. Short favours this week; long treats everything as current. |
@@ -2142,18 +2160,17 @@ repeated here.
 | **Block destructive tools** | On, a destructive tool call is refused outright rather than offered for approval, and the run sees it as a failed call. |
 | **Block network from local model** | On, no cloud provider can be reached even with a key saved. Only a model on this device, or Ollama on your own network, answers. |
 | **Manage tools / MCP servers** | *(no explanation — opens a screen that explains itself)* |
-| **Tool-call timeout** | How long a run waits for you to approve a tool call before it parks and asks again later. It does not bound the call itself. |
-| **Workspace max file size** | The largest single file the workspace accepts, for both writing one and reading one whole. |
-| **Workspace max total size** | How much device storage the whole workspace may hold. A write that would push past it is refused rather than trimmed. |
-| **Workspace read budget** | How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread. |
-| **HTTP response cap** | How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context. |
+| **Approval wait** | How long a run waits for you to approve a tool call before it parks and asks again later. It does not bound the call itself. |
+| **Largest file** | The largest single file the workspace accepts, for both writing one and reading one whole. |
+| **Workspace size limit** | How much device storage the whole workspace may hold. A write that would push past it is refused rather than trimmed. |
+| **Single read budget** | How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread. |
+| **Largest web response** | How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context. |
 | **Allowed HTTP domains** | *(no explanation — opens a screen that explains itself)* |
 
 #### Background & triggers
 
 | Setting | What it means |
 |---|---|
-| **Long-running task alerts** | Not wired up yet: the notification channel exists but nothing posts to it, so switching this on changes nothing. |
 | **Scheduled task alerts** | A notification arrives when a scheduled task finishes or fails, so a background result does not wait for you to open the app. |
 | **Pipeline for sharing** | Which pipeline runs when you share text or a link into the app from somewhere else. |
 | **Keep shares in one chat** | On, every share lands in one Shared chat. Off, each share opens its own, so the chat list grows with each one. |
@@ -2190,14 +2207,16 @@ System-prompt and sampling controls.
   of the built-in variables (`$DATE`, `$TIME`, `$LANG`, `$LOCATION`, `$USER`,
   `$DEVICE`) — they expand fresh on every prompt render. The counter shows live
   character usage against the 4 000-character limit.
-- **Tool-usage instruction** *(Advanced)* — extra free-text guidance on when and
-  how the agent should call tools, appended to the tool-calling prompt.
 - **Temperature** (0.0 – 2.0) — higher values produce more varied output.
 - **Top-K** (1 – 100) — keeps only the K most likely tokens.
 - **Top-P** (0.0 – 1.0) — nucleus sampling threshold.
-- **Repetition penalty** (1.0 – 2.0) — `1.0` is neutral; higher values discourage
-  the model from repeating recent tokens.
 - **Max context length** (512 – 8 192) — working window in tokens.
+
+  The three sampling sliders apply to the **on-device** model. They are sent as
+  one sampler configuration, so all three take effect together; cloud providers
+  use their own defaults and ignore these. The structured-output repair pass
+  overrides them deliberately, because that pass exists to get well-formed
+  output back rather than interesting output.
 - **Voice-input length** (seconds, default 30) — the auto-stop limit for voice
   capture before transcription.
 
@@ -2311,7 +2330,6 @@ Basic:
 
 Advanced:
 
-- **Auto-summarize threshold** — `%` of the memory context budget.
 - **Search results (top-K)** (1–20, default 5), **Similarity threshold**
   (0.30–0.90, default 0.55), **Recency half-life** (7–180 days, default 30),
   **Compaction age** (7–90 days, default 30) and **Max stored chunks**
@@ -2434,9 +2452,18 @@ Basic:
 
 Advanced:
 
-- **Tool-call timeout**, **Workspace max file size**, **Workspace max total
-  size**, **Workspace read token budget** and **HTTP response cap** — the
-  workspace and `http_request` limits.
+- **Approval wait** (5 – 300 s, default 60) — how long a run holds an approval
+  request open in front of you before parking it and asking again later. It does
+  not bound the tool call itself; that deadline is not a setting.
+- **Largest file** (1 – 50 MB, default 5) and **Workspace size limit**
+  (10 – 1024 MB, default 100) — the per-file and total ceilings on the agent
+  workspace. A write that would cross either is refused.
+- **Single read budget** (200 – 8 000 tokens, default 2 000) — how much of a file
+  one `read_file` call may return. Anything past it is cut, with a marker, so one
+  read cannot fill the model's whole context.
+- **Largest web response** (64 – 8 192 KB, default 1 024) — how much of an
+  `http_request` response is read into the answer. Bounds how much untrusted
+  remote text a single call can put in front of the model.
 - **Files / allowed domains** *(link)* — the `http_request` domain allowlist and
   the workspace file browser.
 
@@ -2446,11 +2473,6 @@ Notifications and the windows that govern parked / resumable runs.
 
 Basic:
 
-- **Long-running tasks** — *this notification is not currently posted.* The
-  toggle and its notification channel exist, but nothing in the app asks for the
-  notification to be sent, so switching it on changes nothing today. Stated here
-  rather than left as a promise; the defect is tracked and the row will either
-  start working or be removed.
 - **Scheduled task results** — when on, finishing a scheduled background task
   posts a **Task completed** notification with the first line of the answer (or
   **Task failed** with the reason); tapping it opens the conversation the result
