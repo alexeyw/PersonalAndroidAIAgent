@@ -1003,9 +1003,17 @@ constructor(
                 // failure becomes this item's result and the next item starts.
                 // Opt-in on purpose — `null` and `true` both fail the run, which
                 // is what every pipeline saved before this field did.
+                //
+                // A typed cause is never survivable, whatever the switch says. A
+                // `PIPELINE` node forwards a sub-pipeline's ceiling breach or
+                // stuck-detector verdict through this same field, and those are
+                // not "this subtask failed" — they are the run being out of
+                // budget or going in circles. Carrying on would spend the very
+                // budget the breach reported as gone.
                 val failedQueueId = activeQueueProcessorId
                 val queueNode = failedQueueId?.let { id -> graph.nodes.find { it.id == id } }
-                if (failedQueueId != null && queueNode?.stopOnError == false) {
+                val survivable = nodeResult?.terminationReason == null
+                if (survivable && failedQueueId != null && queueNode?.stopOnError == false) {
                     queueResults.add("Subtask failed: ${nodeResult?.error}")
                     val step = stepQueue(graph, failedQueueId, activeQueue, queueResults)
                     if (step.queueFinished) activeQueueProcessorId = null

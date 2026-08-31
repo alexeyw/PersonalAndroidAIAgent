@@ -1397,6 +1397,42 @@ class GraphExecutionEngineTest {
         )
     }
 
+    @Test
+    fun `given a queue with stopOnError off when the run hits its step ceiling then it still ends`() = runTest {
+        // The ceiling is what makes the queue's survival opt-in safe: without
+        // this, a queue set to carry on would keep spending the budget a breach
+        // has already reported as gone.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(4)
+
+        val inputNode = NodeModel("input", NodeType.INPUT, 0f, 0f)
+        val listGenNode = NodeModel("list_gen", NodeType.LITE_RT, 0f, 0f)
+        val queueNode = NodeModel("queue", NodeType.QUEUE_PROCESSOR, 0f, 0f, stopOnError = false)
+        val itemProcNode = NodeModel("item_proc", NodeType.LITE_RT, 0f, 0f)
+        val outputNode = NodeModel("output", NodeType.OUTPUT, 0f, 0f)
+
+        val graph = PipelineGraph(
+            id = "g3c",
+            name = "Queue meets the ceiling",
+            nodes = listOf(inputNode, listGenNode, queueNode, itemProcNode, outputNode),
+            connections = listOf(
+                ConnectionModel("c1", "input", "list_gen"),
+                ConnectionModel("c2", "list_gen", "queue"),
+                ConnectionModel("c3", "queue", "item_proc", label = "Item"),
+                ConnectionModel("c4", "queue", "output", label = "Done"),
+            ),
+        )
+        every { llmEngine.generateResponseStream(any()) } returnsMany listOf(
+            flowOf("""["a", "b", "c", "d", "e", "f"]"""),
+        ) + List(10) { flowOf("done") }
+
+        val states = engine(sessionId, "Many items, small ceiling", graph).toList()
+
+        assertTrue(
+            "Expected the ceiling to end the run, got: ${states.last()}",
+            states.last() is AgentOrchestratorState.Error,
+        )
+    }
+
     // ─── PromptTemplateEngine integration ────────────────────────────────────
 
     @Test
