@@ -1,6 +1,7 @@
 package app.knotwork.android.presentation.ui.settings.provider
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -95,7 +96,8 @@ fun ProviderDetailScreen(
  * @param context Resource resolution.
  * @return The resolved view state.
  */
-private fun ProviderDetailUiState.toViewState(providerId: ProviderId, context: Context): ProviderDetailViewState {
+@VisibleForTesting
+internal fun ProviderDetailUiState.toViewState(providerId: ProviderId, context: Context): ProviderDetailViewState {
     val label = providerLabel(providerId)
     val ollamaError = context.getString(R.string.settings_ollama_base_url_error).takeIf { ollamaBaseUrlInvalid }
     return ProviderDetailViewState(
@@ -160,7 +162,8 @@ private fun ProviderDetailUiState.toViewState(providerId: ProviderId, context: C
  * @param context Resource resolution.
  * @return The resolved retry state.
  */
-private fun ProviderDetailUiState.cloudRetryViewState(context: Context): CloudRetryViewState {
+@VisibleForTesting
+internal fun ProviderDetailUiState.cloudRetryViewState(context: Context): CloudRetryViewState {
     val minAttempts = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MIN
     val maxAttempts = SettingsDefaults.CLOUD_RETRY_MAX_ATTEMPTS_MAX
     return CloudRetryViewState(

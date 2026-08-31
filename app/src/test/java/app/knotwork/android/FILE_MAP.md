@@ -453,6 +453,7 @@ Only Kotlin files appear inside the generated blocks.
     - `settings/` - Tests for the settings screens and their catalogues.
       - `ExternalAutomationRowSummaryTest.kt` - Unit tests for the pure half of the external-automation Background rows.
       - `provider/` - Tests for the cloud-provider editor.
+        - `ProviderDetailProjectionTest.kt` - Coverage for the projection that feeds the catalog's provider detail surface.
         - `ProviderDetailViewModelTest.kt` - Unit tests for `ProviderDetailViewModel` — the standalone editor backing the Settings → External providers detail screen.
       - `runlimits/` - Tests for the run-limits surface.
         - `RunLimitsViewModelTest.kt` - Covers the one piece of real logic on the run-limits screen: when a background ceiling stops following the interactive one.
