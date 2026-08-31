@@ -275,7 +275,9 @@ details.
 
   The sentence is the one every other surface already uses for the same event,
   so a run stopped by its step ceiling reads the same in the chat, in the
-  notification and on the banner.
+  notification and on the banner. The tile that used to explain a stopped run
+  gave the explanation up to that line and kept what only it can carry — how far
+  the run got, and the one action that changes the outcome.
 
 - **The chat title named the wrong pipeline.** A conversation opened by a
   trigger, by a scheduled task or by external automation showed the name of the

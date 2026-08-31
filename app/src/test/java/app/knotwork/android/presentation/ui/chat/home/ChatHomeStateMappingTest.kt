@@ -107,13 +107,47 @@ class ChatHomeStateMappingTest {
         val termination = requireNotNull(view.termination)
         // The strip is clamped to two lines; sharing one sentence with the tile
         // is what cut the copy in half at large font scales.
-        assertNotEquals(termination.body, termination.banner)
+        assertNotEquals(termination.title, termination.banner)
     }
 
     @Test
-    fun `an untyped failure still drives the composer error banner`() {
+    fun `a typed stop's tile carries no explanatory sentence`() {
+        // The run wrote its outcome into the conversation as it settled, so the
+        // sentence is a few rows above this tile in the same list. What is left
+        // is the numbers and the action — the parts a thread line cannot carry.
+        val view = screenState(
+            ChatHomeUiState.Error(
+                message = "step-ceiling: 15/15 steps",
+                reason = RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+                announcedInThread = true,
+            ),
+        ).toViewState()
+
+        val termination = requireNotNull(view.termination)
+        assertNull(view.errorMessage)
+        assertNotNull(termination.meter)
+        assertNotNull(termination.actionLabel)
+    }
+
+    @Test
+    fun `an untyped failure the thread already announced shows no tile but keeps Retry`() {
+        val view = screenState(
+            ChatHomeUiState.Error("Tool 'http.get' failed", announcedInThread = true),
+        ).toViewState()
+
+        assertNull("The conversation already says this.", view.errorMessage)
+        assertEquals(ComposerState.Error("Tool 'http.get' failed"), view.composerState)
+    }
+
+    @Test
+    fun `an untyped failure with no run behind it still drives the composer error banner`() {
+        // A blocked attachment or a model that would not load never reached a
+        // run, so nothing wrote a line for it — this text is the only account
+        // the user gets, and suppressing it would trade one silent failure for
+        // another.
         val view = screenState(ChatHomeUiState.Error("Tool 'http.get' failed")).toViewState()
 
+        assertEquals("Tool 'http.get' failed", view.errorMessage)
         assertEquals(ComposerState.Error("Tool 'http.get' failed"), view.composerState)
     }
 

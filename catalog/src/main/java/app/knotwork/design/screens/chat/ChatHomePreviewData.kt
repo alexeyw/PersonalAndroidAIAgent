@@ -69,6 +69,21 @@ internal object ChatHomePreview {
         ),
     )
 
+    /**
+     * The `SYSTEM` line a run leaves in the conversation when it stops without
+     * an answer. Byte-identical to `run_termination_body_step_ceiling`, which is
+     * what `RunOutcomeAnnouncer` resolves for the same event.
+     */
+    private val stoppedByCeilingLine = ChatHomeMessageRow(
+        id = "sys1",
+        role = ChatRole.System,
+        content = ChatContent.Text(
+            "This run used all the steps it was allowed. Raise the step limit, or split the work " +
+                "into smaller runs.",
+        ),
+        metadata = ChatMetadata(timestamp = "09:15"),
+    )
+
     /** Sample thread rows surfaced in the drawer overlay. */
     fun threadRows(activeId: String = "t1"): List<ChatHomeThreadRow> = listOf(
         ChatHomeThreadRow(
@@ -308,13 +323,16 @@ internal object ChatHomePreview {
         visualState = ChatHomeVisualState.Error,
         threadTitle = THREAD_TITLE,
         modelName = MODEL_NAME,
-        messages = baselineMessages(),
+        // The run writes its outcome into the conversation as it settles, so the
+        // sentence is a message and the tile below it carries only the numbers
+        // and the action. A fixture without this line would picture a state the
+        // app no longer produces — and the tile would look like it had lost its
+        // explanation rather than handed it over.
+        messages = baselineMessages() + stoppedByCeilingLine,
         termination = ChatTerminationUi(
             tone = RunTerminationToneUi.Limit,
             toneLabel = "Safety limit",
             title = "Stopped by a safety limit",
-            body = "This run used all the steps it was allowed. Raise the step limit, or split the work " +
-                "into smaller runs.",
             banner = "Stopped by a safety limit — used 15 of 15 steps.",
             meter = "Used 15 of 15 steps",
             actionLabel = "Adjust limits",
@@ -331,8 +349,6 @@ internal object ChatHomePreview {
             tone = RunTerminationToneUi.Info,
             toneLabel = "Run ended",
             title = "The pipeline changed while this run was paused",
-            body = "This run was built on the earlier version of the pipeline, so it could not pick up " +
-                "where it left off. Running it again uses the current version.",
             banner = "The pipeline changed while this run was paused.",
             actionLabel = "Run it again",
         ),

@@ -808,11 +808,11 @@ private fun ChatTerminationTile(state: ChatTerminationUi, onAction: () -> Unit) 
             style = KnotworkTextStyles.TitleMd,
             color = MaterialTheme.colorScheme.onSurface,
         )
-        Text(
-            text = state.body,
-            style = KnotworkTextStyles.BodyBase,
-            color = KnotworkTheme.extended.onSurface2,
-        )
+        // No explanatory paragraph. The run wrote its outcome into the
+        // conversation as it settled, so the sentence is a few lines above this
+        // tile; repeating it here is what this tile was asked to stop doing.
+        // What is left is what only a tile can carry — the numbers the run
+        // reached, and the one action that can change them.
         state.meter?.let { meter ->
             Text(
                 text = meter,
