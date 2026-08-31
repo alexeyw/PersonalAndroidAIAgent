@@ -291,6 +291,9 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `PipelineLibraryContent.kt` - pipeline list with sort/filter, per-row overflow, default/active badges, swipe-reveal.
     - `PipelineLibraryPreview.kt` - deterministic preview fixtures (4 sample pipelines) for snapshots.
     - `PipelineLibraryViewState.kt` - visual-state enum + filter enum + pipeline-row model.
+    - `PresetManagerContent.kt` - The preset manager: bundled and saved presets, filtered by category, each with rename / export / delete.
+    - `PresetManagerPreview.kt` - Fixtures for the preset manager's states.
+    - `PresetManagerViewState.kt` - Everything the preset manager renders, already resolved.
   - `prompts/` - Prompt-library page and the prompt-preset picker sheet.
     - `PromptLibraryContent.kt` - prompt library (tabbed categories, card list, FAB, optional edit-sheet overlay, snackbar host slot). The top bar carries the **import** action; each card's footer line carries `used by N` plus Preview · Duplicate · Edit · overflow (Export + Delete), or Preview · Duplicate · Export on a read-only row. Two layout rules are load-bearing: the caption yields and the icon cluster never does, so the overflow — and with it the only route to Delete — survives font scale 200 %; and the top bar drops its subtitle rather than clipping its title at the same scale. An empty **library** (as opposed to an empty category) hides the tabs and the FAB and offers Import / New instead.
     - `PromptLibraryViewState.kt` - visual-state enum + prompt-row / editor state + category / variable tracking + the import/export callbacks.

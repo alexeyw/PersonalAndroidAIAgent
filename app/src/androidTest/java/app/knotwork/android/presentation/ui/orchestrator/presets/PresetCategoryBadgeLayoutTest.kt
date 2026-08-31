@@ -1,6 +1,7 @@
 package app.knotwork.android.presentation.ui.orchestrator.presets
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.getUnclippedBoundsInRoot
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -9,6 +10,9 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelinePreset
 import app.knotwork.android.domain.models.PresetCategory
+import app.knotwork.design.screens.pipelines.PresetManagerCallbacks
+import app.knotwork.design.screens.pipelines.PresetManagerRow
+import app.knotwork.design.screens.pipelines.PresetRowActionLabels
 import app.knotwork.design.theme.KnotworkTheme
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -57,7 +61,11 @@ class PresetCategoryBadgeLayoutTest {
     fun managerRowKeepsItsBadgeOnScreen() {
         composeTestRule.setContent {
             KnotworkTheme(darkTheme = false) {
-                PresetManagerRow(preset = preset(), onRename = {}, onDelete = {}, onExport = {})
+                PresetManagerRow(
+                    row = preset().toRow(LocalContext.current),
+                    actionLabels = PresetRowActionLabels(rename = "Rename", export = "Export", delete = "Delete"),
+                    callbacks = PresetManagerCallbacks(),
+                )
             }
         }
 

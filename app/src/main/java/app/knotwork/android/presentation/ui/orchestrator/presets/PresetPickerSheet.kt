@@ -32,6 +32,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -40,6 +41,9 @@ import app.knotwork.android.R
 import app.knotwork.android.domain.models.PipelinePreset
 import app.knotwork.android.domain.models.PresetCategory
 import app.knotwork.design.icons.AppIcons
+import app.knotwork.design.screens.pipelines.PresetCategoryBadge
+import app.knotwork.design.screens.pipelines.PresetCategoryChipRow
+import app.knotwork.design.screens.pipelines.PresetTabRow
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -120,18 +124,16 @@ fun PresetPickerSheet(
                 }
             }
 
+            // The tab and chip rows are the catalog's now — the same components
+            // the manager screen renders, so the two surfaces cannot drift.
             PresetTabRow(
-                activeTab = state.activeTab,
-                bundledCount = state.bundledPresets.size,
-                userCount = state.userPresets.size,
-                onTabSelected = onTabSelected,
+                tabs = state.presetTabs(LocalContext.current),
+                onTabSelected = { id -> onTabSelected(presetTabFromId(id)) },
             )
 
             PresetCategoryChipRow(
-                visibleCategories = state.visibleCategories,
-                presets = state.presetsForActiveTab,
-                selectedCategory = state.selectedCategory,
-                onCategorySelected = onCategorySelected,
+                chips = state.presetChips(LocalContext.current),
+                onCategorySelected = { id -> onCategorySelected(id?.let(PresetCategory::valueOf)) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(
@@ -284,7 +286,10 @@ internal fun PresetPickerRow(preset: PipelinePreset, selected: Boolean, onClick:
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                PresetCategoryBadge(category = preset.category)
+                PresetCategoryBadge(
+                    label = presetCategoryLabelText(preset.category),
+                    tone = preset.category.toTone(),
+                )
             }
             if (preset.description.isNotBlank()) {
                 Text(
