@@ -11,6 +11,7 @@ import app.knotwork.android.buildtools.R8MappingChecker
 import app.knotwork.android.buildtools.ReleaseVersionChecker
 import app.knotwork.android.buildtools.ReportExternalDocLinksTask
 import app.knotwork.android.buildtools.SettingsHelpDocsGenerator
+import app.knotwork.android.buildtools.StoreListingLengthChecker
 import app.knotwork.android.buildtools.VerifyDocLinksTask
 import app.knotwork.android.buildtools.VerifyFileMapTask
 import app.knotwork.android.buildtools.VerifyMermaidDiagramsTask
@@ -1363,6 +1364,29 @@ val verifyDocsHygiene by tasks.registering {
     }
 }
 tasks.named("check") { dependsOn(verifyDocsHygiene) }
+
+// Play store-listing length gate. Google rejects an over-length field in the
+// Console — after the merge and after the release workflow has signed an
+// artefact — so the ceiling has to be enforced where the text is edited.
+val verifyStoreListingLengths by tasks.registering {
+    group = "verification"
+    description = "Fails the build if a Play store-listing field exceeds Google's character limit."
+    val rootDirForAction: File = rootDir
+    val listingFiles: Set<File> = fileTree("$rootDir/fastlane/metadata") { include("**/*.txt") }.files
+    inputs.files(listingFiles)
+    doLast {
+        val contents = listingFiles.associate { it.relativeTo(rootDirForAction).path to it.readText() }
+        val violations = StoreListingLengthChecker.scan(contents)
+        if (violations.isNotEmpty()) {
+            throw GradleException(
+                "Play store listing is over Google's limits:\n" +
+                    violations.joinToString("\n") { "  - $it" },
+            )
+        }
+    }
+}
+
+tasks.named("check") { dependsOn(verifyStoreListingLengths) }
 
 // Lint-baseline guard for the demoted version-freshness checks.
 //

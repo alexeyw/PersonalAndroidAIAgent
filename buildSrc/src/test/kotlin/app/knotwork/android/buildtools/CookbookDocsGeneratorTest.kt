@@ -67,9 +67,12 @@ class CookbookDocsGeneratorTest {
     @Test
     fun `given a hand-edited verdict when checked for drift then the block is reported`() {
         val rendered = CookbookDocsGenerator.render(skeleton, sources)
+        // Any verdict will do — the point is that a hand-edit to the table is
+        // detected. It used to tamper with a `**No**` row, and there are none
+        // left: every field the run ignored has since been wired up or removed.
         val tampered = rendered.replace(
-            "**No** — stored and exported, but nothing reads it during a run",
             "**Yes** — saved as the node's `systemPrompt`",
+            "**No** — stored and exported, but nothing reads it during a run",
         )
 
         assertEquals(
@@ -104,10 +107,16 @@ class CookbookDocsGeneratorTest {
         // row marked as having no control really has none.
         val rendered = CookbookDocsGenerator.render(skeleton, sources)
 
+        // The `NoControl` vocabulary is no longer reached by the real sources:
+        // the two IF_CONDITION inputs that used it are on the sheet now. The
+        // generator keeps it — it is how the next such field gets recorded
+        // rather than quietly explained — but nothing should be using it today.
         assertTrue(
-            "The four prompt fields should still render as having no in-app control.",
-            rendered.contains("nothing in the app writes it"),
+            "No run-time input should still be marked as having no in-app control.",
+            !rendered.contains("nothing in the app writes it"),
         )
+        // INPUT still has neither run-time inputs nor graph-shaping fields, and
+        // says so rather than rendering an empty table.
         assertTrue(
             "A node with no run-time inputs should say so rather than render an empty table.",
             rendered.contains("**Nothing on this node changes a run.**"),
@@ -229,7 +238,10 @@ class CookbookDocsGeneratorTest {
         val appendix = rendered.substringAfter("<!-- AUTO-GEN:FIELD_TABLE -->")
             .substringBefore("<!-- /AUTO-GEN:FIELD_TABLE -->")
 
-        val expected = nodes.sumOf { it.fields.size }
+        // A node with no fields at all still gets one row, saying so, rather
+        // than vanishing from a table that claims to cover every type — so it
+        // counts once here too.
+        val expected = nodes.sumOf { it.fields.size } + nodes.count { it.fields.isEmpty() }
         val actual = appendix.lines().count { it.startsWith("| `") }
         assertEquals("The appendix does not list every field exactly once.", expected, actual)
     }

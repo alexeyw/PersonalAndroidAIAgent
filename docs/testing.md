@@ -143,10 +143,17 @@ val composeTestRule = createAndroidComposeRule<MainActivity>()
 All tests, static analysis and coverage must pass via:
 
 ```bash
-./gradlew check
+./gradlew check :buildSrc:test
 ```
 
-This is the same task that CI runs on every pull request. It executes
+Two tasks, and the second is not optional: `buildSrc` is a separate build, so
+its tests cannot be reached from `check` — which is why CI spells both out, and
+why running only `check` locally is a narrower gate than the one that decides
+the merge. The build-logic module holds the generators behind the cookbook, the
+file maps and the docs gates; a red test there means a published document is
+being generated from a rule nobody checked.
+
+`check` is the task CI runs on every pull request. It executes
 detekt (including the type-resolution gate, `detektFullDebug` +
 `detektFossDebug`), ktlint, Android lint, the unit-test suite for both
 flavours (`testFullDebugUnitTest` + `testFossDebugUnitTest`), and

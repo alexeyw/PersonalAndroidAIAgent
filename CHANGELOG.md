@@ -15,6 +15,13 @@ details.
 
 ### Fixed
 
+- **The store listing cannot go over Google's limits unnoticed.** A build check
+  now measures every Play field against the ceiling the Console enforces. It
+  was worth adding at that moment rather than later: the English description sat
+  **5 characters** under its limit, the English title **4**, and one release
+  note **2**. One added word breaks any of them, and the rejection lands in the
+  Play Console — after the merge, after a signed artefact exists.
+
 - **The pipeline editor no longer loses work silently.** Save lives in the
   overflow menu, nothing on screen said a pipeline had drifted from storage,
   and leaving simply discarded it. Now the toolbar carries an **Unsaved**

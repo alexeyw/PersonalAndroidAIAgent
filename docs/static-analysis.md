@@ -1,8 +1,8 @@
 # Static Analysis & Coverage — Permanent Rules
 
 This document is the source of truth for the project's quality gates. Every
-PR must pass `./gradlew check`, which is also wired as the required CI job
-on `pull_request → main`. Failing any sub-task blocks the merge.
+PR must pass the gate below, which is also wired as the required CI job on
+`pull_request → main`. Failing any sub-task blocks the merge.
 
 > Test-coverage measurement and thresholds live alongside the rules here;
 > the per-package baseline numbers used to seed the thresholds are kept in
@@ -10,15 +10,26 @@ on `pull_request → main`. Failing any sub-task blocks the merge.
 
 ---
 
-## `./gradlew check`
+## `./gradlew check :buildSrc:test`
 
-A single command runs the entire gate locally:
+Two tasks, not one, and the second is not optional:
 
 ```bash
-./gradlew check
+./gradlew check :buildSrc:test
 ```
 
-This invokes (transitively):
+`buildSrc` is a **separate build**. Its tasks are not reachable from this one,
+so no amount of wiring inside `check` can pull them in — which is why CI spells
+both out on the command line, and why running only `check` locally is a narrower
+gate than the one that decides the merge.
+
+That gap has bitten: three `CookbookDocsGeneratorTest` cases sat red on a phase
+branch through two merges while every local `./gradlew check` reported success.
+The build-logic module holds the generators and scanners behind the cookbook,
+the file maps, the docs gates and the lint-baseline guard — a red test there
+means a document is being generated from a rule nobody is checking.
+
+`check` alone invokes (transitively):
 
 | Sub-task                                      | Purpose                                                                 |
 |-----------------------------------------------|-------------------------------------------------------------------------|
@@ -28,6 +39,7 @@ This invokes (transitively):
 | `:app:lintFullDebug` + `:app:lintFossDebug`   | Android Lint over both distribution flavours + library dependencies. `:catalog:lint` runs too. |
 | `:app:testFullDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
 | `:app:koverVerifyFullDebug`                       | Test-coverage threshold enforcement.                                    |
+| `:app:verifyStoreListingLengths`                  | Play store-listing fields against Google's character limits. Rejection otherwise lands in the Play Console, after a signed release. |
 | `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
 | `:app:verifyBrowserEditorConstants`           | Fails if `pipeline-editor.html` `AUTO-GEN` blocks drift from the domain sources. |
 | `:app:verifyDocsHygiene`                      | Custom rule: guard the public docs against LLM tool-call artifacts and internal-document references (see below). |
