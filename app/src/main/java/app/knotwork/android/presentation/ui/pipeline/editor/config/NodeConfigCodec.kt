@@ -525,8 +525,9 @@ internal object NodeConfigCodec {
     // Per-type decoders
     // ─────────────────────────────────────────────────────────────────────
 
-    // `p` is unused: INPUT carries no payload beyond the shared title and
-    // description. Kept in the signature so the decoder dispatch stays uniform.
+    // No `payload` parameter, unlike every sibling: INPUT carries nothing beyond
+    // the shared title and description, and a parameter the body cannot use
+    // would only invite someone to look for a field that is not there.
     private fun decodeInput(title: String, description: String?): InputConfig = InputConfig(
         title = title,
         description = description,

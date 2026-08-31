@@ -48,12 +48,12 @@ enum class ConfirmPolicy { ALWAYS_CONFIRM, ALLOW_READONLY, ALLOW_SENSITIVE }
 /**
  * Configuration for [NodeType.INPUT] — pipeline entry contract.
  *
- * @property title display title.
- * @property description optional one-line note.
- *
  * Carries no payload of its own. The entry contract is fixed — the run's text
  * arrives as it is — so the `inputName` and `schemaJson` fields that used to sit
  * here were removed rather than left as controls that changed nothing.
+ *
+ * @property title display title.
+ * @property description optional one-line note.
  */
 data class InputConfig(override val title: String, override val description: String? = null) : NodeConfig {
     override val type: NodeType get() = NodeType.INPUT
@@ -166,26 +166,28 @@ data class IntentRouterConfig(
 /**
  * Configuration for [NodeType.IF_CONDITION] — boolean branch.
  *
+ * The four checks are a priority order, not alternatives: image presence, then
+ * keywords, then input length, then the question put to the model. The first one
+ * that matches decides the branch and the rest are never consulted — which is
+ * also the order the sheet lists them in.
+ *
+ * The port labels are fixed at `True` / `False`, because that is what the engine
+ * matches an outgoing edge against; the `labelTrue` / `labelFalse` fields that
+ * used to suggest otherwise were removed.
+ *
  * @property title display title.
  * @property description optional one-line note.
- * @property expression mono boolean expression evaluated against upstream
- * node outputs.
+ * @property expression the yes/no question put to the model, in plain language.
+ * Asked last, and only when none of the checks above it matched — it is the one
+ * that costs a model call.
  * @property keywords comma-separated words matched against the run's text
  * before any model is asked; any match takes the True branch outright. Blank
- * disables the check. Checked after [branchOnImage] and before
- * [complexityThreshold].
+ * disables the check.
  * @property complexityThreshold input length in characters at or above which the
  * True branch is taken without asking a model; `null` disables the check.
- * Checked after [keywords] and before [expression].
  * @property branchOnImage when `true`, the node takes the True branch whenever the
- * run input carries an image attachment — a deterministic check evaluated before
- * everything else, so a pipeline can fork on "did the user send a picture?".
- *
- * The four checks are a priority order, not alternatives: the first one that
- * matches decides the branch and the rest are never consulted. The port labels
- * are fixed at `True` / `False`, because that is what the engine matches an
- * outgoing edge against — the `labelTrue` / `labelFalse` fields that used to
- * suggest otherwise were removed.
+ * run input carries an image attachment — checked before everything else, so a
+ * pipeline can fork on "did the user send a picture?".
  * @property engineProvider optional cloud provider backing this node's
  * structured inference; `null` runs on-device (the default).
  */
@@ -267,14 +269,14 @@ data class DecompositionConfig(
 /**
  * Configuration for [NodeType.QUEUE_PROCESSOR] — iterates a list.
  *
- * @property title display title.
- * @property description optional one-line note.
- * @property stopOnError when `true`, the first failure short-circuits the loop.
- *
  * The queue itself is not configured here: it is the subtask list produced
  * upstream, the current subtask arrives as the node's input, and subtasks always
  * run one at a time. The `inputList` / `itemVariable` / `parallelism` fields that
  * once said otherwise were removed rather than left saying it.
+ *
+ * @property title display title.
+ * @property description optional one-line note.
+ * @property stopOnError when `true`, the first failure short-circuits the loop.
  */
 data class QueueProcessorConfig(
     override val title: String,

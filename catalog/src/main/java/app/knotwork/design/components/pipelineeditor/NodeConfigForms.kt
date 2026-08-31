@@ -861,7 +861,6 @@ private fun ClarificationFormBody(
     )
 }
 
-/** Milliseconds per second — Clarify timeout slider works in whole seconds. */
 /**
  * Top of the IF_CONDITION length-threshold slider, in characters.
  *
@@ -872,6 +871,7 @@ private fun ClarificationFormBody(
  */
 private const val COMPLEXITY_THRESHOLD_MAX: Int = 2_000
 
+/** Milliseconds per second — Clarify timeout slider works in whole seconds. */
 private const val MILLIS_PER_SECOND: Int = 1_000
 
 /** Upper bound (seconds) of the Clarify wait-timeout slider. */
