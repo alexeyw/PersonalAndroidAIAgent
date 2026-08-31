@@ -13,6 +13,20 @@ details.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The pipeline editor no longer loses work silently.** Save lives in the
+  overflow menu, nothing on screen said a pipeline had drifted from storage,
+  and leaving simply discarded it. Now the toolbar carries an **Unsaved**
+  marker beside the node count as soon as the editor holds anything not in
+  storage, and leaving — by the back gesture or the back icon — asks first,
+  offering **Save and leave** or **Discard**.
+
+  Two details that decide whether the guard is worth having: a save that fails
+  validation leaves the work marked unsaved, and an edit made while a save is in
+  flight stays unsaved rather than being counted as stored. Both are what make
+  the marker something you can trust rather than one more thing on screen.
+
 ### Added
 
 - **Nine node settings that did nothing now do what their names say.** The

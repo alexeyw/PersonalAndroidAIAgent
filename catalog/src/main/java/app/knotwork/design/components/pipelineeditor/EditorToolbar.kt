@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -41,6 +43,9 @@ private val ToolbarHeightSingle = 56.dp
  * flush against the title baseline without crowding the navigation icon.
  */
 private val ToolbarHeightWithSubtitle = 64.dp
+
+/** Diameter of the unsaved-changes dot beside the subtitle. */
+private val UnsavedDotSize = 6.dp
 
 /**
  * Pipeline-editor top toolbar — `[← back] [Title + Subtitle stack] [Primary action] [Overflow]`.
@@ -76,6 +81,7 @@ fun EditorToolbar(
     onOverflow: () -> Unit,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
+    unsavedChanges: Boolean = false,
 ) {
     val barHeight = if (subtitle == null) ToolbarHeightSingle else ToolbarHeightWithSubtitle
     Surface(
@@ -101,6 +107,7 @@ fun EditorToolbar(
                 name = name,
                 onNameChange = onNameChange,
                 subtitle = subtitle,
+                unsavedChanges = unsavedChanges,
                 modifier = Modifier.weight(1f),
             )
             KnotworkIconButton(
@@ -126,6 +133,7 @@ private fun TitleStack(
     name: String,
     onNameChange: (String) -> Unit,
     subtitle: String?,
+    unsavedChanges: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -165,14 +173,37 @@ private fun TitleStack(
             )
         }
         if (subtitle != null) {
-            Text(
-                text = subtitle,
-                style = KnotworkTextStyles.BodySm,
-                color = KnotworkTheme.extended.onSurfaceMuted,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp1),
                 modifier = Modifier.padding(horizontal = KnotworkTheme.spacing.sp2),
-            )
+            ) {
+                // A dot rather than a word, and beside the count rather than in
+                // place of it: the subtitle is the one line that survives every
+                // editor state, so the marker has to coexist with what is
+                // already there. The text after it carries the meaning for
+                // anyone who cannot see the colour.
+                if (unsavedChanges) {
+                    Box(
+                        modifier = Modifier
+                            .size(UnsavedDotSize)
+                            .background(color = KnotworkTheme.extended.signalWarn, shape = CircleShape),
+                    )
+                    Text(
+                        text = stringResource(R.string.knotwork_editor_unsaved_changes),
+                        style = KnotworkTextStyles.BodySm,
+                        color = KnotworkTheme.extended.signalWarn,
+                        maxLines = 1,
+                    )
+                }
+                Text(
+                    text = subtitle,
+                    style = KnotworkTextStyles.BodySm,
+                    color = KnotworkTheme.extended.onSurfaceMuted,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

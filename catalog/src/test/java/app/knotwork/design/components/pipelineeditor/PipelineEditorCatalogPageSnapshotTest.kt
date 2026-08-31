@@ -53,4 +53,48 @@ class PipelineEditorCatalogPageSnapshotTest {
             filePath = "src/test/snapshots/pipeline_editor_dark.png",
         )
     }
+
+    /**
+     * The toolbar carrying unsaved work. Its own capture rather than a flag on
+     * the page above, because the page renders the editor's *clean* state and
+     * that is the one worth keeping stable — a second frame is cheaper than a
+     * fixture that has to be read to know which state it pinned.
+     */
+    @Test
+    fun editor_toolbar_unsaved_light() {
+        composeTestRule.setContent {
+            KnotworkTheme(darkTheme = false) {
+                EditorToolbar(
+                    name = "Weekly digest",
+                    onNameChange = {},
+                    onNavigateUp = {},
+                    onOverflow = {},
+                    subtitle = "Editing · 4 nodes · 3 edges",
+                    unsavedChanges = true,
+                )
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(
+            filePath = "src/test/snapshots/editor_toolbar_unsaved_light.png",
+        )
+    }
+
+    @Test
+    fun editor_toolbar_unsaved_dark() {
+        composeTestRule.setContent {
+            KnotworkTheme(darkTheme = true) {
+                EditorToolbar(
+                    name = "Weekly digest",
+                    onNameChange = {},
+                    onNavigateUp = {},
+                    onOverflow = {},
+                    subtitle = "Editing · 4 nodes · 3 edges",
+                    unsavedChanges = true,
+                )
+            }
+        }
+        composeTestRule.onRoot().captureRoboImage(
+            filePath = "src/test/snapshots/editor_toolbar_unsaved_dark.png",
+        )
+    }
 }

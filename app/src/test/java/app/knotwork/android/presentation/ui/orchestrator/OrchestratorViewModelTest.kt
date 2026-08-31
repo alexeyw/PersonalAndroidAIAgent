@@ -54,6 +54,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -371,6 +372,90 @@ class OrchestratorViewModelTest {
         val state = viewModel.uiState.value
         assertEquals(0, state.currentPipeline.nodes.size)
         assertEquals(0, state.currentPipeline.connections.size)
+    }
+
+    @Test
+    fun `given a node is added then the editor reports unsaved changes`() = runTest {
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.addNode(NodeType.LITE_RT, 10f, 10f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("Adding a node must mark the pipeline unsaved", viewModel.uiState.value.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `given a successful save then the editor reports no unsaved changes`() = runTest {
+        coEvery { savePipelineUseCase(any()) } returns Result.success(Unit)
+        viewModel.addNode(NodeType.LITE_RT, 10f, 10f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.saveCurrentPipeline()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse("A saved pipeline must not read as unsaved", viewModel.uiState.value.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `given a failed save then the pipeline still reports unsaved changes`() = runTest {
+        coEvery { savePipelineUseCase(any()) } returns
+            Result.failure(PipelineValidationException(listOf(PipelineValidationError.MissingOutput)))
+        viewModel.addNode(NodeType.LITE_RT, 10f, 10f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.saveCurrentPipeline()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // The failure mode this whole change exists to stop: a Save that did not
+        // reach storage must not leave the editor looking clean, or the guard
+        // that asks before leaving will not ask.
+        assertTrue("A rejected save must leave the work unsaved", viewModel.uiState.value.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `given an edit made while a save is in flight then it stays unsaved`() = runTest {
+        coEvery { savePipelineUseCase(any()) } returns Result.success(Unit)
+        viewModel.addNode(NodeType.LITE_RT, 10f, 10f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.saveCurrentPipeline()
+        // A second node lands before the save coroutine settles the baseline.
+        viewModel.addNode(NodeType.OUTPUT, 40f, 40f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // The baseline moves to the graph that was persisted, not to whatever is
+        // on screen when the save returns — otherwise the second node would be
+        // silently counted as saved.
+        assertTrue("An edit made during a save is still unsaved", viewModel.uiState.value.hasUnsavedChanges)
+    }
+
+    @Test
+    fun `given a rejected save then no success feedback is shown`() = runTest {
+        coEvery { savePipelineUseCase(any()) } returns
+            Result.failure(PipelineValidationException(listOf(PipelineValidationError.MissingOutput)))
+        viewModel.addNode(NodeType.LITE_RT, 10f, 10f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.saveCurrentPipeline()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // The editor used to announce "Pipeline saved." the moment the menu item
+        // was tapped, so a rejected save reported success and failure at once.
+        val state = viewModel.uiState.value
+        assertEquals(null, state.feedbackMessage)
+        assertTrue("A rejected save must still surface its error", state.errorMessage != null)
+    }
+
+    @Test
+    fun `given a successful save then the confirmation is shown`() = runTest {
+        coEvery { savePipelineUseCase(any()) } returns Result.success(Unit)
+        viewModel.addNode(NodeType.LITE_RT, 10f, 10f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.saveCurrentPipeline()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("A successful save must confirm", viewModel.uiState.value.feedbackMessage != null)
     }
 
     @Test
