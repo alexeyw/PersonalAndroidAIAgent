@@ -66,11 +66,9 @@ private fun row(tier: SettingTier, controlType: SettingControlType, syn: List<St
 
 private val GENERATION_ENTRIES = listOf(
     setting("SYSTEM_PROMPT_PREFIX", BASIC, TEXTAREA, hubBasic = true, syn = listOf("prompt", "persona")),
-    setting("TOOL_USAGE_INSTRUCTION", ADVANCED, TEXTAREA, syn = listOf("tools")),
     setting("TEMPERATURE", ADVANCED, SLIDER, syn = listOf("sampling", "creativity")),
     setting("TOP_K", ADVANCED, SLIDER, syn = listOf("sampling")),
     setting("TOP_P", ADVANCED, SLIDER, syn = listOf("nucleus", "sampling")),
-    setting("REPETITION_PENALTY", ADVANCED, SLIDER, syn = listOf("repeat")),
     setting("MAX_CONTEXT_LENGTH", ADVANCED, SLIDER, syn = listOf("max", "window", "tokens")),
     setting("AUDIO_MAX_DURATION_SEC", ADVANCED, SLIDER, syn = listOf("audio", "mic", "voice", "max")),
 )
@@ -85,7 +83,6 @@ private val MEMORY_ENTRIES = listOf(
     setting("AUTO_EXTRACT_ENABLED", BASIC, TOGGLE, syn = listOf("learn", "extract")),
     setting("MEMORY_COMPACTION_ENABLED", BASIC, TOGGLE, syn = listOf("compact")),
     setting("CHAT_HISTORY_COMPRESSION_ENABLED", BASIC, TOGGLE, syn = listOf("history", "compress")),
-    setting("AUTO_SUMMARIZE_THRESHOLD", ADVANCED, SLIDER, syn = listOf("summary")),
     setting("MEMORY_SEARCH_TOP_K", ADVANCED, SLIDER, syn = listOf("retrieve", "top-k")),
     setting("MEMORY_SEARCH_THRESHOLD", ADVANCED, SLIDER, syn = listOf("retrieve", "similarity")),
     setting("MEMORY_RECENCY_HALF_LIFE_DAYS", ADVANCED, SLIDER, syn = listOf("decay", "recency")),
@@ -136,7 +133,6 @@ private val TOOLS_ENTRIES = listOf(
 )
 
 private val BACKGROUND_ENTRIES = listOf(
-    setting("LONG_RUNNING_TASKS_NOTIFICATIONS", BASIC, TOGGLE, hubBasic = true, syn = listOf("notify")),
     setting("SCHEDULED_TASK_NOTIFICATIONS", BASIC, TOGGLE, syn = listOf("notify", "schedule")),
     setting("SHARE_TARGET_PIPELINE_ID", BASIC, DROPDOWN, syn = listOf("share", "send", "pipeline", "surface")),
     setting("SHARE_REUSE_SESSION", BASIC, TOGGLE, syn = listOf("share", "one", "chat", "same", "reuse")),

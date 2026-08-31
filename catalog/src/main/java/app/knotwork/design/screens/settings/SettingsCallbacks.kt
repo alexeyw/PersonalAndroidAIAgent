@@ -37,7 +37,6 @@ class SettingsCallbacks(
     /** Insert a `$VARIABLE` placeholder into the system instructions. */
     val onChipInsert: (String) -> Unit = {},
     /** Tool-usage instruction textarea edit. */
-    val onToolUsageInstructionChange: (String) -> Unit = {},
     /** Sampling / voice slider change, keyed by `SLIDER_*` id. */
     val onGenerationSliderChange: (id: String, value: Float) -> Unit = { _, _ -> },
     /** Restore the sampling parameters to defaults. */
@@ -48,6 +47,8 @@ class SettingsCallbacks(
     val onApproveSelectionChange: (ApproveToolCallsOption) -> Unit = {},
     /** "Block destructive tools" toggle. */
     val onBlockDestructiveChange: (Boolean) -> Unit = {},
+    /** Any Tools-&-workspace Advanced slider changed (id, new value). */
+    val onToolsSliderChange: (id: String, value: Float) -> Unit = { _, _ -> },
     /** "Block network from local model" toggle. */
     val onBlockNetworkChange: (Boolean) -> Unit = {},
 
@@ -91,7 +92,6 @@ class SettingsCallbacks(
 
     // ─── Background ──────────────────────────────────────────────────────────
     /** "Long-running task alerts" toggle. */
-    val onLongRunningToggle: (Boolean) -> Unit = {},
     /** "Scheduled task alerts" toggle. */
     val onScheduledResultsToggle: (Boolean) -> Unit = {},
     /** Background slider change (resume / approval window), keyed by id. */

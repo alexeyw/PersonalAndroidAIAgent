@@ -4,6 +4,7 @@ import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.McpConnectionStatus
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTool
+import app.knotwork.android.domain.models.ToolRisk
 
 /**
  * UI state for the Tools screen.
@@ -22,6 +23,11 @@ import app.knotwork.android.domain.models.McpTool
  * @property expandedServerUrls server URLs currently expanded in the
  * UI; used to drive the chevron and the nested tool-row list. Defaults
  * to empty (every server starts collapsed).
+ * @property allowedHttpDomainCount hosts currently on the `http_request`
+ * allowlist; drives the count on that tool's sub-row.
+ * @property toolRiskOverrides the user's per-tool risk decisions, keyed the way
+ * `ToolRepository.getRisk` looks them up. An absent key means the gate's own
+ * conservative default, not "no risk".
  */
 data class ToolsUiState(
     val mcpServers: List<McpServerSnapshot> = emptyList(),
@@ -30,6 +36,7 @@ data class ToolsUiState(
     val localTools: List<AgentTool> = emptyList(),
     val expandedServerUrls: Set<String> = emptySet(),
     val allowedHttpDomainCount: Int = 0,
+    val toolRiskOverrides: Map<String, ToolRisk> = emptyMap(),
 )
 
 /**

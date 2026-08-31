@@ -387,6 +387,14 @@ internal object ToolsPreview {
 }""",
         lastUsed = "2 hours ago",
         enabled = true,
+        risk = ToolRiskUi.Editable(BuiltInToolRisk.Sensitive),
+    )
+
+    /** A built-in tool: the level is stated, and the app owns it. */
+    fun toolDetailFixedRisk(): ToolDetailViewState = toolDetailDefault().copy(
+        toolName = "read_file",
+        serverDisplayName = "Local tool",
+        risk = ToolRiskUi.Fixed(BuiltInToolRisk.ReadOnly),
     )
 
     fun toolDetailSchemaError(): ToolDetailViewState = ToolDetailViewState(
@@ -397,6 +405,7 @@ internal object ToolsPreview {
         schemaJson = null,
         lastUsed = null,
         enabled = false,
+        risk = ToolRiskUi.Editable(BuiltInToolRisk.Destructive),
     )
 
     fun addMcpDefault(): AddMcpServerForm = AddMcpServerForm(url = "https://server.example.com/mcp")

@@ -1446,7 +1446,6 @@ class SettingsManagerTest {
             manager.setBlockNetworkFromLocalModel(true)
             manager.setCrashReportingEnabled(true)
             manager.setVerboseMemoryLoggingEnabled(true)
-            manager.setLongRunningTaskNotificationsEnabled(false)
             manager.setScheduledTaskNotificationsEnabled(false)
             manager.setChatHistoryCompressionEnabled(false)
 
@@ -1477,10 +1476,6 @@ class SettingsManagerTest {
                 manager.verboseMemoryLoggingEnabled.first(),
             )
             assertEquals(
-                SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT,
-                manager.longRunningTaskNotificationsEnabled.first(),
-            )
-            assertEquals(
                 SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT,
                 manager.scheduledTaskNotificationsEnabled.first(),
             )
@@ -1499,7 +1494,6 @@ class SettingsManagerTest {
         try {
             // Seed user-owned content / configuration that the reset must never touch.
             manager.setSystemPromptPrefix("my custom prefix")
-            manager.setToolUsageInstruction("my custom tool instruction")
             manager.setAllowedHttpDomains(listOf("api.example.com"))
             manager.addMcpServer(McpServerConfig(url = "http://mcp", name = "My MCP"))
             manager.setActiveEmbeddingProviderId("ollama")
@@ -1511,7 +1505,6 @@ class SettingsManagerTest {
             manager.resetToRecommendedDefaults()
 
             assertEquals("my custom prefix", manager.systemPromptPrefix.first())
-            assertEquals("my custom tool instruction", manager.toolUsageInstruction.first())
             assertEquals(listOf("api.example.com"), manager.allowedHttpDomains.first())
             assertEquals(listOf("http://mcp"), manager.mcpServers.first().map { it.url })
             assertEquals("ollama", manager.activeEmbeddingProviderId.first())

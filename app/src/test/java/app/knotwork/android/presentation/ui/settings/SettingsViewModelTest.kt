@@ -113,11 +113,9 @@ class SettingsViewModelTest {
         every { settings.temperature } returns MutableStateFlow(0.7f)
         every { settings.topK } returns MutableStateFlow(40)
         every { settings.topP } returns MutableStateFlow(0.9f)
-        every { settings.repetitionPenalty } returns MutableStateFlow(1.1f)
         every { settings.maxContextLength } returns MutableStateFlow(4096)
         every { settings.localModelBackend } returns MutableStateFlow("CPU")
         every { settings.lastTestProbeResult } returns MutableStateFlow<TestProbeResult?>(null)
-        every { settings.autoSummarizeThreshold } returns MutableStateFlow(0.8f)
         every { settings.autoExtractEnabled } returns MutableStateFlow(true)
         every { settings.memorySearchTopK } returns MutableStateFlow(SettingsDefaults.MEMORY_SEARCH_TOP_K_DEFAULT)
         every { settings.memorySearchThreshold } returns
@@ -130,7 +128,6 @@ class SettingsViewModelTest {
         every { settings.maxMemoryChunks } returns MutableStateFlow(SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT)
         every { settings.activeEmbeddingProviderId } returns MutableStateFlow(EmbeddingProvider.ID_USE)
         every { settings.lastReembedProviderId } returns MutableStateFlow<String?>(null)
-        every { settings.longRunningTaskNotificationsEnabled } returns MutableStateFlow(true)
         every { settings.scheduledTaskNotificationsEnabled } returns MutableStateFlow(true)
         every { settings.crashReportingEnabled } returns MutableStateFlow(false)
         every { settings.verboseMemoryLoggingEnabled } returns MutableStateFlow(false)
@@ -202,22 +199,6 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `setRepetitionPenalty routes through repository`() = runTest {
-        advanceUntilIdle()
-        viewModel.setRepetitionPenalty(1.5f)
-        advanceUntilIdle()
-        coVerify { settings.setRepetitionPenalty(1.5f) }
-    }
-
-    @Test
-    fun `updateToolUsageInstruction routes through repository`() = runTest {
-        advanceUntilIdle()
-        viewModel.updateToolUsageInstruction("Prefer file tools.")
-        advanceUntilIdle()
-        coVerify { settings.setToolUsageInstruction("Prefer file tools.") }
-    }
-
-    @Test
     fun `setAudioMaxDurationSec routes through repository`() = runTest {
         advanceUntilIdle()
         viewModel.setAudioMaxDurationSec(45)
@@ -247,14 +228,6 @@ class SettingsViewModelTest {
         viewModel.setMemorySummaryDefaultLimit(12)
         advanceUntilIdle()
         coVerify { settings.setMemorySummaryDefaultLimit(12) }
-    }
-
-    @Test
-    fun `setAutoSummarizeThreshold converts percent to fraction`() = runTest {
-        advanceUntilIdle()
-        viewModel.setAutoSummarizeThreshold(75)
-        advanceUntilIdle()
-        coVerify { settings.setAutoSummarizeThreshold(0.75f) }
     }
 
     // ─── Memory tuning: observation ────────────────────────────────────────
@@ -557,14 +530,6 @@ class SettingsViewModelTest {
         viewModel.cancelDestructive()
         assertNull(viewModel.uiState.value.pendingDestructive)
         assertEquals("", viewModel.uiState.value.destructiveTypedInput)
-    }
-
-    @Test
-    fun `setLongRunningTaskNotificationsEnabled routes through repository`() = runTest {
-        advanceUntilIdle()
-        viewModel.setLongRunningTaskNotificationsEnabled(false)
-        advanceUntilIdle()
-        coVerify { settings.setLongRunningTaskNotificationsEnabled(false) }
     }
 
     @Test

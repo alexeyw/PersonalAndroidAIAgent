@@ -43,7 +43,7 @@
     <!-- Settings-search description for the entry row. Replaces
          settings_search_desc_pipeline_max_steps, which shipped in the app
          promising a pause the engine never performs. -->
-    <string name="run_limits_entry_search">Caps on how much one autonomous run may use — steps, tokens, and why spend cannot be capped.</string>
+    <string name="run_limits_entry_search">Caps on one autonomous run: steps, tokens, and what cannot be capped.</string>
 
     <!-- A limit, with the reader's own digit grouping. -->
     <string name="run_limits_number" tools:ignore="PluralsCandidate">%1$,d</string>

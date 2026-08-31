@@ -30,7 +30,6 @@ import app.knotwork.design.screens.settings.SLIDER_AUDIO_MAX_DURATION
 import app.knotwork.design.screens.settings.SLIDER_BACKGROUND_APPROVAL_WINDOW
 import app.knotwork.design.screens.settings.SLIDER_BACKGROUND_RESUME_MAX_AGE
 import app.knotwork.design.screens.settings.SLIDER_MAX_CONTEXT
-import app.knotwork.design.screens.settings.SLIDER_MEMORY_AUTO_SUMMARIZE
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_COMPACTION_AGE
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_COMPRESSION_THRESHOLD
 import app.knotwork.design.screens.settings.SLIDER_MEMORY_LIVE_WINDOW
@@ -43,10 +42,14 @@ import app.knotwork.design.screens.settings.SLIDER_PIPELINE_NESTING_DEPTH
 import app.knotwork.design.screens.settings.SLIDER_PIPELINE_STRUCTURED_REPAIRS
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_AGE
 import app.knotwork.design.screens.settings.SLIDER_PRIVACY_RETENTION_RUNS
-import app.knotwork.design.screens.settings.SLIDER_REPETITION_PENALTY
+import app.knotwork.design.screens.settings.SLIDER_HTTP_TOOL_MAX_RESPONSE
 import app.knotwork.design.screens.settings.SLIDER_TEMPERATURE
 import app.knotwork.design.screens.settings.SLIDER_TOP_K
+import app.knotwork.design.screens.settings.SLIDER_TOOL_CALL_TIMEOUT
 import app.knotwork.design.screens.settings.SLIDER_TOP_P
+import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_MAX_FILE_SIZE
+import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_MAX_TOTAL
+import app.knotwork.design.screens.settings.SLIDER_WORKSPACE_READ_TOKEN_BUDGET
 import app.knotwork.design.screens.settings.SettingSliderRow
 import app.knotwork.design.screens.settings.SettingsHubViewState
 import app.knotwork.design.screens.settings.SystemInstructionsCardState
@@ -71,8 +74,7 @@ internal fun buildHubViewState(uiState: SettingsUiState): SettingsHubViewState =
     backendLabel = stringResource(R.string.settings_row_inference_backend_subtitle, uiState.localModelBackend),
     selectedBackend = uiState.localModelBackend,
     backendOptions = LocalBackend.entries.map { it.key },
-    longRunningEnabled = uiState.longRunningTaskNotificationsEnabled,
-    crashReportingEnabled = uiState.crashReportingEnabled,
+        crashReportingEnabled = uiState.crashReportingEnabled,
     restartRequiredMessage = stringResource(R.string.settings_restart_required_message)
         .takeIf { uiState.restartRequired },
     searchQuery = uiState.searchQuery,
@@ -85,7 +87,6 @@ internal fun buildGenerationViewState(uiState: SettingsUiState, context: Context
     val locale = LocalConfiguration.current.locales[0]
     return GenerationSettingsViewState(
         systemInstructions = buildSystemInstructions(uiState, context),
-        toolUsageValue = uiState.toolUsageInstruction,
         advancedSliders = listOf(
             SettingSliderRow(
                 id = SLIDER_TEMPERATURE,
@@ -108,13 +109,6 @@ internal fun buildGenerationViewState(uiState: SettingsUiState, context: Context
                 valueLabel = String.format(locale, "%.2f", uiState.topP),
                 value = uiState.topP,
                 valueRange = 0f..1f,
-            ),
-            SettingSliderRow(
-                id = SLIDER_REPETITION_PENALTY,
-                title = stringResource(R.string.settings_row_repetition_penalty_title),
-                valueLabel = String.format(locale, "%.2f", uiState.repetitionPenalty),
-                value = uiState.repetitionPenalty,
-                valueRange = 1f..2f,
             ),
             SettingSliderRow(
                 id = SLIDER_MAX_CONTEXT,
@@ -246,7 +240,16 @@ internal fun buildPipelinesViewState(uiState: SettingsUiState): PipelinesSetting
     ).withAnchors(),
 )
 
-/** Builds the Tools category state (approval policy + guardrail toggles). */
+/**
+ * Builds the Tools category state (approval policy, guardrail toggles and the
+ * tool / workspace ceilings).
+ *
+ * The five ceilings are shown in the units a person thinks in — seconds,
+ * megabytes, kilobytes, tokens — and converted back on the way out by
+ * `routeToolsSlider`. The byte-valued three are stored in bytes, so the
+ * conversion has to live somewhere; putting it at the two edges keeps every
+ * consumer of the setting reading plain bytes.
+ */
 @Composable
 internal fun buildToolsViewState(uiState: SettingsUiState): ToolsSettingsViewState = ToolsSettingsViewState(
     approveSelection = uiState.toolApprovalPolicy.toApproveOption(),
@@ -255,6 +258,48 @@ internal fun buildToolsViewState(uiState: SettingsUiState): ToolsSettingsViewSta
     approveNeverLabel = stringResource(R.string.settings_restrictions_approve_never),
     blockDestructive = uiState.blockDestructiveTools,
     blockNetwork = uiState.blockNetworkFromLocalModel,
+    advancedSliders = listOf(
+        intSlider(
+            SLIDER_TOOL_CALL_TIMEOUT,
+            stringResource(R.string.settings_row_tool_call_timeout_title),
+            "${uiState.toolCallTimeoutMs / MILLIS_PER_SECOND} s",
+            (uiState.toolCallTimeoutMs / MILLIS_PER_SECOND).toInt(),
+            (SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MIN / MILLIS_PER_SECOND).toInt(),
+            (SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MAX / MILLIS_PER_SECOND).toInt(),
+        ),
+        intSlider(
+            SLIDER_WORKSPACE_MAX_FILE_SIZE,
+            stringResource(R.string.settings_row_workspace_max_file_size_title),
+            "${uiState.workspaceMaxFileSizeBytes / BYTES_PER_MB} MB",
+            (uiState.workspaceMaxFileSizeBytes / BYTES_PER_MB).toInt(),
+            (SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_MIN / BYTES_PER_MB).toInt(),
+            (SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_MAX / BYTES_PER_MB).toInt(),
+        ),
+        intSlider(
+            SLIDER_WORKSPACE_MAX_TOTAL,
+            stringResource(R.string.settings_row_workspace_max_total_title),
+            "${uiState.workspaceMaxTotalBytes / BYTES_PER_MB} MB",
+            (uiState.workspaceMaxTotalBytes / BYTES_PER_MB).toInt(),
+            (SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_MIN / BYTES_PER_MB).toInt(),
+            (SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_MAX / BYTES_PER_MB).toInt(),
+        ),
+        intSlider(
+            SLIDER_WORKSPACE_READ_TOKEN_BUDGET,
+            stringResource(R.string.settings_row_workspace_read_budget_title),
+            "${uiState.workspaceReadTokenBudget} tok",
+            uiState.workspaceReadTokenBudget,
+            SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_MIN,
+            SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_MAX,
+        ),
+        intSlider(
+            SLIDER_HTTP_TOOL_MAX_RESPONSE,
+            stringResource(R.string.settings_row_http_tool_max_response_title),
+            "${uiState.httpToolMaxResponseBytes / BYTES_PER_KB} KB",
+            (uiState.httpToolMaxResponseBytes / BYTES_PER_KB).toInt(),
+            (SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_MIN / BYTES_PER_KB).toInt(),
+            (SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_MAX / BYTES_PER_KB).toInt(),
+        ),
+    ).withAnchors(),
 )
 
 /**
@@ -264,7 +309,6 @@ internal fun buildToolsViewState(uiState: SettingsUiState): ToolsSettingsViewSta
 @Composable
 internal fun buildBackgroundViewState(uiState: SettingsUiState): BackgroundSettingsViewState =
     BackgroundSettingsViewState(
-        longRunningEnabled = uiState.longRunningTaskNotificationsEnabled,
         scheduledResultsEnabled = uiState.scheduledTaskNotificationsEnabled,
         shareTargetPipelineLabel = pipelineBindingLabel(uiState, uiState.shareTargetPipelineId),
         shareReuseSessionEnabled = uiState.shareReuseSession,
@@ -393,13 +437,6 @@ private fun buildLocalModelCard(uiState: SettingsUiState, context: Context): Loc
 
 @Composable
 private fun memoryAdvancedSliders(uiState: SettingsUiState, locale: Locale): List<SettingSliderRow> = listOf(
-    SettingSliderRow(
-        id = SLIDER_MEMORY_AUTO_SUMMARIZE,
-        title = stringResource(R.string.settings_memory_auto_summarize_title),
-        valueLabel = "${(uiState.autoSummarizeThreshold * MAX_PERCENT).roundToInt()} %",
-        value = (uiState.autoSummarizeThreshold * MAX_PERCENT),
-        valueRange = 0f..MAX_PERCENT.toFloat(),
-    ),
     intSlider(
         SLIDER_MEMORY_SEARCH_TOP_K,
         stringResource(R.string.settings_memory_param_top_k_title),
@@ -486,15 +523,18 @@ private fun intSlider(id: String, title: String, valueLabel: String, value: Int,
  * `route*Slider` dispatch in `SettingsScreens`; both must list the same sliders.
  */
 internal val SLIDER_TO_ANCHOR: Map<String, String> = mapOf(
+    SLIDER_TOOL_CALL_TIMEOUT to "TOOL_CALL_TIMEOUT_MS",
+    SLIDER_WORKSPACE_MAX_FILE_SIZE to "WORKSPACE_MAX_FILE_SIZE_BYTES",
+    SLIDER_WORKSPACE_MAX_TOTAL to "WORKSPACE_MAX_TOTAL_BYTES",
+    SLIDER_WORKSPACE_READ_TOKEN_BUDGET to "WORKSPACE_READ_TOKEN_BUDGET",
+    SLIDER_HTTP_TOOL_MAX_RESPONSE to "HTTP_TOOL_MAX_RESPONSE_BYTES",
     SLIDER_TEMPERATURE to "TEMPERATURE",
     SLIDER_TOP_K to "TOP_K",
     SLIDER_TOP_P to "TOP_P",
-    SLIDER_REPETITION_PENALTY to "REPETITION_PENALTY",
     SLIDER_MAX_CONTEXT to "MAX_CONTEXT_LENGTH",
     SLIDER_AUDIO_MAX_DURATION to "AUDIO_MAX_DURATION_SEC",
     SLIDER_PIPELINE_NESTING_DEPTH to "PIPELINE_MAX_NESTING_DEPTH",
     SLIDER_PIPELINE_STRUCTURED_REPAIRS to "STRUCTURED_OUTPUT_MAX_REPAIRS",
-    SLIDER_MEMORY_AUTO_SUMMARIZE to "AUTO_SUMMARIZE_THRESHOLD",
     SLIDER_MEMORY_SEARCH_TOP_K to "MEMORY_SEARCH_TOP_K",
     SLIDER_MEMORY_SEARCH_THRESHOLD to "MEMORY_SEARCH_THRESHOLD",
     SLIDER_MEMORY_RECENCY_HALF_LIFE to "MEMORY_RECENCY_HALF_LIFE_DAYS",
@@ -628,6 +668,15 @@ private fun repairsSteps(): Int =
 
 private const val MS_PER_SECOND_F = 1_000f
 private const val MAX_PERCENT = 100
+
+/** Milliseconds per second — the tool-call timeout is stored in ms, shown in s. */
+private const val MILLIS_PER_SECOND = 1_000L
+
+/** Bytes per kilobyte, for the byte-valued ceilings shown in KB. */
+private const val BYTES_PER_KB = 1024L
+
+/** Bytes per megabyte, for the byte-valued ceilings shown in MB. */
+private const val BYTES_PER_MB = 1024L * 1024
 private const val TOP_K_STEPS = 99
 private const val MAX_CONTEXT_STEPS = 14
 private const val HOURS_MIN = 1f

@@ -155,12 +155,10 @@ class SettingsViewModel @Inject constructor(
     // ─── Generation ────────────────────────────────────────────────────────
 
     fun updateSystemInstructions(value: String) = generation.updateSystemInstructions(value)
-    fun updateToolUsageInstruction(value: String) = generation.updateToolUsageInstruction(value)
     fun insertVariable(placeholder: String) = generation.insertVariable(placeholder)
     fun setTemperature(value: Float) = generation.setTemperature(value)
     fun setTopK(value: Int) = generation.setTopK(value)
     fun setTopP(value: Float) = generation.setTopP(value)
-    fun setRepetitionPenalty(value: Float) = generation.setRepetitionPenalty(value)
     fun setMaxContextLength(value: Int) = generation.setMaxContextLength(value)
     fun setAudioMaxDurationSec(seconds: Int) = generation.setAudioMaxDurationSec(seconds)
     fun resetSamplingDefaults() = generation.resetSamplingDefaults()
@@ -170,6 +168,11 @@ class SettingsViewModel @Inject constructor(
     fun setToolApprovalPolicy(policy: ToolApprovalPolicy) = tools.setToolApprovalPolicy(policy)
     fun setBlockDestructiveTools(blocked: Boolean) = tools.setBlockDestructiveTools(blocked)
     fun setBlockNetworkFromLocalModel(blocked: Boolean) = tools.setBlockNetworkFromLocalModel(blocked)
+    fun setToolCallTimeoutMs(timeoutMs: Long) = tools.setToolCallTimeoutMs(timeoutMs)
+    fun setWorkspaceMaxFileSizeBytes(bytes: Long) = tools.setWorkspaceMaxFileSizeBytes(bytes)
+    fun setWorkspaceMaxTotalBytes(bytes: Long) = tools.setWorkspaceMaxTotalBytes(bytes)
+    fun setWorkspaceReadTokenBudget(tokens: Int) = tools.setWorkspaceReadTokenBudget(tokens)
+    fun setHttpToolMaxResponseBytes(bytes: Long) = tools.setHttpToolMaxResponseBytes(bytes)
 
     // ─── Run limits & structured output ──────────────────────────────────────
 
@@ -180,8 +183,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setResumeMaxAgeHours(hours: Int) = background.setResumeMaxAgeHours(hours)
     fun setBackgroundApprovalWindowHours(hours: Int) = background.setBackgroundApprovalWindowHours(hours)
-    fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) =
-        background.setLongRunningTaskNotificationsEnabled(enabled)
     fun setScheduledTaskNotificationsEnabled(enabled: Boolean) =
         background.setScheduledTaskNotificationsEnabled(enabled)
 
@@ -223,7 +224,6 @@ class SettingsViewModel @Inject constructor(
 
     fun setAutoExtractEnabled(enabled: Boolean) = memory.setAutoExtractEnabled(enabled)
     fun setVerboseMemoryLoggingEnabled(enabled: Boolean) = memory.setVerboseMemoryLoggingEnabled(enabled)
-    fun setAutoSummarizeThreshold(percent: Int) = memory.setAutoSummarizeThreshold(percent)
     fun setMemorySearchTopK(value: Int) = memory.setMemorySearchTopK(value)
     fun setMemorySearchThreshold(value: Float) = memory.setMemorySearchThreshold(value)
     fun setMemoryRecencyHalfLifeDays(days: Int) = memory.setMemoryRecencyHalfLifeDays(days)

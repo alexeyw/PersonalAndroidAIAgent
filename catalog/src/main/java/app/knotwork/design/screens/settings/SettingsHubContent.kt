@@ -470,15 +470,6 @@ private fun HubBasicBlock(state: SettingsHubViewState, callbacks: SettingsCallba
                 onSelected = callbacks.onBackendSelected,
             )
         }
-        SettingsAnchor(anchorKey = SettingsRowAnchors.LONG_RUNNING_TASKS_NOTIFICATIONS) {
-            IconToggleRow(
-                icon = AppIcons.Bolt,
-                title = stringResource(R.string.knotwork_settings_notifications_long_running),
-                state = "",
-                checked = state.longRunningEnabled,
-                onCheckedChange = callbacks.onLongRunningToggle,
-            )
-        }
         SettingsAnchor(anchorKey = SettingsRowAnchors.CRASH_REPORTING_ENABLED) {
             IconToggleRow(
                 icon = AppIcons.Shield,

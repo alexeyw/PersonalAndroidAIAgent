@@ -579,37 +579,6 @@ internal fun SystemInstructionsField(
     }
 }
 
-/** Plain multi-line text field for the tool-usage instruction (no chips/counter). */
-@Composable
-internal fun ToolUsageField(value: String, onValueChange: (String) -> Unit) {
-    var fieldValue by remember {
-        mutableStateOf(TextFieldValue(text = value, selection = TextRange(value.length)))
-    }
-    androidx.compose.runtime.LaunchedEffect(value) {
-        if (value != fieldValue.text) {
-            fieldValue = TextFieldValue(text = value, selection = TextRange(value.length))
-        }
-    }
-    SettingsFieldHeader(title = androidx.compose.ui.res.stringResource(R.string.knotwork_settings_tool_usage_title))
-    OutlinedTextField(
-        value = fieldValue,
-        onValueChange = { next ->
-            fieldValue = next
-            if (next.text != value) onValueChange(next.text)
-        },
-        textStyle = KnotworkTextStyles.MonoSm,
-        minLines = TOOL_USAGE_MIN_LINES,
-        maxLines = TOOL_USAGE_MAX_LINES,
-        shape = KnotworkTheme.shapes.md,
-        modifier = Modifier
-            .fillMaxWidth()
-            .testTag(TOOL_USAGE_FIELD_TEST_TAG),
-    )
-    // Same reason as the system-instructions helper above: prose about what the
-    // field does now lives in the header's hint, not in the muted slot.
-    SettingsHintBody()
-}
-
 /**
  * Title line for a settings control that has no label of its own — the two
  * textareas and the rows built from bare Composables rather than from
@@ -1045,9 +1014,6 @@ const val ADVANCED_DISCLOSURE_TEST_TAG: String = "settings_advanced_disclosure"
 /** Test tag for the system-instructions text field. */
 const val SYSTEM_INSTRUCTIONS_FIELD_TEST_TAG: String = "settings_system_instructions_field"
 
-/** Test tag for the tool-usage-instruction text field. */
-const val TOOL_USAGE_FIELD_TEST_TAG: String = "settings_tool_usage_field"
-
 /** Test tag for the restart-required banner. */
 const val RESTART_BANNER_TEST_TAG: String = "settings_restart_banner"
 
@@ -1075,6 +1041,9 @@ const val PIPELINE_SLIDER_TAG_PREFIX: String = "settings_pipeline_slider_"
 /** Test-tag prefix for background sliders. */
 const val BACKGROUND_SLIDER_TAG_PREFIX: String = "settings_background_slider_"
 
+/** Test-tag prefix for tool / workspace ceiling sliders. */
+const val TOOLS_SLIDER_TAG_PREFIX: String = "settings_tools_slider_"
+
 /** Test-tag prefix for privacy retention sliders. */
 const val PRIVACY_PARAM_ROW_TAG_PREFIX: String = "settings_privacy_param_"
 
@@ -1096,8 +1065,6 @@ private val LOADING_ROW_HEIGHT = 56.dp
 private const val SETTINGS_LOADING_ROWS = 6
 private const val SYSTEM_INSTRUCTIONS_MIN_LINES = 5
 private const val SYSTEM_INSTRUCTIONS_MAX_LINES = 12
-private const val TOOL_USAGE_MIN_LINES = 3
-private const val TOOL_USAGE_MAX_LINES = 8
 internal const val ACTIVE_PILL_ALPHA = 0.18f
 private const val REEMBED_BANNER_TINT_ALPHA = 0.12f
 private const val PERCENT_DENOMINATOR = 100f

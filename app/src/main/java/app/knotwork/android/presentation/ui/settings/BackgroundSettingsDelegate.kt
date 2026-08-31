@@ -47,10 +47,6 @@ class BackgroundSettingsDelegate(
 ) {
 
     init {
-        settingsRepository.longRunningTaskNotificationsEnabled.onEach { value ->
-            state.update { it.copy(longRunningTaskNotificationsEnabled = value) }
-        }.launchIn(scope)
-
         settingsRepository.scheduledTaskNotificationsEnabled.onEach { value ->
             state.update { it.copy(scheduledTaskNotificationsEnabled = value) }
         }.launchIn(scope)
@@ -106,11 +102,6 @@ class BackgroundSettingsDelegate(
      */
     fun setSurfacePipeline(surface: EntrySurface, pipelineId: String?) {
         scope.launch { setSurfacePipelineUseCase(surface, pipelineId) }
-    }
-
-    /** Persists the "ping me when a pipeline runs long in the background" toggle. */
-    fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
-        scope.launch { settingsRepository.setLongRunningTaskNotificationsEnabled(enabled) }
     }
 
     /** Persists the "notify me when a scheduled task fires" toggle. */

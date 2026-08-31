@@ -130,7 +130,6 @@ class NestedResumeIntegrationTest {
         every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
         every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)

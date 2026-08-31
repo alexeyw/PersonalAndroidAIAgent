@@ -33,15 +33,6 @@ fun BackgroundSettingsContent(
         onBack = callbacks.onBack,
         modifier = modifier,
     ) {
-        SettingsAnchor(anchorKey = SettingsRowAnchors.LONG_RUNNING_TASKS_NOTIFICATIONS) {
-            IconToggleRow(
-                icon = AppIcons.Bolt,
-                title = stringResource(R.string.knotwork_settings_notifications_long_running),
-                state = "",
-                checked = state.longRunningEnabled,
-                onCheckedChange = callbacks.onLongRunningToggle,
-            )
-        }
         SettingsAnchor(anchorKey = SettingsRowAnchors.SCHEDULED_TASK_NOTIFICATIONS) {
             IconToggleRow(
                 icon = AppIcons.History,
@@ -127,4 +118,4 @@ fun BackgroundSettingsContent(
  * Number of Basic-tier rows on the Background sub-screen: four toggles, three
  * pipeline bindings, and the request-journal link.
  */
-private const val BASIC_ROW_COUNT = 8
+private const val BASIC_ROW_COUNT = 7

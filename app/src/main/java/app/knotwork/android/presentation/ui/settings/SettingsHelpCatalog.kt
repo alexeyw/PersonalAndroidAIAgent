@@ -30,26 +30,21 @@ enum class NoHint {
      * exists to stop. Each is filed against the bug-fix container, and each is
      * owed a hint as soon as its row does something.
      *
-     * Seven rows qualify, every one of them found by trying to write its
-     * explanation and failing to find the code that would make it true:
-     *  - `LONG_RUNNING_TASKS_NOTIFICATIONS` — gates a notification production
-     *    never posts (`LongRunningTaskNotifier.notify` is called from nothing
-     *    but its own unit test).
-     *  - `TOOL_USAGE_INSTRUCTION` — the edited text has no consumer; both LLM
-     *    executors build the prompt from the system prefix and the node prompt
-     *    only. `DefaultPrompts.TOOL_USAGE_INSTRUCTION` seeds the field and
-     *    appears as a node-editor template, which is not the same thing.
-     *  - `AUTO_SUMMARIZE_THRESHOLD` — read by the settings plumbing and by
-     *    nothing else; moving the slider changes no behaviour.
-     *  - `TEMPERATURE`, `TOP_K`, `TOP_P`, `REPETITION_PENALTY` — the sampling
-     *    sliders. `LiteRTLlmEngine` opens an ordinary conversation with **no**
-     *    `SamplerConfig` at all, leaving the model's native sampler in place;
-     *    its own KDoc says the override "is only ever used for the
-     *    structured-output repair loop", where the values are hardcoded. The
-     *    cloud path builds no sampling params either. Four confident sentences
-     *    about sampling behaviour were written here before this was checked —
-     *    which is the failure this whole task exists to stop, so they are gone
-     *    rather than softened.
+     * **No row qualifies today, and the enum stays** — as the place the next
+     * one is recorded rather than quietly explained. The seven that once did
+     * were all found by trying to write an explanation and failing to find the
+     * code that would make it true; each was then closed the honest way, by
+     * fixing the row or removing it:
+     *  - `TEMPERATURE`, `TOP_K`, `TOP_P` now reach the on-device engine and
+     *    carry ordinary explanations. LiteRT-LM's sampler is all-or-nothing, so
+     *    they had to arrive together or not at all — which is why all three sat
+     *    here while the conversation was opened with no sampler config.
+     *  - `REPETITION_PENALTY` was removed: the library's `SamplerConfig` is
+     *    exactly `(topK, topP, temperature, seed)`, so there is nothing to wire
+     *    it to. Measured against the packaged `.aar`, not assumed.
+     *  - `TOOL_USAGE_INSTRUCTION`, `AUTO_SUMMARIZE_THRESHOLD` and
+     *    `LONG_RUNNING_TASKS_NOTIFICATIONS` were removed: no consumer existed
+     *    for the first two, and the third gated a notification nothing posted.
      */
     BEHAVIOUR_NOT_SHIPPED,
 }
@@ -107,11 +102,9 @@ object SettingsHelpCatalog {
     /** Anchor -> explanation, or the recorded reason there is none. */
     val HELP: Map<String, SettingHelp> = mapOf(
         "SYSTEM_PROMPT_PREFIX" to text(R.string.settings_help_system_prompt_prefix),
-        "TOOL_USAGE_INSTRUCTION" to notShipped(R.string.settings_help_tool_usage_instruction),
-        "TEMPERATURE" to notShipped(R.string.settings_help_temperature),
-        "TOP_K" to notShipped(R.string.settings_help_top_k),
-        "TOP_P" to notShipped(R.string.settings_help_top_p),
-        "REPETITION_PENALTY" to notShipped(R.string.settings_help_repetition_penalty),
+        "TEMPERATURE" to text(R.string.settings_help_temperature),
+        "TOP_K" to text(R.string.settings_help_top_k),
+        "TOP_P" to text(R.string.settings_help_top_p),
         "MAX_CONTEXT_LENGTH" to text(R.string.settings_help_max_context_length),
         "AUDIO_MAX_DURATION_SEC" to text(R.string.settings_help_audio_max_duration_sec),
         "LOCAL_MODEL_BACKEND" to text(R.string.settings_help_local_model_backend),
@@ -120,7 +113,6 @@ object SettingsHelpCatalog {
         "AUTO_EXTRACT_ENABLED" to text(R.string.settings_help_auto_extract_enabled),
         "MEMORY_COMPACTION_ENABLED" to text(R.string.settings_help_memory_compaction_enabled),
         "CHAT_HISTORY_COMPRESSION_ENABLED" to text(R.string.settings_help_chat_history_compression_enabled),
-        "AUTO_SUMMARIZE_THRESHOLD" to notShipped(R.string.settings_help_auto_summarize_threshold),
         "MEMORY_SEARCH_TOP_K" to text(R.string.settings_help_memory_search_top_k),
         "MEMORY_SEARCH_THRESHOLD" to text(R.string.settings_help_memory_search_threshold),
         "MEMORY_RECENCY_HALF_LIFE_DAYS" to text(R.string.settings_help_memory_recency_half_life_days),
@@ -147,7 +139,6 @@ object SettingsHelpCatalog {
         "WORKSPACE_READ_TOKEN_BUDGET" to text(R.string.settings_help_workspace_read_token_budget),
         "HTTP_TOOL_MAX_RESPONSE_BYTES" to text(R.string.settings_help_http_tool_max_response_bytes),
         "LINK_FILES_DOMAINS" to none(NoHint.LINK_ROW),
-        "LONG_RUNNING_TASKS_NOTIFICATIONS" to notShipped(R.string.settings_help_long_running_tasks_notifications),
         "SCHEDULED_TASK_NOTIFICATIONS" to text(R.string.settings_help_scheduled_task_notifications),
         "SHARE_TARGET_PIPELINE_ID" to text(R.string.settings_help_share_target_pipeline_id),
         "SHARE_REUSE_SESSION" to text(R.string.settings_help_share_reuse_session),

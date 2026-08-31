@@ -51,13 +51,10 @@ class SettingsDefaultsTest {
         assertEquals(false, SettingsDefaults.REQUIRES_USER_CONFIRMATION_DEFAULT)
         assertEquals(false, SettingsDefaults.CRASH_REPORTING_ENABLED_DEFAULT)
         assertEquals(true, SettingsDefaults.USAGE_TELEMETRY_ENABLED_DEFAULT)
-        assertEquals(true, SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT)
         assertEquals(true, SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT)
         assertEquals(false, SettingsDefaults.BLOCK_DESTRUCTIVE_TOOLS_DEFAULT)
         assertEquals(false, SettingsDefaults.BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT)
         assertEquals(5, SettingsDefaults.MEMORY_SUMMARY_DEFAULT_LIMIT_DEFAULT)
-        assertEquals(0f, SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MIN)
-        assertEquals(1f, SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MAX)
     }
 
     /**
@@ -142,12 +139,6 @@ class SettingsDefaultsTest {
                 MEMORY_SUMMARY_LIMIT_MAX.toDouble(),
             )
             assertInRange(
-                "REPETITION_PENALTY",
-                REPETITION_PENALTY_DEFAULT.toDouble(),
-                REPETITION_PENALTY_MIN.toDouble(),
-                REPETITION_PENALTY_MAX.toDouble(),
-            )
-            assertInRange(
                 "MEMORY_COMPACTION_AGE_DAYS",
                 MEMORY_COMPACTION_AGE_DAYS_DEFAULT.toDouble(),
                 MEMORY_COMPACTION_AGE_DAYS_MIN.toDouble(),
@@ -178,10 +169,34 @@ class SettingsDefaultsTest {
                 CLOUD_RETRY_BASE_DELAY_MS_MAX.toDouble(),
             )
             assertInRange(
-                "AUTO_SUMMARIZE_THRESHOLD",
-                AUTO_SUMMARIZE_THRESHOLD_DEFAULT.toDouble(),
-                AUTO_SUMMARIZE_THRESHOLD_MIN.toDouble(),
-                AUTO_SUMMARIZE_THRESHOLD_MAX.toDouble(),
+                "TOOL_CALL_TIMEOUT_MS",
+                TOOL_CALL_TIMEOUT_MS_DEFAULT.toDouble(),
+                TOOL_CALL_TIMEOUT_MS_MIN.toDouble(),
+                TOOL_CALL_TIMEOUT_MS_MAX.toDouble(),
+            )
+            assertInRange(
+                "WORKSPACE_MAX_FILE_SIZE_BYTES",
+                WORKSPACE_MAX_FILE_SIZE_BYTES_DEFAULT.toDouble(),
+                WORKSPACE_MAX_FILE_SIZE_BYTES_MIN.toDouble(),
+                WORKSPACE_MAX_FILE_SIZE_BYTES_MAX.toDouble(),
+            )
+            assertInRange(
+                "WORKSPACE_MAX_TOTAL_BYTES",
+                WORKSPACE_MAX_TOTAL_BYTES_DEFAULT.toDouble(),
+                WORKSPACE_MAX_TOTAL_BYTES_MIN.toDouble(),
+                WORKSPACE_MAX_TOTAL_BYTES_MAX.toDouble(),
+            )
+            assertInRange(
+                "WORKSPACE_READ_TOKEN_BUDGET",
+                WORKSPACE_READ_TOKEN_BUDGET_DEFAULT.toDouble(),
+                WORKSPACE_READ_TOKEN_BUDGET_MIN.toDouble(),
+                WORKSPACE_READ_TOKEN_BUDGET_MAX.toDouble(),
+            )
+            assertInRange(
+                "HTTP_TOOL_MAX_RESPONSE_BYTES",
+                HTTP_TOOL_MAX_RESPONSE_BYTES_DEFAULT.toDouble(),
+                HTTP_TOOL_MAX_RESPONSE_BYTES_MIN.toDouble(),
+                HTTP_TOOL_MAX_RESPONSE_BYTES_MAX.toDouble(),
             )
         }
     }

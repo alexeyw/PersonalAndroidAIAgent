@@ -93,6 +93,11 @@ class SettingsHelpCatalogTest {
         // why it was wrong: a row with no glyph beside rows that have one reads
         // as unfinished, and "moving this changes nothing yet" is exactly what
         // the person who just dragged the slider needs to be told.
+        //
+        // The set is empty now: every row that carried this marker was closed by
+        // wiring it up or removing it. The assertion stays, and stays pinned to
+        // the empty set, so a NEW unshipped row is a deliberate edit here rather
+        // than a quiet addition.
         assertEquals(NOT_SHIPPED_ROWS, notShipped)
         val controller = SettingsHelpCatalog.controller(context)
         notShipped.forEach { anchor ->
@@ -164,33 +169,20 @@ class SettingsHelpCatalogTest {
         /**
          * Rows whose behaviour does not happen yet. Each still carries an
          * explanation saying so; the set is pinned because it is also the
-         * defect list, and it may only shrink.
+         * defect list, and it may only shrink. It has now shrunk to nothing:
+         * the sampling sliders reach the engine, and the four rows that could
+         * not be wired were removed instead.
          */
-        val NOT_SHIPPED_ROWS: Set<String> = setOf(
-            "TOOL_USAGE_INSTRUCTION",
-            "TEMPERATURE",
-            "TOP_K",
-            "TOP_P",
-            "REPETITION_PENALTY",
-            "AUTO_SUMMARIZE_THRESHOLD",
-            "LONG_RUNNING_TASKS_NOTIFICATIONS",
-        )
+        val NOT_SHIPPED_ROWS: Set<String> = emptySet()
 
         /**
          * Registry rows that no screen renders, so their explanation has
-         * nowhere to open. All five are Tools ceilings that are registered and
-         * findable by search but drawn by nothing — a pre-existing registry/UI
-         * drift this task surfaced rather than caused, and the reason the hub
-         * cannot honestly count a category's rows. Filed as a defect; the set
-         * may only shrink.
+         * nowhere to open. The five Tools ceilings that used to sit here now
+         * have sliders under Tools → Advanced, so the set is empty — and stays
+         * pinned at empty, because a registry row search can reach and no
+         * screen can show is the exact defect this list recorded.
          */
-        val KNOWN_SURFACELESS: Set<String> = setOf(
-            "TOOL_CALL_TIMEOUT_MS",
-            "WORKSPACE_MAX_FILE_SIZE_BYTES",
-            "WORKSPACE_MAX_TOTAL_BYTES",
-            "WORKSPACE_READ_TOKEN_BUDGET",
-            "HTTP_TOOL_MAX_RESPONSE_BYTES",
-        )
+        val KNOWN_SURFACELESS: Set<String> = emptySet()
 
         /**
          * The hard ceiling, measured rather than chosen by taste: at 200 % font

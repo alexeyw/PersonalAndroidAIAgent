@@ -46,7 +46,6 @@ import app.knotwork.android.data.repositories.ToolRepositoryImpl
 import app.knotwork.android.data.repositories.TriggerJournalRepositoryImpl
 import app.knotwork.android.data.repositories.TriggerRepositoryImpl
 import app.knotwork.android.data.repositories.UsageTelemetryRepositoryImpl
-import app.knotwork.android.data.services.LongRunningTaskNotifierImpl
 import app.knotwork.android.data.services.WorkManagerMemoryReembedScheduler
 import app.knotwork.android.data.services.WorkManagerTriggerScheduler
 import app.knotwork.android.domain.engine.HardwareAccelerationProbe
@@ -86,7 +85,6 @@ import app.knotwork.android.domain.services.AttachmentStore
 import app.knotwork.android.domain.services.AudioCaptureStore
 import app.knotwork.android.domain.services.AudioRecorder
 import app.knotwork.android.domain.services.DatabaseResetService
-import app.knotwork.android.domain.services.LongRunningTaskNotifier
 import app.knotwork.android.domain.services.MemoryReembedScheduler
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.services.TriggerScheduler
@@ -419,16 +417,6 @@ abstract class DataModule {
     @Binds
     @Singleton
     abstract fun bindIdentityRepository(repository: IdentityRepositoryImpl): IdentityRepository
-
-    /**
-     * Binds [LongRunningTaskNotifierImpl] to [LongRunningTaskNotifier].
-     * The implementation gates every `notify` call on the user's
-     * `Long-running tasks` toggle so the binding is safe to provide
-     * unconditionally.
-     */
-    @Binds
-    @Singleton
-    abstract fun bindLongRunningTaskNotifier(notifier: LongRunningTaskNotifierImpl): LongRunningTaskNotifier
 
     /**
      * Binds [WorkManagerMemoryReembedScheduler] to [MemoryReembedScheduler] —

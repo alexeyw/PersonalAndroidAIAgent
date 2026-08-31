@@ -141,7 +141,6 @@ class SkillReportWriterIntegrationTest {
         every { settingsRepository.workspaceMaxFileSizeBytes } returns flowOf(1_000_000L)
         every { settingsRepository.workspaceMaxTotalBytes } returns flowOf(10_000_000L)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("")
         // NeverPrompt so the SENSITIVE write_file runs without a live HITL gate.
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
