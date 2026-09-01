@@ -940,7 +940,7 @@ against the declared `versionName` and fails naming both values and the file to
 edit. A source it cannot *find* is a failure too: a checker that silently finds
 nothing to compare passes everything.
 
-**The last two were added a release after the guard shipped, and the reason is
+**The last three were added a release after the guard shipped, and the reason is
 the point.** The first version held four of the seven hand-written copies a
 survey of the repository had already counted — and the very next release cut duly
 left `SECURITY.md` at the previous version, in its prose *and* in its
@@ -1025,9 +1025,12 @@ are two questions and are answered in two places on purpose.
 
 ### Observed failing
 
-Each field type driven one code point over its limit, and each reported with
-the file, the count and the limit; the committed listing passes. The pure logic
-is unit-tested in `buildSrc` (`StoreListingLengthCheckerTest`).
+The pure logic is unit-tested in `buildSrc` (`StoreListingLengthCheckerTest`)
+with a case per behaviour that decides a verdict: a field exactly **at** its
+limit passes and one character **over** fails — the boundary is where an
+off-by-one in a length rule actually lives — plus the trailing newline, counting
+outside the basic plane, a changelog matched by its directory, every field over
+at once, and a non-listing file ignored. The committed listing passes.
 
 ---
 

@@ -2027,7 +2027,7 @@ listOf(verifyDocLinks, reportExternalDocLinks, verifyMermaidDiagrams).forEach { 
 // number a bug reporter quotes.
 val verifyVersionSources by tasks.registering(VerifyVersionSourcesTask::class) {
     group = "verification"
-    description = "Fails the build if the README badge or the CHANGELOG disagrees with the declared versionName."
+    description = "Fails the build if any hand-written copy of the version disagrees with the declared versionName."
     declaredVersionName.set(android.defaultConfig.versionName.orEmpty())
     readmeFile.set(file("$rootDir/README.md"))
     changelogFile.set(file("$rootDir/CHANGELOG.md"))
