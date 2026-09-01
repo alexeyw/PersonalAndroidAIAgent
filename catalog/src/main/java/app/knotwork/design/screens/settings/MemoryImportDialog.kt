@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName") // File hosts MemoryImportDialog + its MemoryImportDialogUi payload.
+
 package app.knotwork.design.screens.settings
 
 import androidx.compose.foundation.layout.Arrangement

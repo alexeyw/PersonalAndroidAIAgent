@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName") // File hosts SavePromptAsPresetDialog + its view-state and result payloads.
+
 package app.knotwork.design.screens.prompts
 
 import androidx.compose.foundation.layout.Arrangement

@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName") // File hosts PromptPreviewSheet + its segment and view-state payloads.
+
 package app.knotwork.design.components.prompt
 
 import androidx.compose.foundation.background

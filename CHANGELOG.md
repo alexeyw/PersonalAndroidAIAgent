@@ -36,6 +36,18 @@ details.
 
 ### Changed
 
+- **Dialogs look the same as each other now, and stay that way.** The
+  confirmation dialogs had been written out separately across the app and had
+  drifted: some tinted the destructive action red, some did not, so "this will
+  delete something" was a signal you could only sometimes rely on. They now come
+  from one component, as do the rename prompts and the single-choice pickers.
+
+  Nothing about this is visible as a feature, and one thing is visible as a fix:
+  when saving a pipeline as a preset, the selected category chip is now clearly
+  marked. It previously lost its outline when chosen, so the category you picked
+  looked like the one you had not.
+
+
 - **A run that reaches a safety limit now pauses and asks instead of dying.**
   Reaching the step or token limit used to end the run outright, turning
   everything it had done into a "Stopped by a safety limit" message. It now

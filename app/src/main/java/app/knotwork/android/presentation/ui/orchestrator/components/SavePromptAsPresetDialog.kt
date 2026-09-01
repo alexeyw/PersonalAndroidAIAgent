@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName") // File hosts SavePromptAsPresetDialog + its SavePromptAsPresetResult payload.
+
 package app.knotwork.android.presentation.ui.orchestrator.components
 
 import androidx.compose.runtime.Composable

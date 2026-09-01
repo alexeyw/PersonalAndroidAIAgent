@@ -12,6 +12,7 @@ import app.knotwork.android.buildtools.ReleaseVersionChecker
 import app.knotwork.android.buildtools.ReportExternalDocLinksTask
 import app.knotwork.android.buildtools.SettingsHelpDocsGenerator
 import app.knotwork.android.buildtools.StoreListingLengthChecker
+import app.knotwork.android.buildtools.VerifyDialogInventoryTask
 import app.knotwork.android.buildtools.VerifyDocLinksTask
 import app.knotwork.android.buildtools.VerifyFileMapTask
 import app.knotwork.android.buildtools.VerifyMermaidDiagramsTask
@@ -908,6 +909,65 @@ val verifyNoOrphanedKdoc by tasks.registering(VerifyNoOrphanedKdocTask::class) {
     stampFile.set(layout.buildDirectory.file("reports/kdoc/no-orphans.txt"))
 }
 tasks.named("check") { dependsOn(verifyNoOrphanedKdoc) }
+
+// Dialog inventory gate.
+//
+// A dialog composed in `:app` cannot be photographed: Roborazzi runs in
+// `:catalog`. That is not theory — `SaveAsPresetDialog` shipped with its
+// selected category chip visually indistinguishable from the unselected ones,
+// and reached a manual device run before anyone noticed, because nothing could
+// compare it against anything.
+//
+// The inventory meant to prevent that was built by hand twice and was wrong
+// twice: once listing screens that already had catalog twins under
+// feature-named files, once missing the dialogs entirely because it matched
+// `*Screen(` composables. So the list is derived from the sources here, and
+// every call site is answered once, in writing, below.
+val dialogInventoryAllowlist = mapOf(
+    // ── Hosts. The sanctioned arrangement: the body lives in `:catalog` and
+    // the host keeps the wrapper, because scrim, IME and navigation behaviour
+    // belong to the screen.
+    "app/src/main/java/app/knotwork/android/presentation/ui/navigation/KnotworkModalRoute.kt" to
+        "Generic modal-route wrapper; it hosts whatever content a route supplies and composes none itself.",
+    "app/src/main/java/app/knotwork/android/presentation/ui/prompts/PromptLibraryScreen.kt" to
+        "Hosts the catalog's PromptEditorSheetBody.",
+    "app/src/main/java/app/knotwork/android/presentation/ui/taskmonitor/TaskMonitorScreen.kt" to
+        "Hosts the catalog's TaskMonitorDetailSheetBody.",
+    "app/src/main/java/app/knotwork/android/presentation/ui/orchestrator/components/PromptPresetPickerDialog.kt" to
+        "Hosts the catalog's PromptPresetPickerSheet.",
+    "app/src/main/java/app/knotwork/android/presentation/ui/orchestrator/presets/PresetPickerSheet.kt" to
+        "Hosts the catalog's PresetPickerSheetBody.",
+
+    // ── Deliberate deviations. Each composes its own dialog, and each has a
+    // reason that is not "nobody got to it".
+    "app/src/main/java/app/knotwork/android/presentation/ui/onboarding/OnboardingScreen.kt" to
+        "Exit confirmation whose affirmative action is a primary button rather than a text button — " +
+        "a deliberate weight difference for the one dialog that closes the app. Folding it into " +
+        "ConfirmDialog would change how it looks, which is a design decision and not a refactor.",
+    "app/src/main/java/app/knotwork/android/presentation/ui/orchestrator/PipelineLibraryScreen.kt" to
+        "Three dialogs that are not yes/no questions: delete-with-dependents renders a pluralised " +
+        "warning and the list of pipelines that would be left dangling, and the two import dialogs " +
+        "offer a choice among several outcomes rather than a confirmation.",
+    "app/src/main/java/app/knotwork/android/presentation/ui/pipeline/editor/PipelineEditorScreen.kt" to
+        "The unsaved-changes dialog offers three actions — Save and leave, Discard, Cancel — so it " +
+        "is not a ConfirmDialog. Save occupies the confirm slot deliberately; see the note there.",
+
+    // ── Known remaining work, recorded rather than hidden.
+    "app/src/main/java/app/knotwork/android/presentation/ui/chat/home/ChatHomeScreen.kt" to
+        "Two sheets whose bodies are still private composables in `:app` (rename session, new-thread " +
+        "pipeline picker). Found by this gate after the hand inventory had already been declared " +
+        "complete — which is the argument for the gate. They are the next two to move.",
+)
+
+val verifyDialogInventory by tasks.registering(VerifyDialogInventoryTask::class) {
+    group = "verification"
+    description = "Fails the build if a dialog or sheet is composed in :app without a recorded reason."
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+    sources.from(fileTree("$projectDir/src/main/java") { include("**/*.kt") })
+    allowed.set(dialogInventoryAllowlist)
+    stampFile.set(layout.buildDirectory.file("reports/dialogs/inventory.txt"))
+}
+tasks.named("check") { dependsOn(verifyDialogInventory) }
 
 // Browser pipeline-editor constant sync automation.
 //

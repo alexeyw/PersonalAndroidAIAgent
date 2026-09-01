@@ -68,7 +68,7 @@ class PresetDialogsSnapshotTest {
     @Composable
     private fun Body(selectedCategoryId: String) {
         SaveAsPresetDialogBody(
-            ui = PresetDialogsPreview.saveAsPreset(),
+            ui = SaveAsPresetPreview.saveAsPreset(),
             name = "Research assistant",
             onNameChange = {},
             description = "Searches, distils, writes the result to a file.",

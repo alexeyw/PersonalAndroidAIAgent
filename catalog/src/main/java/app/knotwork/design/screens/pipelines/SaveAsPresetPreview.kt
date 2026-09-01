@@ -7,7 +7,7 @@ package app.knotwork.design.screens.pipelines
  * labels: a fixture that invented three plausible buckets would photograph a
  * row that never wraps, and wrapping is the behaviour `FlowRow` is here for.
  */
-object PresetDialogsPreview {
+object SaveAsPresetPreview {
 
     /** The save-as-preset form as it opens: name pre-filled, `Other` selected. */
     fun saveAsPreset(): SaveAsPresetDialogUi = SaveAsPresetDialogUi(

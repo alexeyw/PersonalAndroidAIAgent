@@ -4,9 +4,6 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -22,6 +19,8 @@ import app.knotwork.android.domain.models.OnboardingJourney
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.UsageRetention
 import app.knotwork.android.domain.models.UsageTelemetrySummary
+import app.knotwork.design.components.dialogs.ConfirmDialog
+import app.knotwork.design.components.dialogs.ConfirmDialogUi
 import app.knotwork.design.screens.settings.UsageStatRow
 import app.knotwork.design.screens.settings.UsageTelemetryCallbacks
 import app.knotwork.design.screens.settings.UsageTelemetryContent
@@ -85,23 +84,22 @@ fun UsageTelemetryScreen(onBack: () -> Unit, viewModel: UsageTelemetryViewModel 
     )
 
     if (showResetConfirm) {
-        AlertDialog(
-            onDismissRequest = { showResetConfirm = false },
-            title = { Text(stringResource(R.string.settings_usage_reset_title)) },
-            text = { Text(stringResource(R.string.settings_usage_reset_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.reset()
-                    showResetConfirm = false
-                }) {
-                    Text(stringResource(R.string.settings_usage_reset_confirm))
-                }
+        ConfirmDialog(
+            ui = ConfirmDialogUi(
+                title = stringResource(R.string.settings_usage_reset_title),
+                body = stringResource(R.string.settings_usage_reset_body),
+                confirmLabel = stringResource(R.string.settings_usage_reset_confirm),
+                cancelLabel = stringResource(R.string.settings_usage_reset_cancel),
+                // Resetting the statistics throws away every recorded run. The old
+                // dialog styled this like an ordinary confirmation, which is the drift
+                // one component exists to end.
+                destructive = true,
+            ),
+            onConfirm = {
+                viewModel.reset()
+                showResetConfirm = false
             },
-            dismissButton = {
-                TextButton(onClick = { showResetConfirm = false }) {
-                    Text(stringResource(R.string.settings_usage_reset_cancel))
-                }
-            },
+            onDismiss = { showResetConfirm = false },
         )
     }
 }

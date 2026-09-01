@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName") // File hosts SingleChoiceDialog + its option and view-state payloads.
+
 package app.knotwork.design.components.dialogs
 
 import androidx.compose.foundation.layout.Column

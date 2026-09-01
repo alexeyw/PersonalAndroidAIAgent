@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName") // File hosts ReportResponseDialog + its option and view-state payloads.
+
 package app.knotwork.design.screens.chat
 
 import androidx.compose.foundation.layout.Arrangement

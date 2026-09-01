@@ -59,8 +59,10 @@ import app.knotwork.android.presentation.ui.pipeline.editor.core.EditorState
 import app.knotwork.android.presentation.ui.pipeline.editor.core.ValidationAutoFix
 import app.knotwork.android.presentation.ui.pipeline.editor.core.rememberEditorState
 import app.knotwork.android.presentation.ui.pipeline.editor.sheet.NodeConfigSheetHost
-import app.knotwork.design.components.controls.KnotworkField
-import app.knotwork.design.components.controls.KnotworkTextField
+import app.knotwork.design.components.dialogs.ConfirmDialog
+import app.knotwork.design.components.dialogs.ConfirmDialogUi
+import app.knotwork.design.components.dialogs.SingleFieldDialog
+import app.knotwork.design.components.dialogs.SingleFieldDialogUi
 import app.knotwork.design.components.pipelineeditor.LocalModelOption
 import app.knotwork.design.components.pipelineeditor.PipelineTargetDisabledReason
 import app.knotwork.design.components.pipelineeditor.PipelineTargetOption
@@ -822,34 +824,24 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
             if (node == null) {
                 pendingRenameNodeId = null
             } else {
-                var renameDraft by remember(renameNodeId) { mutableStateOf(node.label) }
-                AlertDialog(
-                    onDismissRequest = { pendingRenameNodeId = null },
-                    title = { Text(text = stringResource(R.string.pipeline_editor_rename_title)) },
-                    text = {
-                        KnotworkField(
-                            label = stringResource(R.string.pipeline_editor_rename_field_label),
-                        ) {
-                            KnotworkTextField(
-                                value = renameDraft,
-                                onValueChange = { renameDraft = it },
-                            )
+                SingleFieldDialog(
+                    ui = SingleFieldDialogUi(
+                        title = stringResource(R.string.pipeline_editor_rename_title),
+                        label = stringResource(R.string.pipeline_editor_rename_field_label),
+                        initialValue = node.label,
+                        confirmLabel = stringResource(R.string.pipeline_editor_rename_confirm),
+                        cancelLabel = stringResource(R.string.pipeline_editor_rename_cancel),
+                    ),
+                    onDismiss = { pendingRenameNodeId = null },
+                    onConfirm = { typed ->
+                        // The component gates on non-blank; only a *changed* name is
+                        // worth an undo entry, so that check stays here.
+                        val trimmed = typed.trim()
+                        if (trimmed.isNotEmpty() && trimmed != node.label) {
+                            editor.undoRedo.push(pipeline)
+                            viewModel.updateNodeFromEditor(node.id, node.copy(label = trimmed))
                         }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            val trimmed = renameDraft.trim()
-                            if (trimmed.isNotEmpty() && trimmed != node.label) {
-                                editor.undoRedo.push(pipeline)
-                                viewModel.updateNodeFromEditor(node.id, node.copy(label = trimmed))
-                            }
-                            pendingRenameNodeId = null
-                        }) { Text(text = stringResource(R.string.pipeline_editor_rename_confirm)) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { pendingRenameNodeId = null }) {
-                            Text(text = stringResource(R.string.pipeline_editor_rename_cancel))
-                        }
+                        pendingRenameNodeId = null
                     },
                 )
             }
@@ -904,23 +896,20 @@ fun PipelineEditorScreen(viewModel: OrchestratorViewModel, onBack: () -> Unit) {
 
         val edgeToDelete = pendingEdgeDelete
         if (edgeToDelete != null) {
-            AlertDialog(
-                onDismissRequest = { pendingEdgeDelete = null },
-                title = { Text(text = stringResource(R.string.pipeline_editor_remove_connection_title)) },
-                text = { Text(text = stringResource(R.string.pipeline_editor_remove_connection_text)) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        editor.undoRedo.push(uiState.currentPipeline)
-                        viewModel.removeConnection(edgeToDelete)
-                        editor.selectedEdgeId = null
-                        pendingEdgeDelete = null
-                    }) { Text(text = stringResource(R.string.pipeline_editor_remove_connection_confirm)) }
+            ConfirmDialog(
+                ui = ConfirmDialogUi(
+                    title = stringResource(R.string.pipeline_editor_remove_connection_title),
+                    body = stringResource(R.string.pipeline_editor_remove_connection_text),
+                    confirmLabel = stringResource(R.string.pipeline_editor_remove_connection_confirm),
+                    cancelLabel = stringResource(R.string.pipeline_editor_remove_connection_cancel),
+                ),
+                onConfirm = {
+                    editor.undoRedo.push(uiState.currentPipeline)
+                    viewModel.removeConnection(edgeToDelete)
+                    editor.selectedEdgeId = null
+                    pendingEdgeDelete = null
                 },
-                dismissButton = {
-                    TextButton(onClick = { pendingEdgeDelete = null }) {
-                        Text(text = stringResource(R.string.pipeline_editor_remove_connection_cancel))
-                    }
-                },
+                onDismiss = { pendingEdgeDelete = null },
             )
         }
 

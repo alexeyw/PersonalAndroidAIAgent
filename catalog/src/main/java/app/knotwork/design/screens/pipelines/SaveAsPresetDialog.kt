@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName") // File hosts SaveAsPresetDialog + its option, view-state and result payloads.
+
 package app.knotwork.design.screens.pipelines
 
 import androidx.compose.foundation.layout.Arrangement

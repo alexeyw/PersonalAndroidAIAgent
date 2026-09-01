@@ -293,7 +293,7 @@ internal fun PresetCategory.toTone(): PresetCategoryToneUi = when (this) {
  *
  * @return The string resource id.
  */
-private fun PresetCategory.labelRes(): Int = when (this) {
+internal fun PresetCategory.labelRes(): Int = when (this) {
     PresetCategory.LOCAL -> R.string.orchestrator_preset_category_local
     PresetCategory.CLOUD -> R.string.orchestrator_preset_category_cloud
     PresetCategory.HYBRID -> R.string.orchestrator_preset_category_hybrid

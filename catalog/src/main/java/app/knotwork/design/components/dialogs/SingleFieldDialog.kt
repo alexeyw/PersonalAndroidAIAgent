@@ -1,3 +1,5 @@
+@file:Suppress("MatchingDeclarationName") // File hosts SingleFieldDialog + its SingleFieldDialogUi payload.
+
 package app.knotwork.design.components.dialogs
 
 import androidx.compose.material3.AlertDialog
