@@ -330,6 +330,16 @@ abstract class VerifyVersionSourcesTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.NONE)
     abstract val changelogFile: RegularFileProperty
 
+    /** `SECURITY.md`, whose every version names the supported release line. */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val securityFile: RegularFileProperty
+
+    /** `docs/roadmap.md`, which names the pre-release line it describes. */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val roadmapFile: RegularFileProperty
+
     /** Written on success so the task can be up to date. */
     @get:OutputFile
     abstract val stampFile: RegularFileProperty
@@ -342,6 +352,8 @@ abstract class VerifyVersionSourcesTask : DefaultTask() {
             versionName = version,
             readme = readmeFile.get().asFile.readText(),
             changelog = changelogFile.get().asFile.readText(),
+            security = securityFile.get().asFile.readText(),
+            roadmap = roadmapFile.get().asFile.readText(),
         )
         if (violations.isNotEmpty()) {
             throw VerificationException(

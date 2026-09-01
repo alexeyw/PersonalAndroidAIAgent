@@ -13,64 +13,7 @@ details.
 
 ## [Unreleased]
 
-### Fixed
-
-- **The store listing cannot go over Google's limits unnoticed.** A build check
-  now measures every Play field against the ceiling the Console enforces. It
-  was worth adding at that moment rather than later: the English description sat
-  **5 characters** under its limit, the English title **4**, and one release
-  note **2**. One added word breaks any of them, and the rejection lands in the
-  Play Console — after the merge, after a signed artefact exists.
-
-- **The pipeline editor no longer loses work silently.** Save lives in the
-  overflow menu, nothing on screen said a pipeline had drifted from storage,
-  and leaving simply discarded it. Now the toolbar carries an **Unsaved**
-  marker beside the node count as soon as the editor holds anything not in
-  storage, and leaving — by the back gesture or the back icon — asks first,
-  offering **Save and leave** or **Discard**.
-
-  Two details that decide whether the guard is worth having: a save that fails
-  validation leaves the work marked unsaved, and an edit made while a save is in
-  flight stays unsaved rather than being counted as stored. Both are what make
-  the marker something you can trust rather than one more thing on screen.
-
-### Changed
-
-- **Confirmation dialogs come from one place now.** They had been written out
-  separately across the app, and had drifted: **Reset usage statistics** — which
-  throws away every recorded run and cannot be undone — asked for confirmation in
-  the same neutral styling as clearing a log. It is now marked as destructive,
-  like deleting a conversation always was.
-
-  Everything else keeps the styling it had; what changed is that the distinction
-  is now made in one component rather than re-decided at each dialog. The same
-  goes for the rename prompts and the single-choice pickers.
-
-  One more visible fix: when saving a pipeline as a preset, the selected category
-  chip is now clearly marked. It previously lost its outline when chosen, so the
-  category you picked looked like the one you had not.
-
-
-- **A run that reaches a safety limit now pauses and asks instead of dying.**
-  Reaching the step or token limit used to end the run outright, turning
-  everything it had done into a "Stopped by a safety limit" message. It now
-  stops, states which allowance ran out and how much was used, and offers
-  **Continue (+N)** or **Stop the run**.
-
-  Continuing buys **one more portion of the same allowance** — the number on the
-  button — and picks up from the checkpoint, so nothing is re-run. It does not
-  lift the limit: the run asks again when that portion is gone, and a run waved
-  through five times is one you said yes to five times. Each axis is bought
-  separately; being let past a step limit does not authorise more tokens.
-
-  The pause is durable from the moment it is raised, so a run that reaches its
-  limit overnight is still waiting in the morning, with the numbers it actually
-  stopped at rather than whatever the setting says by then. Away from the chat,
-  a notification brings you back to it; it deliberately carries no buttons,
-  because the decision turns on how much the run has already spent and the shade
-  has nowhere to show that. An unanswered pause expires with the same background
-  response window that governs tool approvals, and the run then ends at its
-  limit as before.
+## [0.9.0] - 2026-09-01
 
 ### Added
 
@@ -187,10 +130,14 @@ details.
   `#anchor` that leads nowhere, across every Markdown file in the repository —
   and on a **structurally broken Mermaid diagram**, which until now degraded
   into a red error box on GitHub with nothing to catch it. It also holds the
-  **version number to one value**: the badge in `README.md`, the topmost
-  released heading here, both compare links at the foot of this file, and the
-  `versionName` the build declares. The release checklist had never mentioned
-  the badge, which is the number a bug reporter quotes. Finally, a structural
+  **version number to one value**: the badge in `README.md` and the
+  pre-release sentence beneath it, the topmost released heading here, both
+  compare links at the foot of this file, every version in `SECURITY.md`
+  (including both cells of its supported-versions table), and the `versionName`
+  the build declares. The release checklist had never mentioned the badge, which
+  is the number a bug reporter quotes — and a stale supported-versions table is
+  worse still, since it tells someone reporting a bug that their release is not
+  supported. Finally, a structural
   guard now enforces what was written down and nothing enforced — **a prompt
   pack is imported from a file you picked, never fetched over a link**; an
   instruction file that reaches the system prompt of an agent holding tools has
@@ -202,6 +149,43 @@ details.
   server, so they are reported weekly instead.
 
 ### Changed
+
+- **Confirmation dialogs come from one place now.** They had been written out
+  separately across the app, and had drifted: **Reset usage statistics** — which
+  throws away every recorded run and cannot be undone — asked for confirmation in
+  the same neutral styling as clearing a log. It is now marked as destructive,
+  like deleting a conversation always was.
+
+  Everything else keeps the styling it had; what changed is that the distinction
+  is now made in one component rather than re-decided at each dialog. The same
+  goes for the rename prompts and the single-choice pickers.
+
+  One more visible fix: when saving a pipeline as a preset, the selected category
+  chip is now clearly marked. It previously lost its outline when chosen, so the
+  category you picked looked like the one you had not.
+
+
+- **A run that reaches a safety limit now pauses and asks instead of dying.**
+  Reaching the step or token limit used to end the run outright, turning
+  everything it had done into a "Stopped by a safety limit" message. It now
+  stops, states which allowance ran out and how much was used, and offers
+  **Continue (+N)** or **Stop the run**.
+
+  Continuing buys **one more portion of the same allowance** — the number on the
+  button — and picks up from the checkpoint, so nothing is re-run. It does not
+  lift the limit: the run asks again when that portion is gone, and a run waved
+  through five times is one you said yes to five times. Each axis is bought
+  separately; being let past a step limit does not authorise more tokens.
+
+  The pause is durable from the moment it is raised, so a run that reaches its
+  limit overnight is still waiting in the morning, with the numbers it actually
+  stopped at rather than whatever the setting says by then. Away from the chat,
+  a notification brings you back to it; it deliberately carries no buttons,
+  because the decision turns on how much the run has already spent and the shade
+  has nowhere to show that. An unanswered pause expires with the same background
+  response window that governs tool approvals, and the run then ends at its
+  limit as before.
+
 
 - **One toggle was described in search as doing the opposite of what it does.**
   Searching for **Block destructive tools** offered "always require a typed
@@ -266,7 +250,9 @@ details.
   notification that was never posted. Rather than give each a fluent sentence
   about behaviour the build did not have, they were recorded as *behaviour not
   shipped* — and then closed, before this release, by wiring them up or removing
-  them. See the two entries below.
+  them. See *The three sampling sliders now reach the on-device model* under
+  **Added**, and *Four settings that could not be made true are gone* under
+  **Removed**.
 
 - **The explanations that used to sit under a row are gone from that slot.**
   Small muted text under a label is where the app shows what a row is *set to*
@@ -403,6 +389,26 @@ details.
   went with them.
 
 ### Fixed
+
+- **The store listing cannot go over Google's limits unnoticed.** A build check
+  now measures every Play field against the ceiling the Console enforces. It
+  was worth adding at that moment rather than later: the English description sat
+  **5 characters** under its limit, the English title **4**, and one release
+  note **2**. One added word breaks any of them, and the rejection lands in the
+  Play Console — after the merge, after a signed artefact exists.
+
+- **The pipeline editor no longer loses work silently.** Save lives in the
+  overflow menu, nothing on screen said a pipeline had drifted from storage,
+  and leaving simply discarded it. Now the toolbar carries an **Unsaved**
+  marker beside the node count as soon as the editor holds anything not in
+  storage, and leaving — by the back gesture or the back icon — asks first,
+  offering **Save and leave** or **Discard**.
+
+  Two details that decide whether the guard is worth having: a save that fails
+  validation leaves the work marked unsaved, and an edit made while a save is in
+  flight stays unsaved rather than being counted as stored. Both are what make
+  the marker something you can trust rather than one more thing on screen.
+
 
 - **Stop now stops the run.** The button had only detached the screen from it:
   the work carried on in the background, spending steps, tokens and battery, and
@@ -5517,7 +5523,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/alexeyw/knotwork/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/alexeyw/knotwork/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/alexeyw/knotwork/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/alexeyw/knotwork/compare/v0.7.1...v0.7.2

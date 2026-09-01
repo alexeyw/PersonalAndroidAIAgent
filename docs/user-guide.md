@@ -990,10 +990,14 @@ and the verdict:
 - **Fired** — a run started. The entry is completed later with how that run
   ended: **Completed**, **Failed**, **Stopped by the system** (the app's
   process was killed mid-run), **You stopped it**, **Timed out waiting for
-  approval**, or **Stopped by a safety limit** (the run reached the step or
-  token ceiling in force for background runs — a working guard, so it does not
-  count against the trigger's health indicator). Until the run settles it reads **Running…**. If the run stopped
-  to ask you something, a second line says what became of the request —
+  approval**, or **Stopped by a safety limit** — a working guard, so it does
+  not count against the trigger's health indicator. That last one is not the
+  moment the ceiling was reached: a background run that reaches one **pauses and
+  asks** first (see [When a run reaches a limit](#when-a-run-reaches-a-limit)),
+  and settles here only when you answer *Stop the run* or the response window
+  closes with the question unanswered. Until the run settles it reads
+  **Running…**. If the run stopped to ask you something, a second line says
+  what became of the request —
   **You approved it**, **You denied it**, **You answered it**, **Waiting for
   your response**, **No response before the window closed**, or **The request
   never reached you** — and adds *from the notification* (or *in the
@@ -1211,6 +1215,18 @@ is an infinite pan / zoom canvas with the following gestures:
   (longest-path layering + median crossing reduction) so the graph
   reads top-to-bottom. **Save pipeline** lives in the overflow menu and
   is the action that writes your edits to disk.
+
+  Beside the node count sits an **Unsaved** marker — a coloured dot and the
+  word — shown from the moment the editor holds anything that is not in
+  storage. Leaving while it shows, by the back gesture or the back arrow, asks
+  **Leave without saving?** and offers **Save and leave** or **Discard**.
+
+  Two details decide whether that marker is worth trusting. A save refused by
+  validation leaves the work marked unsaved — because it is: nothing was
+  written. And an edit made while a save is in flight stays unsaved rather than
+  being counted as stored. What the marker compares is the whole pipeline,
+  including its name, its sample prompts and its memory query, not just the
+  nodes and the edges.
 
   The editor has no Run button: it composes pipelines, it does not
   execute them. You run a pipeline by binding it to a chat and sending a
