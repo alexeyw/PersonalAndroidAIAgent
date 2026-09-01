@@ -39,7 +39,9 @@ means a document is being generated from a rule nobody is checking.
 | `:app:lintFullDebug` + `:app:lintFossDebug`   | Android Lint over both distribution flavours + library dependencies. `:catalog:lint` runs too. |
 | `:app:testFullDebugUnitTest`                      | JVM unit tests for the debug variant.                                   |
 | `:app:koverVerifyFullDebug`                       | Test-coverage threshold enforcement.                                    |
-| `:app:verifyStoreListingLengths`                  | Play store-listing fields against Google's character limits. Rejection otherwise lands in the Play Console, after a signed release. |
+| `:app:verifyStoreListingLengths`                  | Play store-listing fields against Google's character limits. Rejection otherwise lands in the Play Console, after a signed release (see below). |
+| `:app:verifyNoOrphanedKdoc` + `:catalog:verifyNoOrphanedKdoc` | Fails if a KDoc block documents no declaration — and so silently leaves the one below it undocumented (see below). |
+| `:app:verifyDialogInventory`                  | Fails if a dialog or sheet is composed in `:app` without a recorded reason, putting it out of reach of the design-system baselines (see below). |
 | `:app:checkNoInternalFqn`                     | Custom rule: forbid `app.knotwork.android.*` FQN references in code body.   |
 | `:app:verifyBrowserEditorConstants`           | Fails if `pipeline-editor.html` `AUTO-GEN` blocks drift from the domain sources. |
 | `:app:verifyDocsHygiene`                      | Custom rule: guard the public docs against LLM tool-call artifacts and internal-document references (see below). |
@@ -919,19 +921,39 @@ the one claim this guard cannot make about itself.
 `versionName` in [`app/build.gradle.kts`](../app/build.gradle.kts) is the single
 source of truth for the build — the F-Droid recipe builds a tag with no Gradle
 properties injected and must still get the right number. The problem is that the
-number is *repeated*, for humans, in four places no build step reads:
+number is *repeated*, for humans, in places no build step reads:
 
 - the version badge in `README.md`;
+- the *Pre-release notice* sentence in `README.md` ("currently at **version X**");
 - the topmost released heading of `CHANGELOG.md`;
 - the `[Unreleased]` compare link at the foot of `CHANGELOG.md`;
-- the link definition of that topmost release, which names the tag it shipped as.
+- the link definition of that topmost release, which names the tag it shipped as;
+- every version in `SECURITY.md` — its prose, the line it says fixes land on,
+  and both cells of the supported-versions table.
 
 Each is edited by hand at release time and nothing noticed when one was missed.
 The release checklist did not even mention the badge — which is the version
-number a bug reporter quotes. `:app:verifyVersionSources` compares all four
+number a bug reporter quotes. `:app:verifyVersionSources` compares them all
 against the declared `versionName` and fails naming both values and the file to
 edit. A source it cannot *find* is a failure too: a checker that silently finds
 nothing to compare passes everything.
+
+**The last two were added a release after the guard shipped, and the reason is
+the point.** The first version held four of the seven hand-written copies a
+survey of the repository had already counted — and the very next release cut duly
+left `SECURITY.md` at the previous version, in its prose *and* in its
+supported-versions table, where a stale number tells a reporter their release is
+unsupported. A rule covering four of seven does not merely miss three: it reads
+as a closed subject, which is worse than no rule, because nobody greps a
+question that looks answered.
+
+`SECURITY.md` is checked **wholesale** — every version-like token in it must be
+the shipping version or its minor line (`0.9.0` or `0.9.x`). That is a stronger
+claim than one pattern per sentence, and it is true of this document. It is not
+true of `README.md`, which legitimately discusses older releases (the one-time
+signing change at `0.7.0`), so the README is matched by named patterns only.
+Naming a historic version in `SECURITY.md` therefore means revisiting this rule
+on purpose, which is the intended cost.
 
 `versionCode` is deliberately out of scope. Its agreement with the store
 changelog file is already held by `StoreMetadataTest`, and a second, separately
@@ -943,7 +965,130 @@ Five mutations, one per source plus the whole-release case: a stale README
 badge, a changelog heading ahead of the build, a stale `[Unreleased]` compare
 link, a release heading whose link definition was deleted, and a `versionName`
 bumped with nothing else — which reported all three remaining sources at once.
-The pure logic is unit-tested in `buildSrc` (`VersionSourcesCheckerTest`).
+
+The two sources added later were observed failing on **a real drift rather than
+a mutation**: with `versionName` cut to the shipping version and `SECURITY.md`
+untouched, the extended gate failed naming both stale copies, which is exactly
+the drift the previous release had shipped unnoticed. It was then fixed and the
+gate went green.
+
+The pure logic is unit-tested in `buildSrc` (`VersionSourcesCheckerTest`), with
+a case per source, one asserting that the supported *line* (`0.9.x`) is accepted
+rather than read as a stale version, and one asserting that a `SECURITY.md`
+naming no version at all fails.
+
+---
+
+## Store-listing length guard (`verifyStoreListingLengths`)
+
+The Play Console **rejects** an upload whose listing fields are over Google's
+character limits. Without a gate that rejection lands in a web form, after the
+merge, after the release workflow has built and signed an artefact — the one
+moment at which it is most expensive and least expected.
+
+`:app:verifyStoreListingLengths` measures every file under
+[`fastlane/metadata`](../fastlane/metadata) against the limit for its field:
+30 code points for the app title, 80 for the short description, 4 000 for the
+full description, and 500 for a release's "What's new" text. Counting is in
+**Unicode code points**, matching how the Console counts, and a single trailing
+newline is ignored because every file in the tree ends with one and Play does
+not.
+
+The changelog ceiling is held apart from the other three because those files are
+named after the `versionCode` rather than after the field, so they are matched
+by their parent directory instead of their file name.
+
+**The margins are why this is a gate rather than a line in the release
+checklist.** When it was written, the English full description sat **5**
+characters under its ceiling, the English title **4**, and one release note
+**2**. One added word breaks any of the three, and nothing in the repository
+could see it.
+
+Not to be confused with `StoreMetadataTest`, which checks that a shipping
+`versionCode` *has* release notes at all, in every locale. Length and existence
+are two questions and are answered in two places on purpose.
+
+### Observed failing
+
+Each field type driven one code point over its limit, and each reported with
+the file, the count and the limit; the committed listing passes. The pure logic
+is unit-tested in `buildSrc` (`StoreListingLengthCheckerTest`).
+
+---
+
+## Orphaned-KDoc guard (`verifyNoOrphanedKdoc`)
+
+Kotlin attaches a KDoc block to the declaration that follows it, and only to
+that one. When two blocks end up back to back with no declaration between them,
+the first documents nothing: invisible to Dokka, invisible to the IDE, and —
+worse — it *reads* as documentation of the declaration below, which already has
+its own.
+
+`:app:verifyNoOrphanedKdoc` and `:catalog:verifyNoOrphanedKdoc` fail the build
+on such a block, naming the file, the line and the block's first content line.
+
+**A file-level block is not a violation.** A file whose opening block explains
+the file as a whole, followed by the first declaration's own block, is a
+deliberate shape that several files here use. It is told apart structurally
+rather than by heuristics: a file-level block is one with nothing but `package`,
+`import`, file annotations, comments and blank lines before it.
+
+`:app` scans `androidTest` too, deliberately — `check` neither runs nor compiles
+that source set, so a block orphaned there would go unseen until the separate
+instrumented job, and this check only reads text. `:catalog` is covered because
+it is a design system: its declarations carry the longest KDoc in the
+repository, and components are routinely inserted next to their neighbours,
+which is exactly the edit that produces an orphan.
+
+### Observed failing
+
+The gate's first run over the committed tree found **four** real instances, all
+the same editing accident and none of which had looked like one in review: a new
+function inserted **between** an existing KDoc and the function it described.
+The old doc stayed where it was, the new function kept its own, and the original
+function silently lost its documentation — in one case the entire migration
+policy of the Room database. Every individual line of those diffs was correct.
+The pure logic is unit-tested in `buildSrc` (`OrphanedKdocCheckerTest`).
+
+---
+
+## Dialog inventory guard (`verifyDialogInventory`)
+
+Dialog and sheet **bodies** belong in `:catalog`, where the Roborazzi baselines
+can reach them; `:app` *hosts* them, because the host owns scrim and IME
+behaviour. `:app:verifyDialogInventory` fails the build when a file in `:app`
+calls `AlertDialog`, `BasicAlertDialog` or `ModalBottomSheet` without an entry
+accounting for it.
+
+The check cannot tell a sanctioned host from a dialog composed in place by
+parsing alone, so it does not try: it reports every call site, and each one is
+answered once in an explicit allowlist in
+[`app/build.gradle.kts`](../app/build.gradle.kts) that records **why** — host of
+a named catalog body, deliberate deviation, or known remaining work. That list
+is the deliverable. A file that has to say what it is doing beats a rule that
+quietly decides for itself.
+
+The allowlist is audited in both directions: an entry that no longer matches any
+file fails just as loudly as an unaccounted dialog. An allowlist that outlives
+what it excused is how a gate rots into decoration, and it is the half such a
+check usually forgets.
+
+A call inside a comment is ignored — this codebase discusses these composables
+in prose constantly, and a check that fired on its own documentation would be
+switched off within the day.
+
+### Observed failing
+
+The inventory this gate replaced was wrong **twice**, which is the argument for
+deriving the list from the sources instead of writing it. The first hand pass
+listed seven screens with no catalog twin; three already had one, under a file
+named after the feature rather than after the screen. The second pass missed the
+dialogs entirely, because it matched `*Screen(` composables — so
+`SaveAsPresetDialog` was never counted, never covered, and shipped with its
+selected category chip visually indistinguishable from the unselected ones until
+somebody ran the app by hand. On its own first run the gate named two sheets a
+hand inventory had already declared complete. The pure logic is unit-tested in
+`buildSrc` (`DialogInventoryCheckerTest`).
 
 ---
 

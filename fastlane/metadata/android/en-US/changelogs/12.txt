@@ -1,0 +1,7 @@
+A run that reaches its step or token limit now pauses and asks whether to carry on, instead of ending outright. Continuing grants one more portion of that limit rather than lifting it.
+
+Every setting explains itself in one sentence, and the tool and workspace limits that had no controls now have them.
+
+The pipeline editor marks unsaved work and asks before you leave it.
+
+The trigger and external-request journals can be exported from the app.

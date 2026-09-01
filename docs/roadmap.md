@@ -15,7 +15,7 @@ release cadence settles.
 
 ## Where the project is today
 
-The current pre-release line (`0.8.x`) already covers the core loop
+The current pre-release line (`0.9.x`) already covers the core loop
 end-to-end:
 
 - On-device LLM inference through LiteRT-LM, with optional
@@ -40,6 +40,10 @@ end-to-end:
   the app is actually being used — that never leave the device, and a
   Firebase-free FOSS build flavour for the F-Droid channel.
 - A chat archive, so a chat list that grows with daily use stays usable.
+- Safety limits on an unattended run: reaching the step or token allowance
+  pauses the run and asks whether to grant one more portion, rather than
+  ending it — and the journals of what ran in the background can be
+  exported from the app for inspection.
 - Releases built, signed and published by CI from a tag, with the signing
   identity verified before and after the build (see
   [release.md](release.md)).
@@ -59,18 +63,19 @@ near-term now.
 
 ### Getting the app into the places people look for it
 
-Today the only way to install Knotwork is an APK from GitHub Releases.
-The `foss` flavour exists precisely so the app can be built without
-proprietary telemetry, and both channels are the near-term work:
+Knotwork is on **Google Play**, alongside the APKs on GitHub Releases.
+That settles the first half of this item: a store listing exists, and so
+does a data-safety declaration matching the privacy model the app
+actually implements. What is left is the second channel.
 
-- **F-Droid.** The open question is not the build but the inclusion
-  policy: the on-device inference engine ships as a prebuilt native
-  library, and whether that is acceptable has to be settled before an
-  RFP is worth filing. A reproducible build (a pinned `SOURCE_DATE_EPOCH`)
-  is the other piece.
-- **Google Play.** Store listing, the data-safety declaration matching
-  the privacy model this app actually implements, and a decision about
-  which channel goes first.
+- **F-Droid.** The `foss` flavour exists precisely so the app can be
+  built without proprietary telemetry, and the audience this project is
+  written for largely installs from there. The open question is not the
+  build but the inclusion policy: the on-device inference engine ships as
+  a prebuilt native library, and whether that is acceptable has to be
+  settled before an RFP is worth filing. A reproducible build (a pinned
+  `SOURCE_DATE_EPOCH`) is the other piece. If the policy answer is no,
+  the fallback under consideration is a project-run F-Droid repository.
 
 Note the one-time migration cost described in the *Pre-release notice* of
 [README.md](../README.md): `0.7.0` is the first release-signed build, so

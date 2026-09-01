@@ -180,8 +180,8 @@ android {
         applicationId = "app.knotwork.android"
         minSdk = 34
         targetSdk = 37
-        versionCode = 11
-        versionName = "0.8.0"
+        versionCode = 12
+        versionName = "0.9.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -2031,6 +2031,7 @@ val verifyVersionSources by tasks.registering(VerifyVersionSourcesTask::class) {
     declaredVersionName.set(android.defaultConfig.versionName.orEmpty())
     readmeFile.set(file("$rootDir/README.md"))
     changelogFile.set(file("$rootDir/CHANGELOG.md"))
+    securityFile.set(file("$rootDir/SECURITY.md"))
     stampFile.set(layout.buildDirectory.file("reports/docs-links/version-sources-verified.txt"))
 }
 tasks.named("check") { dependsOn(verifyVersionSources) }

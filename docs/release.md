@@ -562,13 +562,19 @@ maintainer's part is the version bump, the tag, and the decision to publish.
    `img.shields.io/badge/version-…` line. It is the first version number a
    visitor sees and the one a bug reporter quotes, and it used to be the only
    copy this checklist never mentioned.
-6. Land all of it on `main` through the normal review path.
+6. Update the two prose copies the badge does not cover: the *Pre-release
+   notice* sentence in `README.md` ("currently at **version X**"), and
+   [`SECURITY.md`](../SECURITY.md) — which names the version **three** ways: its
+   opening sentence, the line saying which line fixes land on, and both cells of
+   the supported-versions table. A stale table there tells a reporter their
+   release is unsupported, which is the most expensive of these to get wrong.
+7. Land all of it on `main` through the normal review path.
 
-Steps 1, 2, 4 and 5 are held together by `./gradlew check`:
-`:app:verifyVersionSources` fails the build when the README badge, the topmost
-changelog heading or either compare link disagrees with the declared
-`versionName`. Do them in one commit and the gate is invisible; skip one and it
-names the file and both values. See
+Steps 1, 2, 4, 5 and 6 are held together by `./gradlew check`:
+`:app:verifyVersionSources` fails the build when the README badge, the README
+prose, the topmost changelog heading, either compare link, or any version in
+`SECURITY.md` disagrees with the declared `versionName`. Do them in one commit
+and the gate is invisible; skip one and it names the file and both values. See
 [`static-analysis.md`](static-analysis.md#version-number-agreement-guard-verifyversionsources).
 
 **Tagging**
