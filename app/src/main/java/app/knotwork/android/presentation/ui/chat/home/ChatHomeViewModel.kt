@@ -393,19 +393,6 @@ constructor(
     }
 
     /**
-     * Sends the current composer draft through [AgentOrchestratorUseCase].
-     * No-op when the composer is blank, when generation is already in
-     * flight, or when no LLM model is loaded (in the last case the surface
-     * flips to [ChatHomeUiState.Error] so the user sees actionable
-     * guidance).
-     *
-     * The user prompt itself is persisted by the orchestrator's pipeline
-     * (see `TaskQueueManagerImpl.processTask` step 1), not by this VM —
-     * persisting it twice would surface duplicate rows in the display
-     * flow. Same for the final agent reply: `OutputNodeExecutor` writes
-     * the `isFinal = true` row when the pipeline reaches OUTPUT.
-     */
-    /**
      * The three cheap refusals the send path applies before touching the
      * engine: an attachment still being downscaled, a wholly empty send, and an
      * archived chat.
@@ -430,6 +417,19 @@ constructor(
         return true
     }
 
+    /**
+     * Sends the current composer draft through [AgentOrchestratorUseCase].
+     * No-op when the composer is blank, when generation is already in
+     * flight, or when no LLM model is loaded (in the last case the surface
+     * flips to [ChatHomeUiState.Error] so the user sees actionable
+     * guidance).
+     *
+     * The user prompt itself is persisted by the orchestrator's pipeline
+     * (see `TaskQueueManagerImpl.processTask` step 1), not by this VM —
+     * persisting it twice would surface duplicate rows in the display
+     * flow. Same for the final agent reply: `OutputNodeExecutor` writes
+     * the `isFinal = true` row when the pipeline reaches OUTPUT.
+     */
     fun sendMessage() {
         val draftText = _state.value.composer.value.trim()
         val readyAttachment = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment

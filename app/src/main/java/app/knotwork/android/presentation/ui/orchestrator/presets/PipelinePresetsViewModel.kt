@@ -215,7 +215,6 @@ class PipelinePresetsViewModel @Inject constructor(
         _uiState.update { it.copy(pendingPipelineIdFromPreset = null) }
     }
 
-    /** Clears the error channel after the host's Snackbar has shown it. */
     /**
      * Surfaces a one-shot message through the activity-level snackbar host.
      *
@@ -230,6 +229,7 @@ class PipelinePresetsViewModel @Inject constructor(
         transientMessageRelay.post(message)
     }
 
+    /** Clears the error channel after the host's Snackbar has shown it. */
     fun clearError() {
         _uiState.update { it.copy(errorMessage = null) }
     }

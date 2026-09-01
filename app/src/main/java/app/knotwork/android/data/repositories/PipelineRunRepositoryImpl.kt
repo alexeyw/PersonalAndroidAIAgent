@@ -190,20 +190,6 @@ class PipelineRunRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Attributes this run's terminal fate back onto whichever per-origin record
-     * opened for it — the second phase of the two-phase entry a firing trigger or
-     * an admitted external request opened.
-     *
-     * Dispatched on origin, read through a single-column projection rather than a
-     * full run load. The mapping from run status to each surface's outcome
-     * vocabulary lives in a pure mapper ([triggerRunOutcomeForTerminal],
-     * [externalAutomationStatusForTerminal]) — in the trigger's case keeping a
-     * platform kill distinct from a deliberate stop and from a genuine failure.
-     *
-     * Best-effort throughout: the origin read is absorbed and each store absorbs
-     * its own storage failures, so this can never disturb the run it observes.
-     */
-    /**
      * Leaves a line in the run's chat when it ended without an answer.
      *
      * Inside the `rowsTransitioned > 0` guard with the other two terminal
@@ -234,6 +220,20 @@ class PipelineRunRepositoryImpl @Inject constructor(
         runOutcomeAnnouncer.announce(identity.sessionId, status, reason, errorMessage)
     }
 
+    /**
+     * Attributes this run's terminal fate back onto whichever per-origin record
+     * opened for it — the second phase of the two-phase entry a firing trigger or
+     * an admitted external request opened.
+     *
+     * Dispatched on origin, read through a single-column projection rather than a
+     * full run load. The mapping from run status to each surface's outcome
+     * vocabulary lives in a pure mapper ([triggerRunOutcomeForTerminal],
+     * [externalAutomationStatusForTerminal]) — in the trigger's case keeping a
+     * platform kill distinct from a deliberate stop and from a genuine failure.
+     *
+     * Best-effort throughout: the origin read is absorbed and each store absorbs
+     * its own storage failures, so this can never disturb the run it observes.
+     */
     private suspend fun recordOriginBoundOutcome(
         runId: String,
         status: PipelineRunStatus,

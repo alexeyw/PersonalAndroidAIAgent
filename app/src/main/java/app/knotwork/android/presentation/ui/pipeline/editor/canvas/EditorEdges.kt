@@ -137,7 +137,6 @@ private fun matchesPort(port: OutboundPort, label: String?): Boolean = when {
     else -> port.label == label
 }
 
-/** Convenience: builds the catalog `NodePorts` for a domain node (no per-type overrides). */
 /**
  * Builds the catalog `NodePorts` for a domain node, threading through the per-type
  * overrides that depend on the decoded `NodeConfig`:

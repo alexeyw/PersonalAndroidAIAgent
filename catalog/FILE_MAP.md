@@ -364,112 +364,136 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
   - `Spacing.kt` - `KnotworkSpacing` 4 dp grid + `LocalKnotworkSpacing`.
   - `Type.kt` - `KnotworkFonts.install(...)` font-family registry, `KnotworkTextStyles` raw scale and `knotworkTypography()` Material3 mapping.
 <!-- /AUTO-GEN:FILE_MAP -->
-
 ## Tests and snapshot baselines
 
-The test tree is summarised by area rather than file by file, and is not
-generated: much of it is `.png` baselines, which no Kotlin source map covers.
+Generated from `catalog/src/test`, on the same terms as the block above: the
+structure comes from the source tree, the descriptions are written by hand and
+carried across by path.
 
-- `src/test/java/app/knotwork/design/store/StoreScreenshotTest.kt` —
-  Roborazzi baselines for the app-store listing, rendered at
-  `w360dp-h720dp-xxhdpi` = 1080 × 2160 because Play rejects a screenshot
-  whose longer side exceeds twice the shorter one (the 1080 × 2400 hero
-  baselines do). Copied by hand into `fastlane/metadata/android/en-US/
-  images/phoneScreenshots/`.
-- `src/test/java/app/knotwork/design/tokens/KnotworkTokensTest.kt` —
-  pure-JVM sanity tests for the token data classes (no Compose runtime).
-- `src/test/java/app/knotwork/design/theme/KnotworkThemeTest.kt` —
-  Robolectric + Compose-rule tests verifying `KnotworkTheme` wires
-  tokens into `MaterialTheme.colorScheme` and the `KnotworkTheme.*`
-  accessors in both light and dark.
-- `src/test/java/app/knotwork/design/foundations/FoundationsCatalogPageSnapshotTest.kt`
-  — Roborazzi snapshot baseline for `FoundationsCatalogPage` in light
-  and dark.
-- `src/test/java/app/knotwork/design/a11y/KnotworkA11yTest.kt` —
-  Robolectric tests verifying `DefaultKnotworkA11y` reads system
-  scales and `FixedKnotworkA11y` honours its constructor args.
-- `src/test/java/app/knotwork/design/components/ComponentsCatalogPageSnapshotTest.kt`
-  — Roborazzi baseline for the full components catalog page.
-- `src/test/java/app/knotwork/design/components/buttons/KnotworkButtonsSnapshotTest.kt`
-- `src/test/java/app/knotwork/design/components/chips/KnotworkChipsSnapshotTest.kt`
-- `src/test/java/app/knotwork/design/components/chips/KnotworkChipTest.kt`
-- `src/test/java/app/knotwork/design/components/chips/RiskPillTest.kt`
-- `src/test/java/app/knotwork/design/components/chips/StatusPillTest.kt`
-- `src/test/java/app/knotwork/design/components/console/ConsoleEntryStripAffordanceTest.kt`
-  — the strip says its own name, and its description speaks the live
-  status rather than only the verb.
-- `src/test/java/app/knotwork/design/components/console/ConsoleEntryStripSnapshotTest.kt`
-  — `chat_console_strip_*` baselines: every status state, the open form,
-  and font-scale 200 %. No chat fixture set `agentStatusLine` before, so
-  the strip had no visual coverage at all.
-- `src/test/java/app/knotwork/design/screens/tools/ToolsGroupAffordanceTest.kt`
-  — one door to adding a server, a collapsed group that still reports a
-  disconnected one, an empty group that does not collapse. Observed
-  failing on both mutations.
-- `src/test/java/app/knotwork/design/screens/tools/ToolsGroupsSnapshotTest.kt`
-  — `tools_group*` baselines, reached by tapping the headers rather than
-  by handing the surface a pre-folded state.
-- `src/test/java/app/knotwork/design/screens/more/MoreSectionsTest.kt`
-  — Triggers first, App last, no row lost in the regrouping, Tasks the
-  only badge.
-- `src/test/java/app/knotwork/design/components/lists/KnotworkListsSnapshotTest.kt`
-- `src/test/java/app/knotwork/design/components/lists/PipelineListRowTest.kt`
-- `src/test/java/app/knotwork/design/components/lists/ConnectionStatusTest.kt`
-- `src/test/java/app/knotwork/design/components/misc/KnotworkMiscSnapshotTest.kt`
-- `src/test/java/app/knotwork/design/components/chat/ChatCatalogPageSnapshotTest.kt`
-  — Roborazzi baseline for `ChatCatalogContent` (light / dark /
-  reduced-motion).
-- `src/test/java/app/knotwork/design/components/chat/ChatBubbleShapesTest.kt`
-  — pure-JVM check that `ChatBubbleShapes.User` / `.Assistant` carry
-  the documented asymmetric radii.
-- `src/test/java/app/knotwork/design/components/chat/HitlConfirmationStateTest.kt`
-  — pure-JVM coverage of the Allow / Always-Allow / typed-confirm rules.
-- `src/test/java/app/knotwork/design/components/chat/ChatMessageContextMenuTest.kt`
-  — pins the long-press menu roster: no `Rate` row (removed as inert),
-  surviving rows still dispatch.
-- `src/test/java/app/knotwork/design/components/console/ConsoleCatalogPageSnapshotTest.kt`
-  — Roborazzi baseline for `ConsoleCatalogContent` (light / dark).
-- `src/test/java/app/knotwork/design/components/console/ConsoleFilterTest.kt`
-  — pure-JVM coverage of `ConsoleFilter.matches` + `allOn`.
-- `src/test/java/app/knotwork/design/components/console/ConsoleSnapTest.kt`
-  — pure-JVM lock-down of the three snap-point heights.
-- `src/test/java/app/knotwork/design/components/console/ConsoleSearchAffordanceTest.kt`
-  — pins Search to the Logs tab (the only tab with a search field);
-  Copy-all / Clear stay on every tab.
-- `src/test/java/app/knotwork/design/icons/AppIconsTest.kt`
-- `src/test/java/app/knotwork/design/icons/IconCatalogPageSnapshotTest.kt`
-- `src/test/java/app/knotwork/design/components/lists/ConnectionStatusTest.kt`
-  — pure-JVM coverage of the connection-status → pill mapping.
-- `src/test/java/app/knotwork/design/components/pipelineeditor/NodePortsTest.kt`
-  — pure-JVM check of the per-type port topology.
-- `src/test/java/app/knotwork/design/components/pipelineeditor/NodeConfigValidationTest.kt`
-  — pure-JVM coverage of the `NodeConfig` validation rules.
-- `src/test/java/app/knotwork/design/components/pipelineeditor/NodeConfigSheetSnapshotTest.kt`
-  — Roborazzi baselines for the node configuration sheets, which had none
-  until the sheets were pruned. Covers the seven types whose fields changed,
-  not all fourteen: a frame nobody has inspected is not coverage.
-- `src/test/java/app/knotwork/design/components/pipelineeditor/PipelineEditorCatalogPageSnapshotTest.kt`
-  — Roborazzi baseline for the pipeline-editor catalog page.
-- `src/test/java/app/knotwork/design/components/pipelineeditor/HeroSnapshotTest.kt`
-  — Roborazzi hero baseline for the pipeline editor.
-- `src/test/java/app/knotwork/design/components/pipelineeditor/EditorToolbarTest.kt`
-  — pins the toolbar's action roster: no run affordance (the editor
-  composes pipelines, it does not execute them); back / overflow work.
-- `src/test/java/app/knotwork/design/tokens/WcagContrastTest.kt`
-  — pure-JVM WCAG contrast-ratio checks over the palette.
-- `src/test/java/app/knotwork/design/a11y/A11yMatrixSnapshotTest.kt`
-  — Roborazzi font-scale × theme accessibility matrix.
-- `src/test/java/app/knotwork/design/a11y/TalkBackHappyPathsTest.kt`
-  — Robolectric TalkBack semantics happy-path coverage.
-- `src/test/java/app/knotwork/design/screens/` — per-screen Roborazzi
-  snapshot baselines (`*ContentSnapshotTest`, light / dark / a11y
-  font-scale variants), `*AccessibilityTest` semantics checks,
-  `memory/MemoryAffordanceTest.kt` (which Memory states may offer a
-  search action), and per-screen `HeroSnapshotTest` README heroes,
-  covering about /
-  automation / chat / memory / models / monitoring / more / onboarding /
-  pipelines / prompts / settings / splash / taskmonitor / tools.
-- `src/test/snapshots/` — committed Roborazzi baselines: one `*.png`
-  per catalog page / component group / screen state, each in light and
-  dark (plus reduced-motion and font-scale variants where exercised by
-  the matching snapshot test above).
+**What this block does not cover.** Much of this tree is `.png` baselines, and
+no Kotlin source map sees them — the entries below name the tests that *record*
+those baselines, never the images themselves. The count of images a test writes
+is not derivable from its source, so it is stated in the description where it
+matters.
+
+<!-- AUTO-GEN:FILE_MAP_TESTS -->
+- `a11y/` - the design system's accessibility guarantees, kept as tests rather than as a checklist — the font-scale × theme matrix, the TalkBack happy paths, and the `KnotworkA11y` override contract the snapshot suites depend on.
+  - `A11yMatrixSnapshotTest.kt` - Accessibility matrix baseline.
+  - `KnotworkA11yTest.kt` - Verifies the `KnotworkA11y` contract in three parts: the default local resolves to `DefaultKnotworkA11y`, a test may pin `FixedKnotworkA11y` for deterministic snapshots, and that override survives `KnotworkTheme` applied from either side of it.
+  - `TalkBackHappyPathsTest.kt` - Compose-side scaffolds for the five TalkBack happy paths ratified in `project_docs/design/compose/decisions.md §14`.
+- `components/` - one suite per component family. Each family pairs a Roborazzi baseline (what it looks like) with behavioural tests (what a baseline cannot show — gating, affordances, semantics).
+  - `buttons/` - the button family's baseline.
+    - `KnotworkButtonsSnapshotTest.kt` - Roborazzi snapshot baseline for the `KnotworkButtonsCatalogContent` harness in both themes — covers every primary / secondary / text / icon button state in two snapshots (`buttons_light.png`, `buttons_dark.png`).
+  - `chat/` - the chat home, including the README hero shots.
+    - `ChatBubbleShapesTest.kt` - Verifies the asymmetric corner radii on `ChatBubbleShapes`.
+    - `ChatCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for `ChatCatalogContent` in both themes plus a reduced-motion variant that pins `FixedKnotworkA11y` so the long-press scale + composer morph behave deterministically.
+    - `ChatMessageContextMenuTest.kt` - Pins the roster of the long-press message context menu.
+    - `HitlConfirmationStateTest.kt` - Pure-JVM tests for `HitlConfirmationState` — the gating logic behind `HitlConfirmationCard`'s Allow CTA, Always-Allow visibility, and destructive typed-confirm row.
+    - `ImageAttachmentCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for `ImageAttachmentCatalogContent` in both themes plus a reduced-motion variant.
+    - `InterruptedRunCardTest.kt` - Behavioural coverage for `InterruptedRunCard` — the status card the chat stream pins when the session's most recent pipeline run died with its process.
+  - `chips/` - chips and pills. The behavioural tests here exist for one reason: colour is never the only signal, so every variant must announce its state.
+    - `KnotworkChipsSnapshotTest.kt` - Roborazzi snapshot baseline for `KnotworkChipsCatalogContent` in both themes.
+    - `KnotworkChipTest.kt` - Behavioural tests for `KnotworkChip`.
+    - `RiskPillTest.kt` - Verifies that every `RiskPill` variant exposes a `Risk level: <level>` `contentDescription` so TalkBack announces the state and not just the decorative colour (`decisions.md §14`).
+    - `StatusPillTest.kt` - Verifies every `StatusPill` variant exposes a `Status: <label>` `contentDescription` so colour is never the only signal (`decisions.md §14`).
+  - `ComponentsCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for `ComponentsCatalogPage` in both Knotwork themes.
+  - `console/` - the run console — its baseline, and the affordances that decide whether anyone finds it: the entry strip, search, filtering and long-press copy.
+    - `ConsoleCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for `ConsoleCatalogContent` in both themes.
+    - `ConsoleCopyAffordanceTest.kt` - Behavioural tests for the console's long-press copy affordance on the Vars and Traces tabs.
+    - `ConsoleEntryStripAffordanceTest.kt` - Pins what makes the console's entry point findable.
+    - `ConsoleEntryStripSnapshotTest.kt` - Roborazzi baseline for the console entry strip in every status state.
+    - `ConsoleFilterTest.kt` - Pure-JVM tests for `ConsoleFilter` — the predicate used by `ConsolePane`'s Logs tab to drop filtered-out sources.
+    - `ConsoleSearchAffordanceTest.kt` - Pins the console's Search action to the Logs tab.
+    - `ConsoleSnapTest.kt` - Documents the discrete `ConsoleSnap` heights as preview-only fixtures.
+  - `dialogs/` - the shared dialog shapes, currently the outcome family.
+    - `OutcomeDialogSnapshotTest.kt` - Roborazzi baselines for the `OutcomeDialog` family — the four import outcomes and the re-import question, in one shape.
+  - `lists/` - list rows and their status mapping.
+    - `ConnectionStatusTest.kt` - Pure-JVM mapping test for `ConnectionStatus.toStatus`.
+    - `KnotworkListsSnapshotTest.kt` - Roborazzi snapshot baseline for `KnotworkListsCatalogContent` in both themes.
+    - `PipelineListRowTest.kt` - Behavioural tests for `PipelineListRow`.
+  - `misc/` - components with no family of their own yet.
+    - `KnotworkMiscSnapshotTest.kt` - Roborazzi snapshot baseline for `KnotworkMiscCatalogContent` in both themes.
+  - `pipelineeditor/` - the node canvas and its configuration sheets — ports, validation rules, the toolbar roster, and the baselines for each.
+    - `EditorToolbarTest.kt` - Pins the editor toolbar's action roster.
+    - `HeroSnapshotTest.kt` - Roborazzi baseline of the editor's node-card surface at the canonical 1080 × 2400 resolution, in both themes.
+    - `NodeConfigSheetSnapshotTest.kt` - Visual baselines for the node configuration sheets.
+    - `NodeConfigValidationTest.kt` - Tests for `NodeConfigValidation` — covers happy path + every failure mode listed in `node-specs.md` §Validation rules.
+    - `NodePortsTest.kt` - Pure-JVM tests for `NodePorts.forType` — the single source for the outbound-port enumeration per node type.
+    - `PipelineEditorCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for `PipelineEditorCatalogContent` in both themes plus a reduced-motion variant that pins `FixedKnotworkA11y` so the NodeCard running pulse renders deterministically.
+  - `topbar/` - top-bar actions whose behaviour outruns their appearance.
+    - `JournalExportActionsBehaviourTest.kt` - Behaviour of the journal-export actions on both journal surfaces — the parts a Roborazzi baseline cannot show.
+- `foundations/` - the foundations catalog page — the surface that renders the tokens themselves.
+  - `FoundationsCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for the `FoundationsCatalogPage` in both Knotwork themes.
+- `icons/` - the `AppIcons` registry: a cheap correctness gate over every entry, plus the catalog page baseline.
+  - `AppIconsTest.kt` - Cheap correctness gate for every `AppIcons` entry.
+  - `IconCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for `IconCatalogPage` in both Knotwork themes.
+- `screens/` - one directory per screen, mirroring `screens/` in the main tree. The usual trio: a `*ContentSnapshotTest` baseline across the screen's documented state matrix, an `*AccessibilityTest` semantics audit, and behavioural tests for the parts a still image cannot carry.
+  - `about/` - the About screen.
+    - `AboutContentSnapshotTest.kt` - Roborazzi baseline for `AboutContent` in both themes.
+  - `automation/` - the external-automation surfaces — the request journal and the consent dialog behind the master switch.
+    - `ExternalAutomationSnapshotTest.kt` - Roborazzi baselines for the external-automation surfaces — the request journal across its documented states, and the consent dialog raised by the master switch — in both themes.
+  - `chat/` - the chat home, including the README hero shots.
+    - `ChatHomeAccessibilityTest.kt` - Chat-home a11y audit.
+    - `ChatHomeContentSnapshotTest.kt` - Roborazzi snapshot baseline for `ChatHomeContent` across every documented state of `compose/screens/README.md §C1`.
+    - `HeroSnapshotTest.kt` - Roborazzi baselines for the README hero shots at the canonical pixel resolution promised in `README.md` (1080 × 2400, the de-facto-standard Pixel-class portrait viewport used by every modern Android-store marketing surface).
+  - `chatarchive/` - the chat archive, including the font-scale-200 % layouts where the row sheds its decoration.
+    - `ChatArchiveAccessibilityTest.kt` - Accessibility audit of the chat-archive surface.
+    - `ChatArchiveContentSnapshotTest.kt` - Roborazzi baselines for the chat-archive surface across its documented states in both themes, plus the two font-scale-200 % layouts where the row sheds its decoration.
+  - `discover/` - model discovery — the list and the detail surface, including its gated-download and license states.
+    - `DiscoverContentSnapshotTest.kt` - Roborazzi snapshot baseline for the model-discovery list surface (`DiscoverContent`) across its loading / populated / empty / error states in both themes.
+    - `DiscoverDetailContentSnapshotTest.kt` - Roborazzi snapshot baseline for the model-discovery detail surface (`DiscoverDetailContent`): loading, loaded (mixed file states), gated (token field), the license-confirmation dialog and the error state, in both themes.
+  - `files/` - the workspace Files screen.
+    - `FilesContentSnapshotTest.kt` - Preview fixtures for the Files screen snapshot matrix.
+  - `memory/` - long-term memory — the stats header, grouped list, detail sheet and compaction dialog, plus which states may offer which affordances.
+    - `MemoryAccessibilityTest.kt` - Memory-screen a11y audit.
+    - `MemoryAffordanceTest.kt` - Pins which Memory states are allowed to offer which affordances.
+    - `MemoryContentSnapshotTest.kt` - Roborazzi snapshot baseline for the redesigned `MemoryContent` stats header + category chips + sort/date dropdowns + grouped list, the semantic-search variant, the detail bottom sheet (read + edit), the Compact dialog, plus the Empty and Error states — in both themes.
+  - `models/` - installed models and the performance card.
+    - `ModelsContentSnapshotTest.kt` - Roborazzi baseline for `ModelsContent`.
+    - `PerformanceCardSnapshotTest.kt` - Roborazzi baseline for `PerformanceCard`.
+  - `monitoring/` - the local telemetry surface.
+    - `MonitoringContentSnapshotTest.kt` - Roborazzi baseline for `MonitoringContent` across its documented states in both themes.
+  - `more/` - the More tab and the structure of its sections.
+    - `MoreContentSnapshotTest.kt` - Fixture for the More tab.
+    - `MoreSectionsTest.kt` - Pins the structure of the More tab.
+  - `onboarding/` - the scenario onboarding flow.
+    - `OnboardingContentSnapshotTest.kt` - Roborazzi snapshot baseline for the scenario `OnboardingContent` across the value-gallery, motivated-download, and ready states, in both themes.
+  - `pipelines/` - the pipeline library and preset manager, including the README hero shot.
+    - `HeroSnapshotTest.kt` - Roborazzi baseline for the README "Pipeline library" hero shot at the canonical 1080 × 2400 resolution.
+    - `PipelineLibraryContentSnapshotTest.kt` - Roborazzi snapshot baseline for `PipelineLibraryContent` across the 7 documented states (`compose/screens/README.md §C3 · Pipeline library`) in both themes.
+    - `PresetManagerSnapshotTest.kt` - Roborazzi baselines for the preset manager.
+  - `prompts/` - the prompt library and its per-card action cluster.
+    - `PromptLibraryContentActionsTest.kt` - Behaviour tests for the prompt card's action cluster.
+    - `PromptLibraryContentSnapshotTest.kt` - Roborazzi baseline for `PromptLibraryContent`.
+  - `settings/` - the settings hub and its category sub-screens, including the hint affordance, the search surface, and the provider / run-limits details.
+    - `HeroSnapshotTest.kt` - Roborazzi baseline for the README "Settings" hero shot at the canonical 1080 × 2400 resolution.
+    - `ProviderDetailSnapshotTest.kt` - Roborazzi baselines for the provider detail screen.
+    - `RunLimitsSnapshotTest.kt` - Roborazzi baselines for the run-limits screen.
+    - `SettingsCategorySnapshotTest.kt` - Roborazzi baseline for the settings category sub-screens.
+    - `SettingsHintBehaviourTest.kt` - Behaviour of the settings hint affordance: the parts a Roborazzi baseline cannot show.
+    - `SettingsHubSearchTest.kt` - Behavioural tests for the settings-hub search surface: result rows render and route on tap, and the no-match empty state offers a working clear action.
+    - `SettingsHubSnapshotTest.kt` - Roborazzi baseline for the redesigned settings **hub** (category list + inline Basic controls): Default / Loading / RestartRequired × Light/Dark, plus a font-scale 200% variant.
+    - `SettingsPreview.kt` - Internal preview fixtures backing the settings hub + category snapshot suites.
+  - `skills/` - the skill library, its full-screen editor and the delete dialog.
+    - `SkillLibraryContentSnapshotTest.kt` - Roborazzi snapshot baselines for the Skill Library surfaces — the list (`SkillLibraryContent`), the full-screen editor (`SkillEditorContent`) and the delete dialog (`SkillDeleteDialogContent`) across their documented states in both themes.
+  - `splash/` - the splash surface.
+    - `SplashContentSnapshotTest.kt` - Roborazzi baseline for `SplashContent`.
+  - `taskmonitor/` - the active-task monitor.
+    - `TaskMonitorContentSnapshotTest.kt` - Roborazzi baseline for `TaskMonitorContent` — the active-task list and its empty state.
+  - `tools/` - the Tools screen — collapsible groups, the allowed-domains editor, and the three rules the surface gained from the closed test.
+    - `AllowedDomainsContentSnapshotTest.kt` - Roborazzi baseline for the allowed-domains editor, including its empty and populated states.
+    - `HeroSnapshotTest.kt` - Roborazzi baseline for the README "Tools" hero shot at the canonical 1080 × 2400 resolution.
+    - `ToolsAccessibilityTest.kt` - Tools-screen a11y audit.
+    - `ToolsContentSnapshotTest.kt` - Roborazzi baseline for `ToolsContent` across its documented states in both themes.
+    - `ToolsGroupAffordanceTest.kt` - Pins the three rules the Tools surface gained from the closed test.
+    - `ToolsGroupsSnapshotTest.kt` - Roborazzi baseline for the collapsible tool groups.
+  - `triggers/` - the trigger list, editor and delete dialog.
+    - `TriggersContentSnapshotTest.kt` - Roborazzi snapshot baselines for the Triggers surfaces — the list (`TriggersContent`), the full-screen editor (`TriggerEditorContent`) and the delete dialog (`TriggerDeleteDialogContent`) across their documented states in both themes.
+- `store/` - baselines rendered for the app-store listing rather than for review — a different resolution from the README heroes, for a reason the test itself records.
+  - `StoreScreenshotTest.kt` - Roborazzi baselines for the **app-store listing**, rendered at `w360dp-h720dp-xxhdpi` = 1080 × 2160 rather than the README heroes' 1080 × 2400: Play rejects a screenshot whose longer side is more than twice the shorter, and the hero resolution is. Copied by hand into `fastlane/metadata/android/en-US/images/phoneScreenshots/`.
+- `theme/` - that `KnotworkTheme` actually wires the tokens into `MaterialTheme` and into its own accessors.
+  - `KnotworkThemeTest.kt` - Verifies that `KnotworkTheme` wires the Knotwork tokens into the underlying `MaterialTheme` and into the `KnotworkTheme.*` composition-local accessors.
+- `tokens/` - the token data classes themselves, plus the WCAG contrast audit over every on-surface text pair.
+  - `KnotworkTokensTest.kt` - Pure-JVM sanity tests for the token data classes — no Compose runtime, no Robolectric.
+  - `WcagContrastTest.kt` - WCAG 2.1 AA contrast audit for the on-surface text pairs the Knotwork design system depends on in both themes.
+<!-- /AUTO-GEN:FILE_MAP_TESTS -->

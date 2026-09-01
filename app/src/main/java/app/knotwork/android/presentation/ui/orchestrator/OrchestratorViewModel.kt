@@ -1226,17 +1226,6 @@ constructor(
     }
 
     /**
-     * Deletes the pipeline identified by [pipelineId] from the library.
-     *
-     * Forwards the active pipeline id (taken from [OrchestratorUiState.currentPipeline])
-     * to [DeletePipelineUseCase] so attempts to delete the pipeline being edited are
-     * blocked at the use-case layer. The error message wired into the UI is
-     * deliberately UI-friendly ("Active pipeline cannot be deleted") so the
-     * Snackbar reads the same regardless of how the deletion was triggered.
-     *
-     * @param pipelineId Unique identifier of the pipeline to delete.
-     */
-    /**
      * The saved pipelines that run [pipelineId] through a `NodeType.PIPELINE`
      * node — i.e. the dependents that would be left with a dangling target if
      * [pipelineId] were deleted. Read straight off the current library snapshot;
@@ -1290,6 +1279,17 @@ constructor(
         emptyList()
     }
 
+    /**
+     * Deletes the pipeline identified by [pipelineId] from the library.
+     *
+     * Forwards the active pipeline id (taken from [OrchestratorUiState.currentPipeline])
+     * to [DeletePipelineUseCase] so attempts to delete the pipeline being edited are
+     * blocked at the use-case layer. The error message wired into the UI is
+     * deliberately UI-friendly ("Active pipeline cannot be deleted") so the
+     * Snackbar reads the same regardless of how the deletion was triggered.
+     *
+     * @param pipelineId Unique identifier of the pipeline to delete.
+     */
     fun deletePipeline(pipelineId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
