@@ -6,6 +6,7 @@ import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ToolRisk
+import app.knotwork.android.domain.models.ceilingBreach
 import app.knotwork.android.domain.repositories.ClarificationRepository
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
@@ -25,9 +26,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Reattach / background-run / interrupted-run delegate of [ChatHomeViewModel].
@@ -64,6 +62,7 @@ import java.util.Locale
  * @property replayTrace Seam into the console delegate's persisted-trace replay.
  * @property restoreApproval Seam into the HITL delegate's approval-card capture.
  * @property restoreClarification Seam into the HITL delegate's clarification-card capture.
+ * @property restoreCeilingPause Seam into the HITL delegate's ceiling-pause capture.
  */
 class ChatHomeReattachDelegate(
     private val scope: CoroutineScope,
@@ -79,6 +78,7 @@ class ChatHomeReattachDelegate(
     private val replayTrace: suspend (PipelineRun) -> Unit,
     private val restoreApproval: (AgentOrchestratorState.WaitingForApproval) -> Unit,
     private val restoreClarification: (ClarificationRequest) -> Unit,
+    private val restoreCeilingPause: (CeilingPausePending) -> Unit,
 ) {
 
     private val _resumeFeedbackEvents: MutableSharedFlow<ResumeFeedbackEvent> =
@@ -220,6 +220,23 @@ class ChatHomeReattachDelegate(
                         }
                 }
             }
+            PipelineRunStatus.WAITING_CEILING -> {
+                // No live snapshot to prefer, unlike the two gates above: a
+                // ceiling pause has no in-process waiting phase at all. It is
+                // durable from the moment it is raised, so the record IS the
+                // authority — in this process and in any other.
+                pendingInteractionRepository.getForSession(sessionId)
+                    ?.let { parked -> parked.ceilingBreach()?.let { parked to it } }
+                    ?.let { (parked, breach) ->
+                        restoreCeilingPause(
+                            CeilingPausePending(
+                                runId = parked.runId,
+                                breach = breach,
+                                timestamp = chatRowTimestamp(parked.requestedAt),
+                            ),
+                        )
+                    }
+            }
             else -> Unit
         }
     }
@@ -243,7 +260,7 @@ class ChatHomeReattachDelegate(
         val pending = InterruptedRunPending(
             runId = run.id,
             nodeLabel = nodeLabel,
-            timestamp = formatInterruptedAt(run.finishedAt ?: run.startedAt),
+            timestamp = chatRowTimestamp(run.finishedAt ?: run.startedAt),
             resumable = resumable,
         )
         state.update { current ->
@@ -318,15 +335,6 @@ class ChatHomeReattachDelegate(
         }
     }
 
-    /**
-     * Formats the interruption instant for the status card with the in-chat
-     * message timestamp pattern (`HH:mm`, locale-aware). Captured once when the
-     * card is built so it shows a stable, truthful time rather than re-deriving
-     * "now" on every recomposition.
-     */
-    private fun formatInterruptedAt(epochMs: Long): String =
-        SimpleDateFormat(INTERRUPTED_TIMESTAMP_PATTERN, Locale.getDefault()).format(Date(epochMs))
-
     companion object {
         /**
          * Fallback node label rendered on the interrupted-run card when the run
@@ -337,8 +345,5 @@ class ChatHomeReattachDelegate(
 
         /** Milliseconds in one hour, for the resume-window pre-check on the interrupted card. */
         private const val MILLIS_PER_HOUR: Long = 3_600_000L
-
-        /** Timestamp pattern for the interrupted-run card (24h, matches the in-chat message clock). */
-        private const val INTERRUPTED_TIMESTAMP_PATTERN: String = "HH:mm"
     }
 }

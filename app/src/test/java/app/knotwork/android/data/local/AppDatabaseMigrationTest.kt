@@ -1003,4 +1003,50 @@ class AppDatabaseMigrationTest {
             assertFalse("Column $column must carry no default: $sql", sql.uppercase().contains("DEFAULT"))
         }
     }
+
+    @Test
+    fun `MIGRATION_60_61 targets versions 60 to 61`() {
+        val migration = AppDatabase.MIGRATION_60_61
+
+        assertEquals(60, migration.startVersion)
+        assertEquals(61, migration.endVersion)
+    }
+
+    @Test
+    fun `MIGRATION_60_61 adds the grant counters NOT NULL and the pause description nullable`() {
+        val db = mockk<SupportSQLiteDatabase>(relaxed = true)
+        val statements = mutableListOf<String>()
+
+        AppDatabase.MIGRATION_60_61.migrate(db)
+
+        verify(exactly = 5) { db.execSQL(capture(statements)) }
+
+        // The two grant counters must be NOT NULL DEFAULT 0, matching the
+        // `@ColumnInfo(defaultValue = "0")` on the entity *exactly* — Room's
+        // TableInfo comparison sees both sides and rejects the schema at open
+        // if they disagree. Semantically: every existing run has been granted
+        // nothing, and that is a number, not an absence.
+        listOf("`stepCeilingExtensions`", "`tokenCeilingExtensions`").forEachIndexed { index, column ->
+            val sql = statements[index]
+            assertTrue("Expected an ALTER on pipeline_runs, got: $sql", sql.contains("ALTER TABLE `pipeline_runs`"))
+            assertTrue("Expected column $column in: $sql", sql.contains(column))
+            assertTrue("$column must be NOT NULL: $sql", sql.uppercase().contains("NOT NULL"))
+            assertTrue("$column must default to 0: $sql", sql.contains("DEFAULT 0"))
+        }
+
+        // The pause description is the opposite case: the other two kinds of
+        // park have no ceiling to describe, and every row written before this
+        // migration is one of them. A NOT NULL column would have to invent an
+        // axis and two numbers for each of them.
+        listOf("`ceilingAxis` TEXT", "`ceilingLimit` INTEGER", "`ceilingSpent` INTEGER")
+            .forEachIndexed { index, column ->
+                val sql = statements[index + 2]
+                assertTrue(
+                    "Expected an ALTER on pending_interactions, got: $sql",
+                    sql.contains("ALTER TABLE `pending_interactions`"),
+                )
+                assertTrue("Expected column $column in: $sql", sql.contains(column))
+                assertFalse("Column $column must be nullable: $sql", sql.uppercase().contains("NOT NULL"))
+            }
+    }
 }

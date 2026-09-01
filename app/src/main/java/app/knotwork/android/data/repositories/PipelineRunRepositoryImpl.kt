@@ -4,6 +4,7 @@ import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.models.PipelineRunEntity
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunSpend
 import app.knotwork.android.domain.models.RunTerminationKind
@@ -164,7 +165,28 @@ class PipelineRunRepositoryImpl @Inject constructor(
         val projection = absorbing("getSpend") {
             withContext(Dispatchers.IO) { pipelineRunDao.getSpend(rootRunId) }
         }
-        return RunSpend(steps = projection?.stepsSpent ?: 0, tokens = projection?.tokensSpent ?: 0)
+        return RunSpend(
+            steps = projection?.stepsSpent ?: 0,
+            tokens = projection?.tokensSpent ?: 0,
+            stepCeilingExtensions = projection?.stepCeilingExtensions ?: 0,
+            tokenCeilingExtensions = projection?.tokenCeilingExtensions ?: 0,
+        )
+    }
+
+    override suspend fun extendCeiling(rootRunId: String, axis: RunCeilingAxis) {
+        absorbing("extendCeiling") {
+            withContext(Dispatchers.IO) {
+                when (axis) {
+                    RunCeilingAxis.STEPS -> pipelineRunDao.extendStepCeiling(rootRunId)
+                    RunCeilingAxis.TOKENS -> pipelineRunDao.extendTokenCeiling(rootRunId)
+                    // Unmeasured in this release, so there is no column to raise
+                    // and nothing that could have breached on it. Listed rather
+                    // than defaulted: promoting the money axis must fail to
+                    // compile here, not silently discard the user's answer.
+                    RunCeilingAxis.MONEY -> Unit
+                }
+            }
+        }
     }
 
     /**

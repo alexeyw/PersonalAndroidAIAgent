@@ -8,11 +8,15 @@ import app.knotwork.android.domain.models.PendingInteraction
  * two-phase HITL waiting protocol.
  *
  * A record exists exactly while a run is parked in its persistent waiting
- * phase (run status `WAITING_APPROVAL` / `WAITING_CLARIFICATION` with no live
- * in-process gate). Writers: the node executors create records when the live
- * phase times out; the decision use cases record the user's response; the
- * resumed executors consume (delete) the record one-shot; the maintenance
- * worker deletes expired records when failing their runs.
+ * phase (run status `WAITING_APPROVAL` / `WAITING_CLARIFICATION` /
+ * `WAITING_CEILING`, with no live in-process gate). Writers: the node executors
+ * create records when their live phase times out, and the engine creates one
+ * outright when a ceiling binds — that gate has no live phase, because nothing
+ * is in flight between two nodes for a park to have to preserve. The decision
+ * use cases record the user's response; the record is consumed one-shot on
+ * resume, by the executor that raised it or — for a ceiling, which belongs to
+ * no node — by the engine itself; the maintenance worker deletes expired
+ * records when failing their runs.
  *
  * **Failure contract.** [save] reports success explicitly because its caller
  * must fall back to failing the run when the park cannot be made durable — a

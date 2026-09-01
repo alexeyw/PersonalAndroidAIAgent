@@ -93,6 +93,7 @@ class RunOutcomeAnnouncerImpl @Inject constructor(
             PipelineRunStatus.RUNNING,
             PipelineRunStatus.WAITING_APPROVAL,
             PipelineRunStatus.WAITING_CLARIFICATION,
+            PipelineRunStatus.WAITING_CEILING,
             -> null
         }
 }

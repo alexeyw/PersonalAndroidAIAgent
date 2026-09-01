@@ -33,6 +33,7 @@ fun externalAutomationStatusForTerminal(status: PipelineRunStatus): ExternalAuto
     PipelineRunStatus.RUNNING,
     PipelineRunStatus.WAITING_APPROVAL,
     PipelineRunStatus.WAITING_CLARIFICATION,
+    PipelineRunStatus.WAITING_CEILING,
     -> throw IllegalArgumentException(
         "externalAutomationStatusForTerminal requires a terminal status, got $status",
     )

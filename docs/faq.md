@@ -342,6 +342,21 @@ a watch for a run repeating the same step on the same input, which first nudges
 the run and then ends it. See [Run limits](user-guide.md#run-limits) and [When a
 run goes in circles](user-guide.md#when-a-run-goes-in-circles).
 
+### A run hit its limit. Is the work lost?
+
+No — it is waiting for you. Reaching a limit pauses the run rather than ending
+it, and the chat offers **Continue (+N)** or **Stop the run**. Continuing gives
+it one more portion of the same allowance and resumes from where it stopped, so
+nothing is re-run. The pause is written down, so it survives the app closing and
+is still there when you come back. See [When a run reaches a
+limit](user-guide.md#when-a-run-reaches-a-limit).
+
+### Does continuing past a limit turn the limit off?
+
+No. It buys **one more portion** — the same allowance again, which is the number
+on the button — and the run asks again when that runs out. A run you have waved
+through five times is one you have said yes to five times.
+
 ### Can I cap what a run costs me?
 
 No. The app runs on your own API key, never sees your bill, and will not show
@@ -351,11 +366,12 @@ you a figure it would have to guess. The token limit is the closest control.
 
 You mostly cannot, and it is worth knowing exactly what the **stop** button in
 the composer does: it detaches the screen from the run. The run keeps executing,
-and its answer still lands in the conversation. What actually ends a run is a
-run limit, the repetition detector, or — for a chain of scheduled tasks — **More
-→ Active tasks → Stop all scheduled tasks**, which also cancels one that is
-executing. A per-run cancel is not built yet; see
-[Known limitations](#known-limitations).
+and its answer still lands in the conversation. What actually ends a run is
+**Stop the run** on a limit pause, the repetition detector, or — for a chain of
+scheduled tasks — **More → Active tasks → Stop all scheduled tasks**, which also
+cancels one that is executing. The limit pause is the one reliable moment a run
+offers to stop: it waits for an answer rather than pressing on. A per-run cancel
+is not built yet; see [Known limitations](#known-limitations).
 
 ### My run stopped by itself. Which limit was it?
 

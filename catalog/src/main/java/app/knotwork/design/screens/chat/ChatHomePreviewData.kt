@@ -12,6 +12,7 @@ import app.knotwork.design.components.chat.ClarificationCardModel
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chat.HitlConfirmationModel
 import app.knotwork.design.components.chat.InterruptedRunCardModel
+import app.knotwork.design.components.chat.RunCeilingPauseCardModel
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleLevel
@@ -304,6 +305,32 @@ internal object ChatHomePreview {
         ),
     )
 
+    /**
+     * A run paused at one of its own ceilings, waiting to be told whether it
+     * may carry on. Numbers match the run-ceiling copy the app resolves, so the
+     * baseline photographs the real arithmetic rather than a placeholder.
+     */
+    fun ceilingPause(): ChatHomeViewState = ChatHomeViewState(
+        visualState = ChatHomeVisualState.CeilingPause,
+        threadTitle = THREAD_TITLE,
+        modelName = MODEL_NAME,
+        messages = baselineMessages() + ChatHomeMessageRow(
+            id = "a-ceiling-pause",
+            role = ChatRole.Assistant,
+            content = ChatContent.RunCeilingPause(
+                model = RunCeilingPauseCardModel(
+                    title = "Paused at a safety limit",
+                    body = "This run has used every step it was allowed. You can let it carry on " +
+                        "for another 15 steps, or stop it here.",
+                    meter = "Used 15 of 15 steps",
+                    continueLabel = "Continue (+15)",
+                    stopLabel = "Stop the run",
+                ),
+            ),
+            metadata = ChatMetadata(timestamp = "09:16", model = MODEL_NAME),
+        ),
+    )
+
     /** Error state — model failed, inline error tile + retry. */
     fun error(): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.Error,
@@ -380,23 +407,34 @@ internal object ChatHomePreview {
         ),
     )
 
-    /** DrawerOpen state — alt-nav drawer overlayed. */
-    fun drawerOpen(): ChatHomeViewState = ChatHomeViewState(
+    /**
+     * DrawerOpen state — alt-nav drawer overlayed.
+     *
+     * The drawer's three sub-states are parameters rather than three named
+     * factories: each differs from the base by exactly one field, and the call
+     * site reads better naming the field than naming a fixture that hides it.
+     *
+     * @param openThreadMenuId row whose overflow menu (Rename · Archive ·
+     *   Delete) is open, or `null` for none.
+     * @param revealedThreadId row whose single Archive swipe action is
+     *   revealed, or `null` for none.
+     * @param archivedCount archived-chat count; the drawer's archive footer
+     *   entry appears only when it is positive.
+     */
+    fun drawerOpen(
+        openThreadMenuId: String? = null,
+        revealedThreadId: String? = null,
+        archivedCount: Int = 0,
+    ): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.DrawerOpen,
         threadTitle = THREAD_TITLE,
         modelName = MODEL_NAME,
         messages = baselineMessages(),
         threads = threadRows(activeId = "t1"),
+        openThreadMenuId = openThreadMenuId,
+        revealedThreadId = revealedThreadId,
+        archivedCount = archivedCount,
     )
-
-    /** DrawerOpen with the second row's overflow menu open (Rename · Archive · Delete). */
-    fun drawerRowMenu(): ChatHomeViewState = drawerOpen().copy(openThreadMenuId = "t2")
-
-    /** DrawerOpen with the active row's single Archive swipe action revealed. */
-    fun drawerSwipeOpen(): ChatHomeViewState = drawerOpen().copy(revealedThreadId = "t1")
-
-    /** DrawerOpen with the archive footer entry visible (count > 0). */
-    fun drawerWithArchive(): ChatHomeViewState = drawerOpen().copy(archivedCount = 6)
 
     /** Idle state on an archived thread — read-only, composer replaced by the restore bar. */
     fun archivedReadOnly(): ChatHomeViewState = idle().copy(archivedReadOnly = true)
@@ -425,6 +463,7 @@ internal object ChatHomePreview {
         hitlConfirm(),
         clarification(),
         interrupted(),
+        ceilingPause(),
         error(),
         drawerOpen(),
         consoleExpanded(),
@@ -444,6 +483,7 @@ internal fun ChatHomeVisualState.snapshotTag(): String = when (this) {
     ChatHomeVisualState.HitlConfirm -> "hitl_confirm"
     ChatHomeVisualState.Clarification -> "clarification"
     ChatHomeVisualState.Interrupted -> "interrupted"
+    ChatHomeVisualState.CeilingPause -> "ceiling_pause"
     ChatHomeVisualState.Error -> "error"
     ChatHomeVisualState.DrawerOpen -> "drawer_open"
     ChatHomeVisualState.ConsoleExpanded -> "console_expanded"

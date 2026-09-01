@@ -699,6 +699,8 @@ private fun ChatHomeMessageList(
                 onClarificationReply = callbacks.onClarificationReply,
                 onRunResume = callbacks.onResumeRun,
                 onRunDiscard = callbacks.onDiscardRun,
+                onRunContinue = callbacks.onContinuePastCeiling,
+                onRunStop = callbacks.onStopAtCeiling,
                 onErrorRetry = callbacks.onErrorRetry,
                 onContextAction = { action -> callbacks.onMessageContextAction(row.id, action) },
                 markdownRenderer = markdownRenderer,

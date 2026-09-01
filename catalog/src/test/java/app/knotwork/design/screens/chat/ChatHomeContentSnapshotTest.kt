@@ -23,8 +23,9 @@ import org.robolectric.annotation.GraphicsMode
  * state of `compose/screens/README.md §C1`.
  *
  * Coverage:
- *  - 8 single-variant states × 2 themes (Empty / Idle / Generating /
- *    Clarification / Interrupted / Error / DrawerOpen / ConsoleExpanded).
+ *  - 9 single-variant states × 2 themes (Empty / Idle / Generating /
+ *    Clarification / Interrupted / CeilingPause / Error / DrawerOpen /
+ *    ConsoleExpanded).
  *  - HitlConfirm × 3 risk variants × 2 themes (Readonly / Sensitive /
  *    Destructive) — the destructive variant doubles as the typed-confirm
  *    gating snapshot.
@@ -124,6 +125,16 @@ class ChatHomeContentSnapshotTest {
     }
 
     @Test
+    fun chat_home_ceiling_pause_light() = snapshot(name = "ceiling_pause", dark = false) {
+        ChatHomeContent(state = ChatHomePreview.ceilingPause())
+    }
+
+    @Test
+    fun chat_home_ceiling_pause_dark() = snapshot(name = "ceiling_pause", dark = true) {
+        ChatHomeContent(state = ChatHomePreview.ceilingPause())
+    }
+
+    @Test
     fun chat_home_error_light() = snapshot(name = "error", dark = false) {
         ChatHomeContent(state = ChatHomePreview.error())
     }
@@ -180,22 +191,22 @@ class ChatHomeContentSnapshotTest {
 
     @Test
     fun chat_home_drawer_row_menu_light() = snapshot(name = "drawer_row_menu", dark = false) {
-        ChatHomeContent(state = ChatHomePreview.drawerRowMenu())
+        ChatHomeContent(state = ChatHomePreview.drawerOpen(openThreadMenuId = "t2"))
     }
 
     @Test
     fun chat_home_drawer_swipe_open_light() = snapshot(name = "drawer_swipe_open", dark = false) {
-        ChatHomeContent(state = ChatHomePreview.drawerSwipeOpen())
+        ChatHomeContent(state = ChatHomePreview.drawerOpen(revealedThreadId = "t1"))
     }
 
     @Test
     fun chat_home_drawer_swipe_open_dark() = snapshot(name = "drawer_swipe_open", dark = true) {
-        ChatHomeContent(state = ChatHomePreview.drawerSwipeOpen())
+        ChatHomeContent(state = ChatHomePreview.drawerOpen(revealedThreadId = "t1"))
     }
 
     @Test
     fun chat_home_drawer_with_archive_light() = snapshot(name = "drawer_with_archive", dark = false) {
-        ChatHomeContent(state = ChatHomePreview.drawerWithArchive())
+        ChatHomeContent(state = ChatHomePreview.drawerOpen(archivedCount = 6))
     }
 
     @Test
@@ -213,7 +224,7 @@ class ChatHomeContentSnapshotTest {
         snapshot(name = "drawer_open_font_scale_2x", dark = false, fontScale = 2f) {
             // At 200 % the row drops its status dot and gives the space to the
             // title; the trailing controls keep their targets.
-            ChatHomeContent(state = ChatHomePreview.drawerWithArchive())
+            ChatHomeContent(state = ChatHomePreview.drawerOpen(archivedCount = 6))
         }
 
     @Test

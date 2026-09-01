@@ -137,14 +137,50 @@ interface PipelineRunDao {
      *
      * Projected rather than read through the whole row because the only caller
      * is the engine seeding its ledger at the top of a run, and a resume path
-     * that loads and maps a full record just to take two integers would be
+     * that loads and maps a full record just to take four integers would be
      * paying for columns it never looks at.
      *
      * @param rootRunId Id of the run at the root of the tree.
      * @return The persisted counters, or `null` when no such row exists.
      */
-    @Query("SELECT stepsSpent, tokensSpent FROM pipeline_runs WHERE id = :rootRunId")
+    @Query(
+        "SELECT stepsSpent, tokensSpent, stepCeilingExtensions, tokenCeilingExtensions " +
+            "FROM pipeline_runs WHERE id = :rootRunId",
+    )
     suspend fun getSpend(rootRunId: String): RunSpendProjection?
+
+    /**
+     * Grants one more portion of the step ceiling to a run tree.
+     *
+     * An increment rather than an absolute write, and deliberately unlike
+     * [recordSpend] beside it: the ledger in memory is the authority for spend,
+     * but nothing in memory is the authority for grants — the answer that buys a
+     * portion routinely arrives in a process where no ledger exists, hours after
+     * the one that asked has died. `+ 1` in SQL is the only form that is correct
+     * without a reader.
+     *
+     * Carries no terminal-status guard, unlike every other mutation here. The
+     * caller increments *before* resuming, and the resume path requires the run
+     * to be in a resumable status, so a settled run cannot reach this; adding
+     * the guard would only hide a caller that got the order wrong.
+     *
+     * @param rootRunId Id of the run at the root of the tree.
+     */
+    @Query("UPDATE pipeline_runs SET stepCeilingExtensions = stepCeilingExtensions + 1 WHERE id = :rootRunId")
+    suspend fun extendStepCeiling(rootRunId: String)
+
+    /**
+     * Grants one more portion of the token ceiling to a run tree.
+     *
+     * Split from [extendStepCeiling] rather than parameterised by axis because
+     * a column name cannot be bound as a query parameter, and the alternative —
+     * one statement with a `CASE` over both columns — writes to a column the
+     * caller did not name on every call.
+     *
+     * @param rootRunId Id of the run at the root of the tree.
+     */
+    @Query("UPDATE pipeline_runs SET tokenCeilingExtensions = tokenCeilingExtensions + 1 WHERE id = :rootRunId")
+    suspend fun extendTokenCeiling(rootRunId: String)
 
     /**
      * Returns the run with [runId], or `null` when no such row exists. Backs

@@ -6,10 +6,13 @@ import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.TriggerHitlEvent
 import app.knotwork.android.domain.models.TriggerHitlResolution
+import app.knotwork.android.domain.models.ceilingBreach
+import app.knotwork.android.domain.models.diagnostic
 import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
@@ -17,12 +20,13 @@ import javax.inject.Inject
 /**
  * Shared submission tail of the background-HITL decision use cases.
  *
- * [SubmitApprovalDecisionUseCase] and [SubmitClarificationAnswerUseCase]
- * differ only in how they record the user's response onto the parked
- * [PendingInteraction]; everything after that — notification teardown, the
- * lazy approval-window check, the first-writer-wins response write, the
- * checkpoint resume, and the failure settlement of unresumable parks — is
- * identical and lives here so the two cannot drift apart.
+ * [SubmitApprovalDecisionUseCase], [SubmitClarificationAnswerUseCase] and
+ * [SubmitCeilingDecisionUseCase] differ only in how they record the user's
+ * response onto the parked [PendingInteraction]; everything after that —
+ * notification teardown, the lazy approval-window check, the first-writer-wins
+ * response write, the checkpoint resume, and the failure settlement of
+ * unresumable parks — is identical and lives here so the three cannot drift
+ * apart.
  */
 class ParkedRunResumer @Inject constructor(
     private val pendingInteractionRepository: PendingInteractionRepository,
@@ -30,6 +34,7 @@ class ParkedRunResumer @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val approvalNotifier: ApprovalNotifier,
     private val clarificationNotifier: ClarificationNotifier,
+    private val ceilingNotifier: CeilingNotifier,
     private val resumePipelineRunUseCase: ResumePipelineRunUseCase,
     private val recordTriggerHitlEvent: RecordTriggerHitlEventUseCase,
 ) {
@@ -62,7 +67,7 @@ class ParkedRunResumer @Inject constructor(
 
         val windowHours = settingsRepository.backgroundApprovalWindowHours.first()
         if (System.currentTimeMillis() - pending.requestedAt > windowHours * MILLIS_PER_HOUR) {
-            failPark(pending, APPROVAL_WINDOW_EXPIRED_MESSAGE, RunTerminationReason.HitlWindowExpired)
+            failExpiredPark(pending)
             return PendingSubmissionOutcome.Expired
         }
 
@@ -77,7 +82,7 @@ class ParkedRunResumer @Inject constructor(
                 PendingSubmissionOutcome.GraphChanged
             }
             ResumeOutcome.Expired -> {
-                failPark(pending, APPROVAL_WINDOW_EXPIRED_MESSAGE, RunTerminationReason.HitlWindowExpired)
+                failExpiredPark(pending)
                 PendingSubmissionOutcome.Expired
             }
             ResumeOutcome.NotResumable -> {
@@ -113,6 +118,41 @@ class ParkedRunResumer @Inject constructor(
     }
 
     /**
+     * Settles a park whose response window elapsed unanswered.
+     *
+     * The settlement is **not** the same for all three kinds, and the
+     * difference is the run's recorded cause. An unanswered approval or
+     * clarification really did stop waiting for the user, so it settles as
+     * [RunTerminationReason.HitlWindowExpired] — the chat then says "Stopped
+     * waiting for your approval". A ceiling pause did not: the run reached a
+     * limit and was never told to carry on, so it settles at that limit, with
+     * the numbers off the record. Telling the owner of an overnight run that
+     * the app had been waiting for their *approval* would describe something
+     * that never happened, and would send them looking for a tool call there
+     * was none of.
+     *
+     * The resolution is `TIMED_OUT` either way: the user *was* asked and the
+     * window closed. That is the one thing all three have in common, and it is
+     * exactly what separates this from the deliberate "stop the run".
+     *
+     * Shared by the lazy check on the submission path and by the maintenance
+     * pass, which is the backstop for parks nobody ever answers.
+     *
+     * @param pending The park whose window elapsed.
+     */
+    suspend fun failExpiredPark(pending: PendingInteraction) {
+        // A park that cannot produce a breach — another kind, a partial record,
+        // or the unmeasured money axis — has no ceiling to settle at, and the
+        // window story is true of it either way.
+        val reason = pending.ceilingBreach()?.asTerminationReason()
+        if (reason == null) {
+            failPark(pending, APPROVAL_WINDOW_EXPIRED_MESSAGE, RunTerminationReason.HitlWindowExpired)
+            return
+        }
+        failPark(pending, reason.diagnostic(), reason, TriggerHitlResolution.TIMED_OUT)
+    }
+
+    /**
      * Settles an unrecoverable park: fails the run with [reason], deletes the
      * pending record, and removes its notification.
      *
@@ -132,8 +172,20 @@ class ParkedRunResumer @Inject constructor(
      *   than inferred: this function used to recover the distinction by
      *   comparing [reason] against its own constant by string equality, which
      *   held only for as long as nobody edited the copy.
+     * @param resolution How the gate itself ended, when the caller knows better
+     *   than the default. Every settlement reachable from the two HITL gates is
+     *   one the user never got to make, so the default reads the answer off
+     *   [terminationReason]: timed out, or abandoned. A ceiling pause breaks
+     *   that assumption — "stop the run" is a decision, deliberately given, and
+     *   journalling it as abandonment would record the user as absent at the
+     *   moment they were most present.
      */
-    suspend fun failPark(pending: PendingInteraction, reason: String, terminationReason: RunTerminationReason) {
+    suspend fun failPark(
+        pending: PendingInteraction,
+        reason: String,
+        terminationReason: RunTerminationReason,
+        resolution: TriggerHitlResolution? = null,
+    ) {
         val rootId = pipelineRunRepository.getRootRunId(pending.runId) ?: pending.runId
         // Settle the gate in the journal before the run record itself: the
         // window elapsing unanswered and the park being discarded under a
@@ -142,7 +194,7 @@ class ParkedRunResumer @Inject constructor(
         recordTriggerHitlEvent(
             rootId,
             TriggerHitlEvent.Resolved(
-                if (terminationReason == RunTerminationReason.HitlWindowExpired) {
+                resolution ?: if (terminationReason == RunTerminationReason.HitlWindowExpired) {
                     TriggerHitlResolution.TIMED_OUT
                 } else {
                     TriggerHitlResolution.ABANDONED
@@ -164,6 +216,7 @@ class ParkedRunResumer @Inject constructor(
             PendingInteractionKind.APPROVAL -> approvalNotifier.cancelApprovalNotification(pending.sessionId)
             PendingInteractionKind.CLARIFICATION ->
                 clarificationNotifier.cancelClarificationNotification(pending.sessionId)
+            PendingInteractionKind.CEILING -> ceilingNotifier.cancelCeilingNotification(pending.sessionId)
         }
     }
 
@@ -199,6 +252,7 @@ class ParkedRunResumer @Inject constructor(
             PipelineRunStatus.INTERRUPTED,
             PipelineRunStatus.WAITING_APPROVAL,
             PipelineRunStatus.WAITING_CLARIFICATION,
+            PipelineRunStatus.WAITING_CEILING,
         )
     }
 }

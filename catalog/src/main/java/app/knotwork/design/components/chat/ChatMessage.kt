@@ -116,6 +116,11 @@ private const val LONG_PRESS_SCALE_DURATION_MS = 60
  * [ChatContent.RunInterrupted] card.
  * @param onRunDiscard invoked when the user taps the Discard CTA on a
  * [ChatContent.RunInterrupted] card.
+ * @param onRunContinue invoked when the user taps the continue CTA on a
+ * [ChatContent.RunCeilingPause] card, granting the run one more portion of the
+ * limit it reached.
+ * @param onRunStop invoked when the user taps the stop CTA on a
+ * [ChatContent.RunCeilingPause] card.
  */
 @Composable
 @Suppress("LongParameterList") // Public chat-message API — collapsing into a single config object hides intent.
@@ -135,6 +140,8 @@ fun ChatMessage(
     onClarificationReply: (String) -> Unit = {},
     onRunResume: () -> Unit = {},
     onRunDiscard: () -> Unit = {},
+    onRunContinue: () -> Unit = {},
+    onRunStop: () -> Unit = {},
     markdownRenderer: (@Composable (String) -> Unit)? = null,
 ) {
     when (role) {
@@ -154,6 +161,8 @@ fun ChatMessage(
             onClarificationReply = onClarificationReply,
             onRunResume = onRunResume,
             onRunDiscard = onRunDiscard,
+            onRunContinue = onRunContinue,
+            onRunStop = onRunStop,
             markdownRenderer = markdownRenderer,
             modifier = modifier,
         )
@@ -172,6 +181,8 @@ fun ChatMessage(
             onClarificationReply = onClarificationReply,
             onRunResume = onRunResume,
             onRunDiscard = onRunDiscard,
+            onRunContinue = onRunContinue,
+            onRunStop = onRunStop,
             markdownRenderer = markdownRenderer,
             modifier = modifier,
         )
@@ -196,6 +207,8 @@ private fun BubbleMessage(
     onClarificationReply: (String) -> Unit,
     onRunResume: () -> Unit,
     onRunDiscard: () -> Unit,
+    onRunContinue: () -> Unit,
+    onRunStop: () -> Unit,
     markdownRenderer: (@Composable (String) -> Unit)?,
     modifier: Modifier,
 ) {
@@ -229,6 +242,8 @@ private fun BubbleMessage(
                 onClarificationReply = onClarificationReply,
                 onRunResume = onRunResume,
                 onRunDiscard = onRunDiscard,
+                onRunContinue = onRunContinue,
+                onRunStop = onRunStop,
                 markdownRenderer = markdownRenderer,
             )
             // Clarification / HITL confirmation cards are self-contained
@@ -237,7 +252,8 @@ private fun BubbleMessage(
             // clash. Every other variant keeps the footer.
             if (content !is ChatContent.Clarification &&
                 content !is ChatContent.Confirmation &&
-                content !is ChatContent.RunInterrupted
+                content !is ChatContent.RunInterrupted &&
+                content !is ChatContent.RunCeilingPause
             ) {
                 BubbleFooter(role = role, metadata = metadata)
             }
@@ -332,6 +348,8 @@ private fun BubbleBody(
     onClarificationReply: (String) -> Unit,
     onRunResume: () -> Unit,
     onRunDiscard: () -> Unit,
+    onRunContinue: () -> Unit,
+    onRunStop: () -> Unit,
     markdownRenderer: (@Composable (String) -> Unit)?,
 ) {
     when (content) {
@@ -368,6 +386,11 @@ private fun BubbleBody(
             model = content.model,
             onResume = onRunResume,
             onDiscard = onRunDiscard,
+        )
+        is ChatContent.RunCeilingPause -> RunCeilingPauseCard(
+            model = content.model,
+            onContinue = onRunContinue,
+            onStop = onRunStop,
         )
         is ChatContent.Image -> ImageBubble(
             role = role,

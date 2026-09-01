@@ -2,6 +2,7 @@ package app.knotwork.android.presentation.ui.common
 
 import app.knotwork.android.R
 import app.knotwork.android.data.engine.TaskQueueManagerImpl
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunNoticeCause
 import app.knotwork.android.domain.models.RunTerminationKind
@@ -326,5 +327,66 @@ class RunTerminationCopyMapperTest {
         const val CONSTANT_NAME: String = "_"
 
         val CEILING_KINDS = setOf(RunTerminationKind.STEP_CEILING, RunTerminationKind.TOKEN_CEILING)
+    }
+
+    @Test
+    fun `given a ceiling pause then it says paused, never stopped`() {
+        // A card headed "Stopped by a safety limit" beside a Continue button
+        // reads as an error the user is being invited to override, rather than
+        // a decision they are being asked to make. The two titles must differ.
+        val pause = RunTerminationCopyMapper.ceilingPauseCopy(
+            HardCeilingBreach(RunCeilingAxis.STEPS, limit = 15, spent = 15),
+        )
+        val stop = RunTerminationCopyMapper.terminationCopy(
+            RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+        )
+
+        assertNotEquals(context.resolve(stop.title), context.resolve(pause.title))
+        assertFalse(context.resolve(pause.title).lowercase().contains("stopped"))
+    }
+
+    @Test
+    fun `given a ceiling pause then its numbers line matches the stop's, word for word`() {
+        // A run that pauses and is then stopped must not appear to change its
+        // arithmetic between the two cards.
+        val breach = HardCeilingBreach(RunCeilingAxis.TOKENS, limit = 100_000, spent = 100_400)
+        val pause = RunTerminationCopyMapper.ceilingPauseCopy(breach)
+        val stop = RunTerminationCopyMapper.terminationCopy(
+            RunTerminationReason.TokenCeiling(limit = 100_000, spent = 100_400),
+        )
+
+        assertEquals(context.resolve(stop.meter!!), context.resolve(pause.meter))
+    }
+
+    @Test
+    fun `given a ceiling pause then the continue label names the size of the portion`() {
+        // "Continue" alone reads as removing the limit, which is exactly what
+        // this gate does not do — and the number is the limit that BOUND, so a
+        // run already on an extension is offered the amount it will actually get.
+        val label = context.resolve(
+            RunTerminationCopyMapper.ceilingPauseCopy(
+                HardCeilingBreach(RunCeilingAxis.STEPS, limit = 30, spent = 30),
+            ).continueLabel,
+        )
+
+        assertTrue("Expected the portion size in: $label", label.contains("30"))
+    }
+
+    @Test
+    fun `given each axis then the pause body speaks in that axis's own unit`() {
+        val steps = context.resolve(
+            RunTerminationCopyMapper.ceilingPauseCopy(
+                HardCeilingBreach(RunCeilingAxis.STEPS, limit = 15, spent = 15),
+            ).body,
+        )
+        val tokens = context.resolve(
+            RunTerminationCopyMapper.ceilingPauseCopy(
+                HardCeilingBreach(RunCeilingAxis.TOKENS, limit = 15, spent = 15),
+            ).body,
+        )
+
+        assertTrue(steps.contains("step"))
+        assertTrue(tokens.contains("token"))
+        assertNotEquals(steps, tokens)
     }
 }

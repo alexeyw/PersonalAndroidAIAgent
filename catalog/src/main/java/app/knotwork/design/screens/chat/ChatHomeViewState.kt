@@ -54,6 +54,19 @@ enum class ChatHomeVisualState {
      */
     Interrupted,
 
+    /**
+     * A run has spent one of the limits the user set for it and is waiting to
+     * be told whether it may carry on. Run-ceiling pause card (Continue / Stop)
+     * pinned to the last bubble.
+     *
+     * Its own state rather than a flavour of [Interrupted]: both pin a status
+     * card and leave the composer idle, but an interrupted run is over unless
+     * the user revives it, while this one is alive and waiting. A host that
+     * could not tell them apart would offer Discard for a run that is still
+     * holding its checkpoint.
+     */
+    CeilingPause,
+
     /** Inline error tile + retry. */
     Error,
 
@@ -359,6 +372,20 @@ class ChatHomeCallbacks(
      * Hosts settle the interrupted run as failed and drop the card.
      */
     val onDiscardRun: () -> Unit = {},
+    /**
+     * Fired when the user taps the continue CTA on the run-ceiling pause card.
+     * Hosts grant the run one more portion of the limit it reached and resume
+     * it from its checkpoint. Deliberately not [onResumeRun]: that one continues
+     * a run that was interrupted, this one authorises a run to spend more than
+     * it was allowed, and a host wiring the two together would let a Resume tap
+     * quietly raise a limit.
+     */
+    val onContinuePastCeiling: () -> Unit = {},
+    /**
+     * Fired when the user taps the stop CTA on the run-ceiling pause card.
+     * Hosts settle the run at the ceiling it reached.
+     */
+    val onStopAtCeiling: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
     /**
      * Invoked by the single action on a typed termination tile. What it does is

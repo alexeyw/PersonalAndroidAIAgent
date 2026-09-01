@@ -109,15 +109,21 @@ default**, or rebind the chat by creating a new one.
 
 ## The agent stopped mid-run
 
-A long run can reach one of its **run limits**. The run does not pause and does
-not ask what to do — it stops, and the chat says **Stopped by a safety limit**
-along with which allowance ran out and how much of it was used. **Adjust limits**
-on that message opens the screen where you can raise it.
+A long run can reach one of its **run limits**. It pauses and asks: the chat
+says **Paused at a safety limit**, names which allowance ran out and how much of
+it was used, and offers **Continue (+N)** or **Stop the run**. Continuing gives
+it one more portion of the same allowance and picks up where it left off; it
+asks again when that runs out.
 
-Two things worth knowing before you raise anything. The limit that stopped the
-run may be the **token** one rather than the step one, so read the message rather
-than assuming; and a run you did not start yourself is governed by
-the **background** limits, which are set separately on the same screen.
+If the run stopped instead of pausing, the chat says **Stopped by a safety
+limit** — you chose Stop, the waiting window closed before you answered, or the
+run had no record to wait on (a test run from the editor). **Adjust limits** on
+that message opens the screen where you can raise the limit for next time.
+
+Two things worth knowing before you raise anything. The limit involved may be
+the **token** one rather than the step one, so read the message rather than
+assuming; and a run you did not start yourself is governed by the **background**
+limits, which are set separately on the same screen.
 
 But read the message first, because not every mid-run stop is a limit. **Stopped:
 the run was not getting anywhere** means the run was repeating itself and was

@@ -53,6 +53,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.SkillRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.skillio.SkillJsonSerializer
@@ -244,6 +245,8 @@ class SkillReportWriterIntegrationTest {
         val retrieveRelevantMemoryUseCase = mockk<RetrieveRelevantMemoryUseCase>()
         val pipelineRunRepository = mockk<PipelineRunRepository>(relaxed = true)
         val runTraceRepository = mockk<RunTraceRepository>(relaxed = true)
+        val pendingInteractionRepository = mockk<PendingInteractionRepository>(relaxed = true)
+        val ceilingNotifier = mockk<CeilingNotifier>(relaxed = true)
 
         coEvery { loadModelUseCase(any()) } returns Result.Success(Unit)
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
@@ -351,6 +354,8 @@ class SkillReportWriterIntegrationTest {
             pipelineRunRepository,
             runTraceRepository,
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
     }
 }

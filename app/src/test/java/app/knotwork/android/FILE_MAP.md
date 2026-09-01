@@ -340,6 +340,7 @@ Only Kotlin files appear inside the generated blocks.
     - `SetSurfacePipelineUseCaseTest.kt` - Unit tests for `SetSurfacePipelineUseCase`, confirming each surface writes to its own binding and that `null` clears it.
     - `SetUpScenarioUseCaseTest.kt` - Unit tests for `SetUpScenarioUseCase` — the one-tap onboarding set-up orchestration.
     - `SubmitApprovalDecisionUseCaseTest.kt` - Unit tests for `SubmitApprovalDecisionUseCase` — the single entry point of the user's approve / deny decision across both waiting phases.
+    - `SubmitCeilingDecisionUseCaseTest.kt` - Unit tests for `SubmitCeilingDecisionUseCase`.
     - `SubmitClarificationAnswerUseCaseTest.kt` - Unit tests for `SubmitClarificationAnswerUseCase` — the single entry point of the user's clarification answer across both waiting phases.
     - `SyncTriggersUseCaseTest.kt` - Unit tests for `SyncTriggersUseCase` — the one-shot reconcile that hands the current active-trigger snapshot to the scheduler.
     - `TaskRouterUseCaseTest.kt` - Tests for TaskRouterUseCase.

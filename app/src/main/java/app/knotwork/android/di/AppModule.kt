@@ -37,12 +37,14 @@ import app.knotwork.android.data.services.WorkManagerTaskScheduler
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
 import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
+import app.knotwork.android.presentation.notifications.CeilingNotificationManager
 import app.knotwork.android.presentation.notifications.ClarificationNotificationManager
 import app.knotwork.android.presentation.notifications.ScheduledTaskNotifierImpl
 import app.knotwork.android.presentation.run.RunOutcomeAnnouncerImpl
@@ -215,6 +217,7 @@ object AppModule {
                 AppDatabase.MIGRATION_57_58,
                 AppDatabase.MIGRATION_58_59,
                 AppDatabase.MIGRATION_59_60,
+                AppDatabase.MIGRATION_60_61,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -455,6 +458,15 @@ object AppModule {
     @Provides
     @Singleton
     fun provideClarificationNotifier(impl: ClarificationNotificationManager): ClarificationNotifier = impl
+
+    /**
+     * Binds the presentation-layer [CeilingNotificationManager] implementation
+     * to the domain-facing [CeilingNotifier] consumed by the execution engine
+     * (which raises the pause) and by [ParkedRunResumer] (which tears it down).
+     */
+    @Provides
+    @Singleton
+    fun provideCeilingNotifier(impl: CeilingNotificationManager): CeilingNotifier = impl
 
     /**
      * Binds the data-layer [ExternalAutomationCallbackSender] (a package-directed

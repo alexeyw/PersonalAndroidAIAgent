@@ -54,11 +54,34 @@ sealed interface AgentOrchestratorState {
     data class AwaitingClarification(val request: ClarificationRequest) : AgentOrchestratorState
 
     /**
+     * The run tree has spent one of its ceilings and is waiting for the user to
+     * say whether it may carry on.
+     *
+     * Not a failure and not a question about the work: the pipeline has not gone
+     * wrong, it has run out of the allowance the user set for it. Answering yes
+     * buys one more portion of [axis] and the run continues from its checkpoint;
+     * answering no ends it with the ceiling as its recorded cause — which is
+     * exactly what the run used to do without asking.
+     *
+     * The numbers travel with the state rather than being re-read at render
+     * time. The card has to state the limit *this run* was stopped at, and by
+     * the time it is answered — hours later, in another process — the setting
+     * behind that limit may have changed.
+     *
+     * @property axis Which ceiling bound.
+     * @property limit The limit in force when it bound, in the axis's own unit.
+     *   Already includes every portion granted to this run before now.
+     * @property spent What the run tree had charged against [axis].
+     */
+    data class WaitingForCeilingRaise(val axis: RunCeilingAxis, val limit: Int, val spent: Int) :
+        AgentOrchestratorState
+
+    /**
      * The run has been parked in its persistent waiting phase: the live
      * in-process HITL gate ([WaitingForApproval] or [AwaitingClarification])
-     * timed out, the pending request is durable in the pending-interaction
-     * store, and the engine coroutine is about to end without a terminal
-     * state. The run record keeps its WAITING_* status; the user's response
+     * timed out — or a ceiling bound, which parks straight away — the pending
+     * request is durable in the pending-interaction store, and the engine
+     * coroutine is about to end without a terminal state. The run record keeps its WAITING_* status; the user's response
      * later resumes the run from its checkpoint — possibly in a different
      * process. Consumers treat this as "run no longer live" without mapping
      * it to failure or cancellation.

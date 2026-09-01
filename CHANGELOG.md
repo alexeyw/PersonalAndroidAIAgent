@@ -34,6 +34,29 @@ details.
   flight stays unsaved rather than being counted as stored. Both are what make
   the marker something you can trust rather than one more thing on screen.
 
+### Changed
+
+- **A run that reaches a safety limit now pauses and asks instead of dying.**
+  Reaching the step or token limit used to end the run outright, turning
+  everything it had done into a "Stopped by a safety limit" message. It now
+  stops, states which allowance ran out and how much was used, and offers
+  **Continue (+N)** or **Stop the run**.
+
+  Continuing buys **one more portion of the same allowance** — the number on the
+  button — and picks up from the checkpoint, so nothing is re-run. It does not
+  lift the limit: the run asks again when that portion is gone, and a run waved
+  through five times is one you said yes to five times. Each axis is bought
+  separately; being let past a step limit does not authorise more tokens.
+
+  The pause is durable from the moment it is raised, so a run that reaches its
+  limit overnight is still waiting in the morning, with the numbers it actually
+  stopped at rather than whatever the setting says by then. Away from the chat,
+  a notification brings you back to it; it deliberately carries no buttons,
+  because the decision turns on how much the run has already spent and the shade
+  has nowhere to show that. An unanswered pause expires with the same background
+  response window that governs tool approvals, and the run then ends at its
+  limit as before.
+
 ### Added
 
 - **Nine node settings that did nothing now do what their names say.** The

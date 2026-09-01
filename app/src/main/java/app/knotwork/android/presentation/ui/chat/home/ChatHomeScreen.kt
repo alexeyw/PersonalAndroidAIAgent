@@ -435,6 +435,8 @@ fun ChatHomeScreen(
         onClarificationReply = viewModel.hitl::submitClarificationReply,
         onResumeRun = viewModel.reattach::resumeInterruptedRun,
         onDiscardRun = viewModel.reattach::discardInterruptedRun,
+        onContinuePastCeiling = viewModel.hitl::continuePastCeiling,
+        onStopAtCeiling = viewModel.hitl::stopAtCeiling,
         onErrorRetry = viewModel::retryAfterError,
         // One slot, three destinations. The tile carries a label, not a verb,
         // so what the action *does* is decided here from the typed reason the
