@@ -36,6 +36,21 @@ details.
 
 ### Changed
 
+- **Confirmation dialogs come from one place now.** They had been written out
+  separately across the app, and had drifted: **Reset usage statistics** — which
+  throws away every recorded run and cannot be undone — asked for confirmation in
+  the same neutral styling as clearing a log. It is now marked as destructive,
+  like deleting a conversation always was.
+
+  Everything else keeps the styling it had; what changed is that the distinction
+  is now made in one component rather than re-decided at each dialog. The same
+  goes for the rename prompts and the single-choice pickers.
+
+  One more visible fix: when saving a pipeline as a preset, the selected category
+  chip is now clearly marked. It previously lost its outline when chosen, so the
+  category you picked looked like the one you had not.
+
+
 - **A run that reaches a safety limit now pauses and asks instead of dying.**
   Reaching the step or token limit used to end the run outright, turning
   everything it had done into a "Stopped by a safety limit" message. It now

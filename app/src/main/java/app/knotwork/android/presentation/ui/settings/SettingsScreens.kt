@@ -5,24 +5,10 @@ package app.knotwork.android.presentation.ui.settings
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -31,7 +17,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -43,6 +28,9 @@ import app.knotwork.android.domain.models.MemoryImportStrategy
 import app.knotwork.android.domain.models.ProviderId
 import app.knotwork.android.domain.models.ToolApprovalPolicy
 import app.knotwork.android.presentation.tile.requestAddDutyTile
+import app.knotwork.design.components.dialogs.SingleChoiceDialog
+import app.knotwork.design.components.dialogs.SingleChoiceDialogUi
+import app.knotwork.design.components.dialogs.SingleChoiceOptionUi
 import app.knotwork.design.screens.automation.ExternalAutomationConsentContent
 import app.knotwork.design.screens.automation.ExternalAutomationConsentStrings
 import app.knotwork.design.screens.settings.AboutSettingsContent
@@ -52,6 +40,7 @@ import app.knotwork.design.screens.settings.GenerationSettingsContent
 import app.knotwork.design.screens.settings.HubSearchResultRow
 import app.knotwork.design.screens.settings.LocalSettingsHighlightKey
 import app.knotwork.design.screens.settings.LocalSettingsHints
+import app.knotwork.design.screens.settings.MemoryImportDialogUi
 import app.knotwork.design.screens.settings.MemorySettingsContent
 import app.knotwork.design.screens.settings.ModelsSettingsContent
 import app.knotwork.design.screens.settings.PipelinesSettingsContent
@@ -88,6 +77,7 @@ import com.jakewharton.processphoenix.ProcessPhoenix
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import app.knotwork.android.domain.settings.SettingsCategoryId as DomainCategoryId
+import app.knotwork.design.screens.settings.MemoryImportDialog as CatalogMemoryImportDialog
 
 /**
  * Navigation actions threaded into every settings screen from the nav graph.
@@ -329,10 +319,18 @@ private fun externalAutomationConsentStrings(): ExternalAutomationConsentStrings
 )
 
 /**
- * Single-choice picker binding a pipeline to an entry surface. Reuses a plain
- * Material 3 [AlertDialog] with a radio list (the "Reset settings" dialog idiom)
- * rather than introducing a new design-system component; "None" clears the
- * binding so the surface returns to its inert privacy-first default.
+ * `:app` binding of the catalog's single-choice dialog for the pipeline that a
+ * given entry surface runs.
+ *
+ * "None" is a real option rather than the absence of one: choosing it clears the
+ * binding so the surface returns to its inert, privacy-first default. It is
+ * therefore rendered as a row like any other, with `null` as its id.
+ *
+ * @param title Dialog title, naming the surface being bound.
+ * @param options The pipelines available to bind.
+ * @param selectedId Currently bound pipeline, or `null` for none.
+ * @param onSelect A row was tapped; `null` clears the binding.
+ * @param onDismiss Cancel or scrim tap.
  */
 @Composable
 private fun SurfacePipelinePickerDialog(
@@ -342,45 +340,18 @@ private fun SurfacePipelinePickerDialog(
     onSelect: (String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                PipelinePickerRow(
-                    label = stringResource(R.string.settings_pipeline_picker_none),
-                    selected = selectedId == null,
-                    onClick = { onSelect(null) },
-                )
-                options.forEach { option ->
-                    PipelinePickerRow(
-                        label = option.name,
-                        selected = option.id == selectedId,
-                        onClick = { onSelect(option.id) },
-                    )
-                }
-            }
-        },
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
-        },
+    SingleChoiceDialog(
+        ui = SingleChoiceDialogUi(
+            title = title,
+            options = listOf(
+                SingleChoiceOptionUi(id = null, label = stringResource(R.string.settings_pipeline_picker_none)),
+            ) + options.map { SingleChoiceOptionUi(id = it.id, label = it.name) },
+            selectedId = selectedId,
+            cancelLabel = stringResource(R.string.common_cancel),
+        ),
+        onSelect = onSelect,
+        onDismiss = onDismiss,
     )
-}
-
-/** One selectable radio row inside [SurfacePipelinePickerDialog]. */
-@Composable
-private fun PipelinePickerRow(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, onClick = onClick)
-            .padding(vertical = 8.dp),
-    ) {
-        RadioButton(selected = selected, onClick = onClick)
-        Text(text = label, modifier = Modifier.padding(start = 8.dp))
-    }
 }
 
 /** Privacy category sub-screen. */
@@ -606,9 +577,16 @@ private fun ApproveToolCallsOption.toPolicy(): ToolApprovalPolicy = when (this) 
 }
 
 /**
- * Strategy-choice dialog raised after a memory import file parses. Lets the user
- * pick Merge (keep existing, skip duplicate ids) or Replace (wipe then load), and
- * surfaces provider / schema mismatch warnings.
+ * `:app` binding of the catalog's memory-import dialog: resolves the copy and
+ * decides which mismatch warnings apply to the parsed document.
+ *
+ * Which warnings apply is a judgement about the import, so it is made here; the
+ * catalog receives finished sentences.
+ *
+ * @param pending The parsed document awaiting a strategy.
+ * @param onMerge Keep existing entries, skip duplicate ids.
+ * @param onReplace Wipe, then load.
+ * @param onCancel Import nothing.
  */
 @Composable
 private fun MemoryImportDialog(
@@ -617,40 +595,28 @@ private fun MemoryImportDialog(
     onReplace: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    val warnings = buildList {
-        if (pending.schemaMismatch) add(stringResource(R.string.settings_memory_import_schema_warning))
-        if (pending.providerMismatch) {
-            add(stringResource(R.string.settings_memory_import_provider_warning, pending.document.embeddingProviderId))
-        }
-    }
-    AlertDialog(
-        onDismissRequest = onCancel,
-        title = { Text(stringResource(R.string.settings_memory_import_dialog_title)) },
-        text = {
-            Text(
-                buildString {
-                    append(stringResource(R.string.settings_memory_import_dialog_body, pending.document.chunks.size))
-                    warnings.forEach { warning ->
-                        append("\n\n")
-                        append(warning)
-                    }
-                },
-            )
-        },
-        confirmButton = {
-            Row(horizontalArrangement = Arrangement.spacedBy(IMPORT_BUTTON_GAP)) {
-                TextButton(onClick = onMerge) { Text(stringResource(R.string.settings_memory_import_merge)) }
-                TextButton(
-                    onClick = onReplace,
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
-                ) {
-                    Text(stringResource(R.string.settings_memory_import_replace))
+    CatalogMemoryImportDialog(
+        ui = MemoryImportDialogUi(
+            title = stringResource(R.string.settings_memory_import_dialog_title),
+            body = stringResource(R.string.settings_memory_import_dialog_body, pending.document.chunks.size),
+            warnings = buildList {
+                if (pending.schemaMismatch) add(stringResource(R.string.settings_memory_import_schema_warning))
+                if (pending.providerMismatch) {
+                    add(
+                        stringResource(
+                            R.string.settings_memory_import_provider_warning,
+                            pending.document.embeddingProviderId,
+                        ),
+                    )
                 }
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) { Text(stringResource(R.string.settings_memory_import_cancel)) }
-        },
+            },
+            mergeLabel = stringResource(R.string.settings_memory_import_merge),
+            replaceLabel = stringResource(R.string.settings_memory_import_replace),
+            cancelLabel = stringResource(R.string.settings_memory_import_cancel),
+        ),
+        onMerge = onMerge,
+        onReplace = onReplace,
+        onCancel = onCancel,
     )
 }
 

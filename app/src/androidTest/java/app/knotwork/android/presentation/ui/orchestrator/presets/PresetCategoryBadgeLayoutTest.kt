@@ -12,6 +12,7 @@ import app.knotwork.android.domain.models.PipelinePreset
 import app.knotwork.android.domain.models.PresetCategory
 import app.knotwork.design.screens.pipelines.PresetManagerCallbacks
 import app.knotwork.design.screens.pipelines.PresetManagerRow
+import app.knotwork.design.screens.pipelines.PresetPickerRow
 import app.knotwork.design.screens.pipelines.PresetRowActionLabels
 import app.knotwork.design.theme.KnotworkTheme
 import org.junit.Assert.assertTrue
@@ -76,7 +77,7 @@ class PresetCategoryBadgeLayoutTest {
     fun pickerRowKeepsItsBadgeOnScreen() {
         composeTestRule.setContent {
             KnotworkTheme(darkTheme = false) {
-                PresetPickerRow(preset = preset(), selected = false, onClick = {})
+                PresetPickerRow(row = preset().toPickerRow(LocalContext.current), selected = false, onClick = {})
             }
         }
 

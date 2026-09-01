@@ -31,16 +31,13 @@ import org.robolectric.annotation.GraphicsMode
  * `weight(fill = false)` the title takes the whole row and the badge collapses
  * to a one-character-per-line sliver.
  *
- * **The rename dialog has no baseline, and this is not an oversight.** A text
- * field inside an `AlertDialog` never reaches idle here — `setContent` spins for
- * 60 seconds and Espresso gives up with "Compose did not get idle". Measured
- * rather than guessed: it happens with the plain Material `OutlinedTextField`
- * too, so it is the harness and not a component of ours, and no existing
- * baseline in this module captures a field inside a dialog either. Freezing the
- * test clock does not help — the loop is in composition, not in an animation.
- * The delete confirmation, which carries no field, is captured in both themes.
- * Do not re-add the rename capture without first making a field-in-dialog
- * settle; the fixture is kept for `@Preview` use.
+ * **The rename dialog is no longer a component of this screen.** Renaming a
+ * preset and naming a pipeline are the same interaction, so both now use the
+ * shared `SingleFieldDialog`, and its baseline lives with it — see
+ * `SingleFieldDialogSnapshotTest`, which also records why such a dialog is
+ * photographed as a body rather than whole.
+ *
+ * The delete confirmation, which carries no field, is still captured here.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)

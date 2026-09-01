@@ -29,7 +29,6 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -79,6 +78,8 @@ import app.knotwork.design.components.chat.ImageViewer
 import app.knotwork.design.components.chat.SourceChooserSheet
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
+import app.knotwork.design.components.dialogs.ConfirmDialog
+import app.knotwork.design.components.dialogs.ConfirmDialogUi
 import app.knotwork.design.components.knotworkMarkdownColor
 import app.knotwork.design.components.knotworkMarkdownTypography
 import app.knotwork.design.components.misc.KnotworkSnackbar
@@ -602,68 +603,47 @@ fun ChatHomeScreen(
             }
         }
         if (screenState.consoleClearConfirmRequested) {
-            AlertDialog(
-                onDismissRequest = viewModel.console::dismissConsoleClear,
-                title = { Text(stringResource(R.string.chat_console_clear_dialog_title)) },
-                text = { Text(stringResource(R.string.chat_console_clear_dialog_text)) },
-                confirmButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_console_clear_dialog_confirm),
-                        onClick = viewModel.console::confirmConsoleClear,
-                    )
-                },
-                dismissButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_console_clear_dialog_cancel),
-                        onClick = viewModel.console::dismissConsoleClear,
-                    )
-                },
+            ConfirmDialog(
+                ui = ConfirmDialogUi(
+                    title = stringResource(R.string.chat_console_clear_dialog_title),
+                    body = stringResource(R.string.chat_console_clear_dialog_text),
+                    confirmLabel = stringResource(R.string.chat_console_clear_dialog_confirm),
+                    cancelLabel = stringResource(R.string.chat_console_clear_dialog_cancel),
+                ),
+                onConfirm = viewModel.console::confirmConsoleClear,
+                onDismiss = viewModel.console::dismissConsoleClear,
             )
         }
         deleteThreadTargetId?.let { targetId ->
-            AlertDialog(
-                onDismissRequest = { deleteThreadTargetId = null },
-                title = { Text(stringResource(R.string.chat_delete_dialog_title)) },
-                text = { Text(stringResource(R.string.chat_delete_dialog_text)) },
-                confirmButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_delete_dialog_confirm),
-                        destructive = true,
-                        onClick = {
-                            deleteThreadTargetId = null
-                            viewModel.threads.deleteThread(targetId)
-                        },
-                    )
+            ConfirmDialog(
+                ui = ConfirmDialogUi(
+                    title = stringResource(R.string.chat_delete_dialog_title),
+                    body = stringResource(R.string.chat_delete_dialog_text),
+                    confirmLabel = stringResource(R.string.chat_delete_dialog_confirm),
+                    cancelLabel = stringResource(R.string.chat_delete_dialog_cancel),
+                    destructive = true,
+                ),
+                onConfirm = {
+                    deleteThreadTargetId = null
+                    viewModel.threads.deleteThread(targetId)
                 },
-                dismissButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_delete_dialog_cancel),
-                        onClick = { deleteThreadTargetId = null },
-                    )
-                },
+                onDismiss = { deleteThreadTargetId = null },
             )
         }
         if (deleteDialogVisible) {
-            AlertDialog(
-                onDismissRequest = { deleteDialogVisible = false },
-                title = { Text(stringResource(R.string.chat_delete_dialog_title)) },
-                text = { Text(stringResource(R.string.chat_delete_dialog_text)) },
-                confirmButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_delete_dialog_confirm),
-                        destructive = true,
-                        onClick = {
-                            deleteDialogVisible = false
-                            viewModel.threads.deleteCurrentSession()
-                        },
-                    )
+            ConfirmDialog(
+                ui = ConfirmDialogUi(
+                    title = stringResource(R.string.chat_delete_dialog_title),
+                    body = stringResource(R.string.chat_delete_dialog_text),
+                    confirmLabel = stringResource(R.string.chat_delete_dialog_confirm),
+                    cancelLabel = stringResource(R.string.chat_delete_dialog_cancel),
+                    destructive = true,
+                ),
+                onConfirm = {
+                    deleteDialogVisible = false
+                    viewModel.threads.deleteCurrentSession()
                 },
-                dismissButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_delete_dialog_cancel),
-                        onClick = { deleteDialogVisible = false },
-                    )
-                },
+                onDismiss = { deleteDialogVisible = false },
             )
         }
         reportTargetRowId?.let { rowId ->

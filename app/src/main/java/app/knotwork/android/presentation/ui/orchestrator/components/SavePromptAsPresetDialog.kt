@@ -1,28 +1,14 @@
-@file:Suppress("MatchingDeclarationName") // File hosts dialog + its SavePromptAsPresetResult payload.
+@file:Suppress("MatchingDeclarationName") // File hosts SavePromptAsPresetDialog + its SavePromptAsPresetResult payload.
 
 package app.knotwork.android.presentation.ui.orchestrator.components
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import app.knotwork.android.R
 import app.knotwork.android.domain.constants.PromptPresetConstants
 import app.knotwork.android.domain.models.NodeType
-import app.knotwork.design.components.controls.KnotworkField
-import app.knotwork.design.components.controls.KnotworkTextField
-import app.knotwork.design.theme.KnotworkTheme
+import app.knotwork.design.screens.prompts.SavePromptAsPresetDialogUi
+import app.knotwork.design.screens.prompts.SavePromptAsPresetDialog as CatalogSavePromptAsPresetDialog
 
 /**
  * Result payload emitted by [SavePromptAsPresetDialog] when the user submits.
@@ -32,160 +18,58 @@ import app.knotwork.design.theme.KnotworkTheme
  *
  * @property name Display name; trimmed by the dialog before emission.
  * @property description Free-form description; trimmed.
- * @property tags Comma-separated tags as the user typed them.
+ * @property tags Tags as the user typed them, split and trimmed.
  */
 data class SavePromptAsPresetResult(val name: String, val description: String, val tags: List<String>)
 
 /**
- * Modal dialog used by the pipeline editor's `NodeConfigSheet` 💾 button to
- * capture the metadata needed to persist the currently-edited system prompt
- * as a user prompt preset.
+ * `:app` binding of the catalog's save-prompt-as-preset dialog: resolves the
+ * copy and supplies the name-length limit the domain owns.
  *
- * The dialog owns its own internal form state. Submission gates on a non-blank
- * name within [PromptPresetConstants.MAX_NAME_LENGTH] characters and is
- * additionally disabled (with an inline message) when [systemPromptPreview]
- * is blank — saving an empty prompt would fail the use-case validator
- * anyway. The target node type is implicit from the field the user clicked
- * 💾 on, so there is no category picker here.
+ * The dialog itself lives in `:catalog` so its three states — the ordinary
+ * form, the blank-prompt refusal and the over-length name — can be
+ * photographed. None of them could be while it lived here.
  *
- * @param nodeType target [NodeType] (rendered as the dialog subtitle).
- * @param systemPromptPreview the current text of the field; rendered in a
- *   compact read-only label so the user can confirm what they're saving.
- * @param onConfirm invoked with the captured [SavePromptAsPresetResult] when
- *   the user taps Save.
- * @param onDismiss invoked when the user taps Cancel or the scrim.
+ * @param nodeType Target [NodeType], rendered as the dialog subtitle.
+ * @param systemPromptPreview The current text of the field, shown read-only so
+ *   the user can confirm what they are saving.
+ * @param onConfirm Invoked with the captured [SavePromptAsPresetResult] on Save.
+ * @param onDismiss Invoked when the user taps Cancel or the scrim.
  */
 @Composable
-@Suppress("LongMethod")
 fun SavePromptAsPresetDialog(
     nodeType: NodeType,
     systemPromptPreview: String,
     onConfirm: (SavePromptAsPresetResult) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var name by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var tagsRaw by remember { mutableStateOf("") }
-
-    val trimmedName = name.trim()
-    val nameTooLong = trimmedName.length > PromptPresetConstants.MAX_NAME_LENGTH
-    val promptBlank = systemPromptPreview.isBlank()
-    val canSubmit = canSavePromptPreset(name, systemPromptPreview)
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.testTag(tag = SAVE_PROMPT_AS_PRESET_DIALOG_TEST_TAG),
-        title = {
-            Column {
-                Text(
-                    text = stringResource(R.string.prompt_preset_save_dialog_title),
-                    style = MaterialTheme.typography.titleLarge,
-                )
-                Text(
-                    text = stringResource(
-                        R.string.prompt_preset_save_dialog_subtitle,
-                        nodeType.name,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+    CatalogSavePromptAsPresetDialog(
+        ui = SavePromptAsPresetDialogUi(
+            title = stringResource(R.string.prompt_preset_save_dialog_title),
+            subtitle = stringResource(R.string.prompt_preset_save_dialog_subtitle, nodeType.name),
+            promptPreview = systemPromptPreview,
+            nameLabel = stringResource(R.string.prompt_preset_save_field_name),
+            descriptionLabel = stringResource(R.string.prompt_preset_save_field_description),
+            tagsLabel = stringResource(R.string.prompt_preset_save_field_tags),
+            tagsHint = stringResource(R.string.prompt_preset_save_field_tags_hint),
+            blankPromptError = stringResource(R.string.prompt_preset_save_error_blank_prompt),
+            nameTooLongError = stringResource(
+                R.string.prompt_preset_save_error_name_too_long,
+                PromptPresetConstants.MAX_NAME_LENGTH,
+            ),
+            saveLabel = stringResource(R.string.prompt_preset_save_action_save),
+            cancelLabel = stringResource(R.string.prompt_preset_save_action_cancel),
+            maxNameLength = PromptPresetConstants.MAX_NAME_LENGTH,
+        ),
+        onConfirm = { form ->
+            onConfirm(
+                SavePromptAsPresetResult(
+                    name = form.name,
+                    description = form.description,
+                    tags = form.tags,
+                ),
+            )
         },
-        text = {
-            Column(
-                verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
-            ) {
-                if (promptBlank) {
-                    Text(
-                        text = stringResource(R.string.prompt_preset_save_error_blank_prompt),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                } else {
-                    // Compact read-only preview so the user can verify which
-                    // draft they're persisting — the dialog opens from a
-                    // single 💾 button so the visual association is otherwise
-                    // implicit.
-                    Text(
-                        text = systemPromptPreview,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = PREVIEW_MAX_LINES,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                KnotworkField(label = stringResource(R.string.prompt_preset_save_field_name)) {
-                    KnotworkTextField(value = name, onValueChange = { name = it })
-                }
-                if (nameTooLong) {
-                    Text(
-                        text = stringResource(
-                            R.string.prompt_preset_save_error_name_too_long,
-                            PromptPresetConstants.MAX_NAME_LENGTH,
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error,
-                    )
-                }
-                KnotworkField(label = stringResource(R.string.prompt_preset_save_field_description)) {
-                    KnotworkTextField(value = description, onValueChange = { description = it })
-                }
-                KnotworkField(label = stringResource(R.string.prompt_preset_save_field_tags)) {
-                    KnotworkTextField(value = tagsRaw, onValueChange = { tagsRaw = it })
-                }
-                Text(
-                    text = stringResource(R.string.prompt_preset_save_field_tags_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = canSubmit,
-                onClick = {
-                    onConfirm(
-                        SavePromptAsPresetResult(
-                            name = trimmedName,
-                            description = description.trim(),
-                            tags = parsePromptPresetTags(tagsRaw),
-                        ),
-                    )
-                },
-            ) { Text(stringResource(R.string.prompt_preset_save_action_save)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.prompt_preset_save_action_cancel))
-            }
-        },
+        onDismiss = onDismiss,
     )
 }
-
-/**
- * Splits a comma-separated tag string into a clean list — trims each token and
- * drops blanks. Final de-dup is left to `SavePromptAsPresetUseCase` so the
- * dialog stays dumb. Pure function so the parser can be unit-tested without
- * spinning up Compose.
- */
-internal fun parsePromptPresetTags(raw: String): List<String> =
-    raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
-
-/**
- * Returns `true` when the dialog's Save button should be enabled — name is
- * non-blank, within [PromptPresetConstants.MAX_NAME_LENGTH] characters, and
- * the source prompt is non-blank. Mirrors the live-state gate inside the
- * Composable so the rule can be unit-tested.
- */
-internal fun canSavePromptPreset(name: String, systemPrompt: String): Boolean {
-    val trimmedName = name.trim()
-    return trimmedName.isNotEmpty() &&
-        trimmedName.length <= PromptPresetConstants.MAX_NAME_LENGTH &&
-        systemPrompt.isNotBlank()
-}
-
-/** Test-tag applied to the Save-as-prompt-preset dialog root for Compose tests. */
-internal const val SAVE_PROMPT_AS_PRESET_DIALOG_TEST_TAG = "save_prompt_as_preset_dialog"
-
-/** Cap for the read-only systemPrompt preview rendered above the form. */
-private const val PREVIEW_MAX_LINES: Int = 4

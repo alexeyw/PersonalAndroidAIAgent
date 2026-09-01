@@ -89,7 +89,10 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `KnotworkTextField.kt` - single-line `BasicTextField` with full state table (default / hovered / focused / filled / disabled / readOnly / error), mono flag, search-bar variant.
     - `LabeledSwitchRow.kt` - settings-style toggle row (label + muted description, trailing `Switch` scaled down to sit beside the 14 sp title). The whole row is the tap target — the switch itself is non-interactive — so the 48 dp floor holds wherever it is reused.
   - `dialogs/` - dialog components.
+    - `ConfirmDialog.kt` - A dialog that asks one yes-or-no question.
     - `OutcomeDialog.kt` - the one "here is what happened" dialog shape. `OutcomeTone` picks the layout and glyph: `INFO` / `GUARD` / `ERROR` draw an icon above a centred headline, `QUESTION` draws none and left-aligns. The distinction that carries weight is **GUARD vs ERROR** — a safeguard that held is not a failure, so `GUARD` is the shield and red is reserved for "nothing happened". Carries an optional `OutcomeNamedList` ("left out", capped at `MAX_NAMED_LIST_ITEMS` with a caller-resolved summary line) and one to three `OutcomeAction`s, one of which may be emphasised. The body scrolls so the buttons survive large font scales. Shared by prompt import and the pipeline-import schema-mismatch dialog, which was the hand-rolled original.
+    - `SingleChoiceDialog.kt` - A dialog that picks exactly one option from a radio list.
+    - `SingleFieldDialog.kt` - A dialog that asks for exactly one non-blank string.
     - `TypedConfirmDialog.kt` - canonical destructive typed-confirm dialog (`TypedConfirmDialogState` payload + `typedConfirmMatches` keyword rule). Shared by the Settings destructive actions and the splash data-recovery wipe so the confirmation contract cannot drift.
   - `lists/` - `PipelineListRow` / `ToolListRow` / `MemoryEntryRow` / `KnotworkNavListRow` (leading-icon + title + chevron routing row) + previews.
     - `KnotworkListsPreview.kt` - Harness rendering every list-row variant, including a pipeline row in the swipe-revealed state, shared by the preview pane and the Roborazzi baseline.
@@ -123,6 +126,9 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `NodeType.kt` - enum of the 12 editor node types (Input, Output, LiteRT, Cloud, IntentRouter, IfCondition, Clarification, Tool, Decomposition, QueueProcessor, Evaluation, Summary).
     - `NodeTypeColors.kt` - composables mapping `NodeType` to header tint, luminance-banded foreground, and display label.
     - `PipelineEditorCatalogContent.kt` - scrollable harness exercising every pipeline-editor base component + theme previews.
+  - `prompt/` - prompt-facing components: the preview sheet that shows a rendered prompt with its placeholders resolved, and its unresolved ones marked as errors.
+    - `PromptPreviewPreview.kt` - Preview fixtures for the prompt-preview sheet.
+    - `PromptPreviewSheet.kt` - Bottom sheet displaying a prompt with its `$VARIABLES` already substituted.
   - `topbar/` - top-app-bar chrome.
     - `JournalExportActions.kt` - The pair of top-bar actions that hands a journal to the user: **share it** and **save it to a file**.
     - `KnotworkTopAppBarShell.kt` - wraps a `TopAppBar` in a column with an attached hairline divider so it never bleeds into scrolled content.
@@ -257,6 +263,8 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `ChatHomeDrawer.kt` - the alternate-nav drawer overlay extracted from `ChatHomeContent.kt`: sessions list, `+ New chat` pill, the thread row (`⋮` menu = Rename / Archive / — / Delete chat, plus a one-action Archive swipe and TalkBack custom actions; drops its status dot at font-scale 200 %) and the footer rows (`Archived chats` only when the count is positive, `Import chat`, `Settings`).
     - `ChatHomePreviewData.kt` - deterministic preview fixtures for the chat surface (thread, model, message rows, HITL / clarification cards).
     - `ChatHomeViewState.kt` - visual-state enum (Loading / Empty / Idle / Generating / HitlConfirm / Clarification / Error / DrawerOpen / ConsoleExpanded) + message / thread row models.
+    - `ReportResponseDialog.kt` - Dialog collecting a user's flag against a model-authored message.
+    - `ReportResponseDialogPreview.kt` - Preview fixtures for the content-report dialog.
   - `chatarchive/` - archived-chats surface (the chats a user took out of the drawer without deleting them).
     - `ChatArchiveContent.kt` - list of archived chats, most-recently- archived first: leading archive tile, relative archived-at label, an optional "run finished after archiving" note, inline Restore pill, a one-action Restore swipe and a row overflow (Restore / Export chat / ─ / Delete forever behind a plain confirmation). Teaching empty state with no CTA, skeleton and error branches. At font-scale 200 % the tile is dropped and Restore collapses to an icon-only 48 dp button with the word kept for TalkBack.
     - `ChatArchiveContentPreview.kt` - Android Studio `@Preview` group.
@@ -297,10 +305,17 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `PresetManagerContent.kt` - The preset manager: bundled and saved presets, filtered by category, each with rename / export / delete.
     - `PresetManagerPreview.kt` - Fixtures for the preset manager's states.
     - `PresetManagerViewState.kt` - Everything the preset manager renders, already resolved.
+    - `PresetPickerPreview.kt` - Preview fixtures for the preset picker.
+    - `PresetPickerSheetBody.kt` - Bottom-sheet body for choosing a preset to instantiate.
+    - `SaveAsPresetDialog.kt` - Modal dialog capturing name, description, category and tags before a pipeline is saved as a preset.
+    - `SaveAsPresetPreview.kt` - Preview fixtures for the preset dialogs.
   - `prompts/` - Prompt-library page and the prompt-preset picker sheet.
     - `PromptLibraryContent.kt` - prompt library (tabbed categories, card list, FAB, optional edit-sheet overlay, snackbar host slot). The top bar carries the **import** action; each card's footer line carries `used by N` plus Preview · Duplicate · Edit · overflow (Export + Delete), or Preview · Duplicate · Export on a read-only row. Two layout rules are load-bearing: the caption yields and the icon cluster never does, so the overflow — and with it the only route to Delete — survives font scale 200 %; and the top bar drops its subtitle rather than clipping its title at the same scale. An empty **library** (as opposed to an empty category) hides the tabs and the FAB and offers Import / New instead.
     - `PromptLibraryViewState.kt` - visual-state enum + prompt-row / editor state + category / variable tracking + the import/export callbacks.
+    - `PromptPresetPickerPreview.kt` - Preview fixtures for the prompt-preset picker.
     - `PromptPresetPickerSheet.kt` - modal preset picker by `NodeType` (Bundled / Mine tabs, searchable rows, tag filter).
+    - `SavePromptAsPresetDialog.kt` - Modal dialog capturing the metadata needed to persist the prompt currently being edited as a reusable preset.
+    - `SavePromptAsPresetPreview.kt` - Preview fixtures for the save-prompt-as-preset dialog.
   - `settings/` - the settings hub plus one content composable per category sub-screen (the flat single-screen `SettingsContent` was split into this stack).
     - `AboutSettingsContent.kt` - identity card, build info, licenses and the reset actions.
     - `BackgroundSettingsContent.kt` - background work, triggers, notifications and entry-surface bindings.
@@ -308,6 +323,7 @@ Paths below are relative to `src/main/java/app/knotwork/design/`.
     - `KnotworkMonoTextArea.kt` - multi-line monospace textarea (brand outline) for system instructions.
     - `KnotworkParamSlider.kt` - labelled numeric-parameter slider with value label, optional validation error, and (inside a settings screen) its own help glyph and explanation panel under the track.
     - `KnotworkProviderRow.kt` - cloud-provider row with optional Ollama-specific fields (base URL, model) and validation.
+    - `MemoryImportDialog.kt` - Strategy choice raised after a memory-import file parses.
     - `MemorySettingsContent.kt` - long-term-memory controls (extraction, retrieval thresholds, re-embed).
     - `ModelsSettingsContent.kt` - local model + inference backend and the cloud-provider list.
     - `PipelinesSettingsContent.kt` - pipeline / structured-output controls. Basic tier is the **Run limits** entry row, carrying the current step and token limits as its subtitle.
@@ -406,7 +422,10 @@ matters.
     - `ConsoleSearchAffordanceTest.kt` - Pins the console's Search action to the Logs tab.
     - `ConsoleSnapTest.kt` - Documents the discrete `ConsoleSnap` heights as preview-only fixtures.
   - `dialogs/` - the shared dialog shapes, currently the outcome family.
+    - `DialogsSnapshotTest.kt` - Roborazzi baselines for the two field-free dialogs that moved out of the settings screen.
     - `OutcomeDialogSnapshotTest.kt` - Roborazzi baselines for the `OutcomeDialog` family — the four import outcomes and the re-import question, in one shape.
+    - `SingleFieldDialogSnapshotTest.kt` - Roborazzi baselines for the shared single-field dialog.
+    - `SingleFieldDialogTest.kt` - Behaviour of the shared single-field dialog — the part a baseline cannot show.
   - `lists/` - list rows and their status mapping.
     - `ConnectionStatusTest.kt` - Pure-JVM mapping test for `ConnectionStatus.toStatus`.
     - `KnotworkListsSnapshotTest.kt` - Roborazzi snapshot baseline for `KnotworkListsCatalogContent` in both themes.
@@ -420,6 +439,8 @@ matters.
     - `NodeConfigValidationTest.kt` - Tests for `NodeConfigValidation` — covers happy path + every failure mode listed in `node-specs.md` §Validation rules.
     - `NodePortsTest.kt` - Pure-JVM tests for `NodePorts.forType` — the single source for the outbound-port enumeration per node type.
     - `PipelineEditorCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for `PipelineEditorCatalogContent` in both themes plus a reduced-motion variant that pins `FixedKnotworkA11y` so the NodeCard running pulse renders deterministically.
+  - `prompt/` - baselines for the prompt-facing components.
+    - `PromptPreviewSheetSnapshotTest.kt` - Roborazzi baselines for the prompt-preview sheet.
   - `topbar/` - top-bar actions whose behaviour outruns their appearance.
     - `JournalExportActionsBehaviourTest.kt` - Behaviour of the journal-export actions on both journal surfaces — the parts a Roborazzi baseline cannot show.
 - `foundations/` - the foundations catalog page — the surface that renders the tokens themselves.
@@ -436,6 +457,7 @@ matters.
     - `ChatHomeAccessibilityTest.kt` - Chat-home a11y audit.
     - `ChatHomeContentSnapshotTest.kt` - Roborazzi snapshot baseline for `ChatHomeContent` across every documented state of `compose/screens/README.md §C1`.
     - `HeroSnapshotTest.kt` - Roborazzi baselines for the README hero shots at the canonical pixel resolution promised in `README.md` (1080 × 2400, the de-facto-standard Pixel-class portrait viewport used by every modern Android-store marketing surface).
+    - `ReportResponseDialogSnapshotTest.kt` - Roborazzi baselines for the content-report dialog.
   - `chatarchive/` - the chat archive, including the font-scale-200 % layouts where the row sheds its decoration.
     - `ChatArchiveAccessibilityTest.kt` - Accessibility audit of the chat-archive surface.
     - `ChatArchiveContentSnapshotTest.kt` - Roborazzi baselines for the chat-archive surface across its documented states in both themes, plus the two font-scale-200 % layouts where the row sheds its decoration.
@@ -461,10 +483,15 @@ matters.
   - `pipelines/` - the pipeline library and preset manager, including the README hero shot.
     - `HeroSnapshotTest.kt` - Roborazzi baseline for the README "Pipeline library" hero shot at the canonical 1080 × 2400 resolution.
     - `PipelineLibraryContentSnapshotTest.kt` - Roborazzi snapshot baseline for `PipelineLibraryContent` across the 7 documented states (`compose/screens/README.md §C3 · Pipeline library`) in both themes.
+    - `PresetDialogsSnapshotTest.kt` - Roborazzi baselines for the save-as-preset form.
     - `PresetManagerSnapshotTest.kt` - Roborazzi baselines for the preset manager.
+    - `PresetPickerSnapshotTest.kt` - Roborazzi baselines for the preset picker.
   - `prompts/` - the prompt library and its per-card action cluster.
     - `PromptLibraryContentActionsTest.kt` - Behaviour tests for the prompt card's action cluster.
     - `PromptLibraryContentSnapshotTest.kt` - Roborazzi baseline for `PromptLibraryContent`.
+    - `PromptPresetPickerSnapshotTest.kt` - Roborazzi baselines for the prompt-preset picker.
+    - `SavePromptAsPresetFormTest.kt` - Pure-logic tests for the parsing and submit-gate helpers behind `SavePromptAsPresetDialog`.
+    - `SavePromptAsPresetSnapshotTest.kt` - Roborazzi baselines for the save-prompt-as-preset form.
   - `settings/` - the settings hub and its category sub-screens, including the hint affordance, the search surface, and the provider / run-limits details.
     - `HeroSnapshotTest.kt` - Roborazzi baseline for the README "Settings" hero shot at the canonical 1080 × 2400 resolution.
     - `ProviderDetailSnapshotTest.kt` - Roborazzi baselines for the provider detail screen.

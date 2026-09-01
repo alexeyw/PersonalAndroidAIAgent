@@ -427,7 +427,6 @@ Only Kotlin files appear inside the generated blocks.
     - `orchestrator/` - Tests for the pipeline-library surface.
       - `components/` - Tests for the pipeline-library components.
         - `PromptPresetPickerDialogTest.kt` - Pure-logic tests for the filter helper backing `PromptPresetPickerDialog`.
-        - `SavePromptAsPresetDialogTest.kt` - Pure-logic tests for the parsing / submit-gate helpers backing `SavePromptAsPresetDialog`.
       - `OrchestratorViewModelTest.kt` - Tests for OrchestratorViewModel.
       - `presets/` - Tests for the preset gallery and its graph-flow preview.
         - `GraphFlowPreviewTest.kt` - Unit tests for the preset graph-flow preview.

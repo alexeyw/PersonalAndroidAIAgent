@@ -46,8 +46,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.chips.KnotworkChipSize
 import app.knotwork.design.components.chips.KnotworkFilterChip
-import app.knotwork.design.components.controls.KnotworkField
-import app.knotwork.design.components.controls.KnotworkTextField
+import app.knotwork.design.components.dialogs.SingleFieldDialog
+import app.knotwork.design.components.dialogs.SingleFieldDialogUi
 import app.knotwork.design.components.topbar.KnotworkTopAppBarShell
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
@@ -405,22 +405,16 @@ private fun PresetCategoryToneUi.accent(): Color = when (this) {
  */
 @Composable
 private fun RenamePresetDialog(dialog: PresetRenameDialogUi, onDismiss: () -> Unit, onConfirm: (String) -> Unit) {
-    var name by remember(dialog.initialName) { mutableStateOf(dialog.initialName) }
-    val canConfirm = name.trim().isNotEmpty()
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(dialog.title) },
-        text = {
-            KnotworkField(label = dialog.label) {
-                KnotworkTextField(value = name, onValueChange = { name = it })
-            }
-        },
-        confirmButton = {
-            TextButton(enabled = canConfirm, onClick = { onConfirm(name) }) {
-                Text(dialog.confirmLabel)
-            }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(dialog.cancelLabel) } },
+    SingleFieldDialog(
+        ui = SingleFieldDialogUi(
+            title = dialog.title,
+            label = dialog.label,
+            initialValue = dialog.initialName,
+            confirmLabel = dialog.confirmLabel,
+            cancelLabel = dialog.cancelLabel,
+        ),
+        onDismiss = onDismiss,
+        onConfirm = onConfirm,
     )
 }
 
