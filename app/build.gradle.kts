@@ -2032,6 +2032,7 @@ val verifyVersionSources by tasks.registering(VerifyVersionSourcesTask::class) {
     readmeFile.set(file("$rootDir/README.md"))
     changelogFile.set(file("$rootDir/CHANGELOG.md"))
     securityFile.set(file("$rootDir/SECURITY.md"))
+    roadmapFile.set(file("$rootDir/docs/roadmap.md"))
     stampFile.set(layout.buildDirectory.file("reports/docs-links/version-sources-verified.txt"))
 }
 tasks.named("check") { dependsOn(verifyVersionSources) }

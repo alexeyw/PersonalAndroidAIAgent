@@ -16,7 +16,9 @@ package app.knotwork.android.buildtools
  *  - the link definition of that topmost release, which names the tag it shipped as;
  *  - the pre-release sentence in `README.md` (\"currently at **version X**\");
  *  - every version-like token in `SECURITY.md` — its prose, the line it says
- *    fixes land on, and both cells of the supported-versions table.
+ *    fixes land on, and both cells of the supported-versions table;
+ *  - the pre-release **line** named at the top of `docs/roadmap.md`, which says
+ *    which release the "where the project is today" list describes.
  *
  * Every one of those is edited by hand at release time, and nothing noticed when
  * one was missed. The release checklist did not even mention the README badge.
@@ -62,6 +64,9 @@ object VersionSourcesChecker {
     /** The pre-release sentence in `README.md`, which names the version in prose. */
     private val README_PROSE = Regex("""currently at \*\*version ([0-9][0-9A-Za-z.\-]*)\*\*""")
 
+    /** The pre-release line named at the top of `docs/roadmap.md`. */
+    private val ROADMAP_LINE = Regex("""current pre-release line \(`(\d+\.\d+\.x)`\)""")
+
     /**
      * Any version-like token: `1.2.3`, `1.2.x`, with an optional suffix.
      *
@@ -79,10 +84,17 @@ object VersionSourcesChecker {
      * @param readme The full text of `README.md`.
      * @param changelog The full text of `CHANGELOG.md`.
      * @param security The full text of `SECURITY.md`.
+     * @param roadmap The full text of `docs/roadmap.md`.
      * @return One message per disagreement, empty when every source agrees.
      *   Each message names both values and the file to edit.
      */
-    fun check(versionName: String, readme: String, changelog: String, security: String): List<String> {
+    fun check(
+        versionName: String,
+        readme: String,
+        changelog: String,
+        security: String,
+        roadmap: String,
+    ): List<String> {
         val declared = versionName.trim()
         if (declared.isEmpty()) {
             return listOf("The build declares no `versionName`; set it in `app/build.gradle.kts`.")
@@ -105,6 +117,12 @@ object VersionSourcesChecker {
         }
         compare(violations, declared, README_PROSE.find(readme)?.groupValues?.get(1), PROSE_SOURCE)
         violations += checkSecurity(declared, security)
+        compare(
+            violations,
+            minorLineOf(declared) ?: declared,
+            ROADMAP_LINE.find(roadmap)?.groupValues?.get(1),
+            ROADMAP_SOURCE,
+        )
         return violations
     }
 
@@ -123,7 +141,7 @@ object VersionSourcesChecker {
      * @return One message per disagreeing token, deduplicated.
      */
     private fun checkSecurity(declared: String, security: String): List<String> {
-        val minorLine = declared.split(".").take(2).takeIf { it.size == 2 }?.joinToString(".", postfix = ".x")
+        val minorLine = minorLineOf(declared)
         val tokens = VERSION_TOKEN.findAll(security).map { it.groupValues[1] }.toList()
         if (tokens.isEmpty()) {
             return listOf(
@@ -157,6 +175,19 @@ object VersionSourcesChecker {
     }
 
     /**
+     * The minor line a version belongs to: `0.9.0` -> `0.9.x`.
+     *
+     * Two documents talk about the *line* rather than the release — the
+     * supported-versions table and the roadmap's opening sentence — so the
+     * comparison for those is against this, not against the full version.
+     *
+     * @param declared The version the build declares.
+     * @return The minor line, or `null` for a version with no minor component.
+     */
+    private fun minorLineOf(declared: String): String? =
+        declared.split(".").take(2).takeIf { it.size == 2 }?.joinToString(".", postfix = ".x")
+
+    /**
      * One hand-written copy of the version number.
      *
      * @property description What and where it is, for the failure message.
@@ -180,6 +211,12 @@ object VersionSourcesChecker {
     private val PROSE_SOURCE = Source(
         "The pre-release sentence in `README.md`",
         "Update \"currently at **version …**\" in the *Pre-release notice*; see `docs/release.md`.",
+    )
+
+    /** The pre-release line the roadmap says it is describing. */
+    private val ROADMAP_SOURCE = Source(
+        "The pre-release line in `docs/roadmap.md`",
+        "Update \"The current pre-release line (`X.Y.x`)\" to the shipping line.",
     )
 
     /** The compare link that says which tag the unreleased range starts from. */

@@ -250,7 +250,9 @@ details.
   notification that was never posted. Rather than give each a fluent sentence
   about behaviour the build did not have, they were recorded as *behaviour not
   shipped* — and then closed, before this release, by wiring them up or removing
-  them. See the two entries below.
+  them. See *The three sampling sliders now reach the on-device model* under
+  **Added**, and *Four settings that could not be made true are gone* under
+  **Removed**.
 
 - **The explanations that used to sit under a row are gone from that slot.**
   Small muted text under a label is where the app shows what a row is *set to*

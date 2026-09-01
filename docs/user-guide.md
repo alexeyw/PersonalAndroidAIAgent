@@ -996,8 +996,8 @@ and the verdict:
   asks** first (see [When a run reaches a limit](#when-a-run-reaches-a-limit)),
   and settles here only when you answer *Stop the run* or the response window
   closes with the question unanswered. Until the run settles it reads
-  **Running…**. If the run stopped
-  to ask you something, a second line says what became of the request —
+  **Running…**. If the run stopped to ask you something, a second line says
+  what became of the request —
   **You approved it**, **You denied it**, **You answered it**, **Waiting for
   your response**, **No response before the window closed**, or **The request
   never reached you** — and adds *from the notification* (or *in the

@@ -929,7 +929,9 @@ number is *repeated*, for humans, in places no build step reads:
 - the `[Unreleased]` compare link at the foot of `CHANGELOG.md`;
 - the link definition of that topmost release, which names the tag it shipped as;
 - every version in `SECURITY.md` — its prose, the line it says fixes land on,
-  and both cells of the supported-versions table.
+  and both cells of the supported-versions table;
+- the pre-release **line** named at the top of `docs/roadmap.md`, which says
+  which release the "where the project is today" list describes.
 
 Each is edited by hand at release time and nothing noticed when one was missed.
 The release checklist did not even mention the badge — which is the version
@@ -948,12 +950,22 @@ as a closed subject, which is worse than no rule, because nobody greps a
 question that looks answered.
 
 `SECURITY.md` is checked **wholesale** — every version-like token in it must be
-the shipping version or its minor line (`0.9.0` or `0.9.x`). That is a stronger
+the shipping version or its minor line (`X.Y.Z` or `X.Y.x`). That is a stronger
 claim than one pattern per sentence, and it is true of this document. It is not
 true of `README.md`, which legitimately discusses older releases (the one-time
 signing change at `0.7.0`), so the README is matched by named patterns only.
 Naming a historic version in `SECURITY.md` therefore means revisiting this rule
 on purpose, which is the intended cost.
+
+Two documents name the *line* rather than the release — the supported-versions
+table and the roadmap's opening sentence — so those are compared against
+`X.Y.x`, which is what makes a patch release pass without touching either.
+
+Deliberately outside the rule: `PRIVACY.md` says the policy applies "from
+version 0.7.1 onward", which is a dated statement about the past and must not
+follow the build; and `README.md`'s account of the one-time signing change
+names the releases it happened at. Both are versions that are *supposed* to go
+out of date.
 
 `versionCode` is deliberately out of scope. Its agreement with the store
 changelog file is already held by `StoreMetadataTest`, and a second, separately
@@ -966,14 +978,17 @@ badge, a changelog heading ahead of the build, a stale `[Unreleased]` compare
 link, a release heading whose link definition was deleted, and a `versionName`
 bumped with nothing else — which reported all three remaining sources at once.
 
-The two sources added later were observed failing on **a real drift rather than
-a mutation**: with `versionName` cut to the shipping version and `SECURITY.md`
+The sources added later were observed failing on **a real drift rather than a
+mutation**: with `versionName` cut to the shipping version and `SECURITY.md`
 untouched, the extended gate failed naming both stale copies, which is exactly
 the drift the previous release had shipped unnoticed. It was then fixed and the
-gate went green.
+gate went green. The roadmap line was found the same way one step later — in the
+diff of the change that added the other two — and is the reason this list is
+worth keeping honest rather than declaring finished: a rule that has just been
+widened is exactly when its author is most sure it is complete.
 
 The pure logic is unit-tested in `buildSrc` (`VersionSourcesCheckerTest`), with
-a case per source, one asserting that the supported *line* (`0.9.x`) is accepted
+a case per source, one asserting that the supported *line* (`X.Y.x`) is accepted
 rather than read as a stale version, and one asserting that a `SECURITY.md`
 naming no version at all fails.
 
@@ -1042,8 +1057,8 @@ which is exactly the edit that produces an orphan.
 
 ### Observed failing
 
-The gate's first run over the committed tree found **four** real instances, all
-the same editing accident and none of which had looked like one in review: a new
+**Four** real instances existed in the tree when this check was written, all the
+same editing accident and none of which had looked like one in review: a new
 function inserted **between** an existing KDoc and the function it described.
 The old doc stayed where it was, the new function kept its own, and the original
 function silently lost its documentation — in one case the entire migration

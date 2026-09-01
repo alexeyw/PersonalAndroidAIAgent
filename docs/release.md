@@ -568,12 +568,16 @@ maintainer's part is the version bump, the tag, and the decision to publish.
    opening sentence, the line saying which line fixes land on, and both cells of
    the supported-versions table. A stale table there tells a reporter their
    release is unsupported, which is the most expensive of these to get wrong.
-7. Land all of it on `main` through the normal review path.
+7. On a **minor** bump only, update the pre-release line at the top of
+   [`docs/roadmap.md`](roadmap.md) ("The current pre-release line (`X.Y.x`)").
+   A patch release leaves it correct, and the gate compares against the line
+   rather than the full version for exactly that reason.
+8. Land all of it on `main` through the normal review path.
 
-Steps 1, 2, 4, 5 and 6 are held together by `./gradlew check`:
+Steps 1, 2, 4, 5, 6 and 7 are held together by `./gradlew check`:
 `:app:verifyVersionSources` fails the build when the README badge, the README
-prose, the topmost changelog heading, either compare link, or any version in
-`SECURITY.md` disagrees with the declared `versionName`. Do them in one commit
+prose, the topmost changelog heading, either compare link, any version in
+`SECURITY.md`, or the roadmap line disagrees with the declared `versionName`. Do them in one commit
 and the gate is invisible; skip one and it names the file and both values. See
 [`static-analysis.md`](static-analysis.md#version-number-agreement-guard-verifyversionsources).
 
