@@ -28,6 +28,12 @@ import org.robolectric.annotation.GraphicsMode
  * distinction is the field, not the dialog, and the preset delete confirmation
  * has been captured whole for the same reason all along.
  *
+ * The confirm dialog is captured in both tones, and that pair is the reason it
+ * exists: the sites it replaced were split between tinting the destructive
+ * action and not tinting it, so "this deletes something" was a signal a reader
+ * could only sometimes rely on. One picture of one tone would prove nothing
+ * about the distinction.
+ *
  * For the import dialog the warning state is the one worth having. The dialog
  * is the last thing a user sees before choosing between merging into their
  * memory and wiping it, and the warnings are what say the file may not match
@@ -39,6 +45,17 @@ import org.robolectric.annotation.GraphicsMode
 class DialogsSnapshotTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+
+    @Test
+    fun confirm_light() = snapshot("confirm", dark = false) { Confirm(destructive = false) }
+
+    @Test
+    fun confirm_dark() = snapshot("confirm", dark = true) { Confirm(destructive = false) }
+
+    @Test
+    fun confirm_destructive_light() = snapshot("confirm_destructive", dark = false) {
+        Confirm(destructive = true)
+    }
 
     @Test
     fun single_choice_light() = snapshot("single_choice", dark = false) { SingleChoice() }
@@ -56,6 +73,25 @@ class DialogsSnapshotTest {
                 "This file was written by a newer version of the app; some fields may be ignored.",
                 "It was embedded with a different provider (gecko-110), so search quality may differ.",
             ),
+        )
+    }
+
+    @Composable
+    private fun Confirm(destructive: Boolean) {
+        ConfirmDialog(
+            ui = ConfirmDialogUi(
+                title = if (destructive) "Delete this conversation?" else "Clear the console?",
+                body = if (destructive) {
+                    "Its messages and the runs behind them go with it. This cannot be undone."
+                } else {
+                    "The log is cleared for this session. Nothing that already ran is affected."
+                },
+                confirmLabel = if (destructive) "Delete" else "Clear",
+                cancelLabel = "Cancel",
+                destructive = destructive,
+            ),
+            onConfirm = {},
+            onDismiss = {},
         )
     }
 
