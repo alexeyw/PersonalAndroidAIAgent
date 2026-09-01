@@ -182,6 +182,7 @@ internal fun mockChatHomeViewModel(
     every { vm.voice } returns voiceDelegate
     val attachmentDelegate = mockk<ChatHomeAttachmentDelegate>(relaxed = true)
     every { attachmentDelegate.attachmentErrorEvents } returns MutableSharedFlow()
+    every { attachmentDelegate.attachmentReplacedEvents } returns MutableSharedFlow()
     every { vm.attachments } returns attachmentDelegate
     val transferDelegate = mockk<ChatHomeTransferDelegate>(relaxed = true)
     every { transferDelegate.exportEvents } returns MutableSharedFlow()
