@@ -31,16 +31,20 @@ import org.robolectric.annotation.GraphicsMode
  * `weight(fill = false)` the title takes the whole row and the badge collapses
  * to a one-character-per-line sliver.
  *
- * **The rename dialog has no baseline, and this is not an oversight.** A text
- * field inside an `AlertDialog` never reaches idle here — `setContent` spins for
- * 60 seconds and Espresso gives up with "Compose did not get idle". Measured
- * rather than guessed: it happens with the plain Material `OutlinedTextField`
- * too, so it is the harness and not a component of ours, and no existing
- * baseline in this module captures a field inside a dialog either. Freezing the
- * test clock does not help — the loop is in composition, not in an animation.
- * The delete confirmation, which carries no field, is captured in both themes.
- * Do not re-add the rename capture without first making a field-in-dialog
- * settle; the fixture is kept for `@Preview` use.
+ * **The rename dialog is captured as a body, not as a dialog.** A text field
+ * inside an `AlertDialog` really does never reach idle here — `setContent` spins
+ * until Espresso gives up with `AppNotIdleException`, it reproduces with the
+ * plain Material `OutlinedTextField` too, and neither the v2 compose rule nor a
+ * clock frozen before `setContent` changes it. All of that was measured.
+ *
+ * What did not follow was the conclusion drawn from it: that the dialog could
+ * not be photographed at all. The **host** is what never settles, not the field,
+ * so `RenamePresetDialogBody` is captured without the `AlertDialog` around it —
+ * exactly the split `NodeConfigSheet` already uses because a `ModalBottomSheet`
+ * does not lay out here either. The wrapper adds a title and two buttons, and
+ * those are exercised behaviourally.
+ *
+ * The delete confirmation, which carries no field, is still captured whole.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -97,6 +101,24 @@ class PresetManagerSnapshotTest {
     @Test
     fun preset_manager_font_scale_200_light() = snapshot("fontscale200", dark = false, fontScale = FONT_SCALE_200) {
         PresetManagerContent(state = PresetManagerPreview.mine())
+    }
+
+    @Test
+    fun preset_manager_rename_body_light() = snapshot("rename_body", dark = false) {
+        RenamePresetDialogBody(
+            dialog = PresetManagerPreview.renaming().rename!!,
+            name = "Research assistant",
+            onNameChange = {},
+        )
+    }
+
+    @Test
+    fun preset_manager_rename_body_dark() = snapshot("rename_body", dark = true) {
+        RenamePresetDialogBody(
+            dialog = PresetManagerPreview.renaming().rename!!,
+            name = "Research assistant",
+            onNameChange = {},
+        )
     }
 
     private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {

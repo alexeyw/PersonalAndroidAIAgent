@@ -410,11 +410,7 @@ private fun RenamePresetDialog(dialog: PresetRenameDialogUi, onDismiss: () -> Un
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(dialog.title) },
-        text = {
-            KnotworkField(label = dialog.label) {
-                KnotworkTextField(value = name, onValueChange = { name = it })
-            }
-        },
+        text = { RenamePresetDialogBody(dialog = dialog, name = name, onNameChange = { name = it }) },
         confirmButton = {
             TextButton(enabled = canConfirm, onClick = { onConfirm(name) }) {
                 Text(dialog.confirmLabel)
@@ -422,6 +418,33 @@ private fun RenamePresetDialog(dialog: PresetRenameDialogUi, onDismiss: () -> Un
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(dialog.cancelLabel) } },
     )
+}
+
+/**
+ * The rename dialog's body, without the `AlertDialog` around it.
+ *
+ * This capture was previously declared impossible. The note above this suite's
+ * sibling test said a text field inside an `AlertDialog` never reaches idle
+ * under Robolectric — which is true, and re-measured — and concluded the dialog
+ * could not be photographed. The conclusion did not follow: the **host** is what
+ * never settles, not the field, and the same split `NodeConfigSheet` uses to get
+ * around `ModalBottomSheet` works here too.
+ *
+ * @param dialog Resolved copy and the initial name.
+ * @param name Current value of the field.
+ * @param onNameChange The field was edited.
+ * @param modifier Optional layout modifier.
+ */
+@Composable
+fun RenamePresetDialogBody(
+    dialog: PresetRenameDialogUi,
+    name: String,
+    onNameChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    KnotworkField(label = dialog.label, modifier = modifier) {
+        KnotworkTextField(value = name, onValueChange = onNameChange)
+    }
 }
 
 /** Root test tag of the preset manager surface. */
