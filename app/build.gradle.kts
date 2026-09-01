@@ -15,6 +15,7 @@ import app.knotwork.android.buildtools.StoreListingLengthChecker
 import app.knotwork.android.buildtools.VerifyDocLinksTask
 import app.knotwork.android.buildtools.VerifyFileMapTask
 import app.knotwork.android.buildtools.VerifyMermaidDiagramsTask
+import app.knotwork.android.buildtools.VerifyNoOrphanedKdocTask
 import app.knotwork.android.buildtools.VerifyVersionSourcesTask
 import com.android.build.api.artifact.SingleArtifact
 import dev.detekt.gradle.Detekt
@@ -866,6 +867,42 @@ val checkNoInternalFqn by tasks.registering {
 }
 tasks.named("check") { dependsOn(checkNoInternalFqn) }
 
+// Orphaned KDoc gate.
+//
+// Kotlin attaches a doc block to the declaration that follows it, and to no
+// other. Four blocks in this codebase documented nothing: in each case a
+// function had been inserted *between* an existing doc block and the function
+// it described, so the doc stayed put, the new function kept its own, and the
+// original silently lost its documentation — in one case the entire migration
+// policy of the Room database. Every individual line of those diffs was
+// correct, which is why review never caught them.
+//
+// Typed rather than ad-hoc for the reasons the file-map pair records below:
+// configuration-cache compatibility, and a declared output so `check` can skip
+// it while no source has changed.
+val verifyNoOrphanedKdoc by tasks.registering(VerifyNoOrphanedKdocTask::class) {
+    group = "verification"
+    description = "Fails the build if a KDoc block documents no declaration."
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+    sources.from(
+        // androidTest included deliberately: `check` neither runs nor compiles
+        // that source set, so a doc block orphaned there would go unseen until
+        // the separate instrumented job — and this check only reads text.
+        listOf(
+            "src/main/java",
+            "src/main/kotlin",
+            "src/test/java",
+            "src/test/kotlin",
+            "src/androidTest/java",
+            "src/androidTest/kotlin",
+        ).map { root ->
+            fileTree("$projectDir/$root") { include("**/*.kt") }
+        },
+    )
+    stampFile.set(layout.buildDirectory.file("reports/kdoc/no-orphans.txt"))
+}
+tasks.named("check") { dependsOn(verifyNoOrphanedKdoc) }
+
 // Browser pipeline-editor constant sync automation.
 //
 // `pipeline-editor.html` mirrors a slice of the Android domain (node types,
@@ -1273,6 +1310,16 @@ val fileMapSpecs = listOf(
         blockId = "FILE_MAP",
         roots = listOf(FileMapSpec.Root("catalog/src/main/java/app/knotwork/design")),
         baselineKey = "catalog",
+    ),
+    FileMapSpec(
+        // The catalog's test tree used to be prose beside a generated block: 42
+        // entries describing 83 files, verified by nothing. That is the exact
+        // shape the generated maps exist to remove — a map covering half its
+        // directory does not read as stale, it reads as complete.
+        mapPath = "catalog/FILE_MAP.md",
+        blockId = "FILE_MAP_TESTS",
+        roots = listOf(FileMapSpec.Root("catalog/src/test/java/app/knotwork/design")),
+        baselineKey = "catalog-test",
     ),
 )
 

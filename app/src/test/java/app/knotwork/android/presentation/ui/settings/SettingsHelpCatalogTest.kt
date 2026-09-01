@@ -150,7 +150,6 @@ class SettingsHelpCatalogTest {
         )
     }
 
-    /** Every row that carries an explanation, paired with its anchor. */
     /**
      * Every row that carries an explanation, paired with its string resource —
      * `NotShipped` rows included, since they carry text and render a glyph

@@ -99,6 +99,25 @@ object AppModule {
         )
 
     /**
+     * Provides the deferred SQLCipher open-helper factory as its own singleton so the
+     * user-confirmed data wipe ([app.knotwork.android.data.local.DatabaseResetServiceImpl])
+     * can run inside [DeferredPassphraseOpenHelperFactory.runExclusive], serialized against
+     * every concurrent database open.
+     *
+     * sqlcipher-android retains the passphrase array for the helper's lifetime (it re-keys
+     * every pooled connection from it — unlike the legacy android-database-sqlcipher, it never
+     * zeroes the array); the provider hands over a fresh copy, so the retained array never
+     * aliases the stored value.
+     */
+    @Provides
+    @Singleton
+    fun provideDeferredPassphraseOpenHelperFactory(
+        passphraseProvider: EncryptedDbPassphraseProvider,
+    ): DeferredPassphraseOpenHelperFactory = DeferredPassphraseOpenHelperFactory(passphraseProvider) { passphrase ->
+        SupportOpenHelperFactory(passphrase)
+    }
+
+    /**
      * Provides the singleton instance of the Room Database.
      *
      * The database is encrypted at rest via SQLCipher. A random 32-byte passphrase is stored
@@ -128,25 +147,6 @@ object AppModule {
      * real database open, where `AppInitializationUseCase` catches the failure and routes it to
      * the splash recovery screen.
      */
-    /**
-     * Provides the deferred SQLCipher open-helper factory as its own singleton so the
-     * user-confirmed data wipe ([app.knotwork.android.data.local.DatabaseResetServiceImpl])
-     * can run inside [DeferredPassphraseOpenHelperFactory.runExclusive], serialized against
-     * every concurrent database open.
-     *
-     * sqlcipher-android retains the passphrase array for the helper's lifetime (it re-keys
-     * every pooled connection from it — unlike the legacy android-database-sqlcipher, it never
-     * zeroes the array); the provider hands over a fresh copy, so the retained array never
-     * aliases the stored value.
-     */
-    @Provides
-    @Singleton
-    fun provideDeferredPassphraseOpenHelperFactory(
-        passphraseProvider: EncryptedDbPassphraseProvider,
-    ): DeferredPassphraseOpenHelperFactory = DeferredPassphraseOpenHelperFactory(passphraseProvider) { passphrase ->
-        SupportOpenHelperFactory(passphrase)
-    }
-
     @Provides
     @Singleton
     fun provideAppDatabase(
