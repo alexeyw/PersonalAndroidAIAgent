@@ -91,12 +91,6 @@ class ProviderDetailSnapshotTest {
         ProviderDetailContent(state = SettingsPreview.providerDetail())
     }
 
-    /**
-     * The retry policy sits below the fold on a 760 dp screen. Captured on a
-     * taller device rather than by scrolling: the section is static, and without
-     * this it has no baseline at all — which is precisely how it grew its own
-     * visual language the first time.
-     */
     /** The retry section's hint open — the panel has to have a baseline too. */
     @Test
     @Config(sdk = [36], qualifiers = "w360dp-h1400dp-xhdpi")
@@ -104,6 +98,12 @@ class ProviderDetailSnapshotTest {
         ProviderDetailContent(state = SettingsPreview.providerDetail())
     }
 
+    /**
+     * The retry policy sits below the fold on a 760 dp screen. Captured on a
+     * taller device rather than by scrolling: the section is static, and without
+     * this it has no baseline at all — which is precisely how it grew its own
+     * visual language the first time.
+     */
     @Test
     @Config(sdk = [36], qualifiers = "w360dp-h1400dp-xhdpi")
     fun provider_detail_retry_light() = snapshot("retry", dark = false) {

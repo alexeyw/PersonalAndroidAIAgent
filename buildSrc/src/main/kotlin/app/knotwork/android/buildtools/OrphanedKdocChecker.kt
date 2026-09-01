@@ -153,10 +153,13 @@ object OrphanedKdocChecker {
      * Whether [trimmed] begins a top-level declaration, after which any further
      * KDoc necessarily belongs to something inside it.
      *
-     * Annotations and modifiers are deliberately **not** treated as the start:
-     * they may precede a declaration whose own KDoc sits above them, and
-     * treating `@JvmInline` as "the file body has begun" would report that
-     * perfectly ordinary shape.
+     * **Annotations** are deliberately not treated as the start, while
+     * **modifiers** are. The asymmetry is not an oversight: an annotation may
+     * sit between a declaration's own KDoc and the declaration itself — every
+     * Hilt provider in this codebase is written that way — so treating
+     * `@Provides` as "the body has begun" would report each of them. A modifier
+     * cannot appear on its own: a line beginning `internal fun` or `sealed
+     * interface` *is* the declaration.
      */
     private fun isDeclarationStart(trimmed: String): Boolean =
         DECLARATION_KEYWORDS.any { trimmed.startsWith(it) }

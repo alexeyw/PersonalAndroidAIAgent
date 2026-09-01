@@ -870,12 +870,18 @@ tasks.named("check") { dependsOn(checkNoInternalFqn) }
 // Orphaned KDoc gate.
 //
 // Kotlin attaches a doc block to the declaration that follows it, and to no
-// other. Four blocks in this codebase documented nothing: in each case a
-// function had been inserted *between* an existing doc block and the function
-// it described, so the doc stayed put, the new function kept its own, and the
-// original silently lost its documentation — in one case the entire migration
-// policy of the Room database. Every individual line of those diffs was
-// correct, which is why review never caught them.
+// other. Nine blocks in this codebase documented nothing, and every one of them
+// was the same accident: a function had been inserted *between* an existing
+// doc block and the function it described, so the doc stayed put, the new
+// function kept its own, and the original silently lost its documentation — in
+// one case the entire migration policy of the Room database. Every individual
+// line of those diffs was correct, which is why review never caught them.
+//
+// Only four were found by hand. Three more turned up the first time this gate
+// ran — the hand sweep had looked for `*/` on a line of its own, and a
+// single-line block closes on the line carrying its text — and two more the
+// first time it ran against `:catalog`. That progression is the argument for a
+// gate rather than a one-off cleanup.
 //
 // Typed rather than ad-hoc for the reasons the file-map pair records below:
 // configuration-cache compatibility, and a declared output so `check` can skip

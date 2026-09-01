@@ -1,4 +1,5 @@
 import app.knotwork.android.buildtools.LintBaselineGuard
+import app.knotwork.android.buildtools.VerifyNoOrphanedKdocTask
 import dev.detekt.gradle.Detekt
 
 plugins {
@@ -148,3 +149,27 @@ dependencies {
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
 }
+
+// Orphaned KDoc gate — the catalog half. See the fuller note in
+// `app/build.gradle.kts`; the short version is that Kotlin attaches a doc block
+// to the declaration that follows it and to no other, so two blocks back to back
+// mean the first documents nothing.
+//
+// Registered here as well as in `:app` deliberately. Every instance found when
+// the gate was written happened to be in `:app`, but this module is where the
+// accident is *most* likely: it is a design system, its declarations carry the
+// longest KDoc in the repository, and components are routinely inserted next to
+// their neighbours. A gate that covered only the module the first bugs came
+// from would be a gate built for the past.
+val verifyNoOrphanedKdoc by tasks.registering(VerifyNoOrphanedKdocTask::class) {
+    group = "verification"
+    description = "Fails the build if a KDoc block documents no declaration."
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+    sources.from(
+        listOf("src/main/java", "src/main/kotlin", "src/test/java", "src/test/kotlin").map { root ->
+            fileTree("$projectDir/$root") { include("**/*.kt") }
+        },
+    )
+    stampFile.set(layout.buildDirectory.file("reports/kdoc/no-orphans.txt"))
+}
+tasks.named("check") { dependsOn(verifyNoOrphanedKdoc) }
