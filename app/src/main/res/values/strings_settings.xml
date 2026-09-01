@@ -18,19 +18,20 @@
     <string name="settings_restrictions_approve_all">All</string>
     <string name="settings_restrictions_approve_sensitive">Sensitive +</string>
     <string name="settings_restrictions_approve_never">Never</string>
-    <string name="settings_restrictions_block_destructive_subtitle">schedule_task · delegate_task · file write — agent refuses these.</string>
-    <string name="settings_restrictions_block_network_subtitle">LiteRT runs offline · cloud providers gated server-side.</string>
 
     <!-- LLM parameters card -->
     <string name="settings_row_temperature_title">Temperature</string>
     <string name="settings_row_top_k_title">Top-K</string>
     <string name="settings_row_top_p_title">Top-P</string>
-    <string name="settings_row_repetition_penalty_title">Repetition penalty</string>
     <string name="settings_row_max_context_title">Max context</string>
     <string name="settings_row_resume_window_title">Resume window</string>
     <string name="settings_row_approval_window_title">Approval window</string>
     <string name="settings_row_voice_length_title">Voice input length</string>
-    <string name="settings_tool_usage_helper">Extra guidance, prepended to tool-enabled prompts, on when and how to call tools.</string>
+    <string name="settings_row_tool_call_timeout_title">Approval wait</string>
+    <string name="settings_row_workspace_max_file_size_title">Largest file</string>
+    <string name="settings_row_workspace_max_total_title">Workspace size limit</string>
+    <string name="settings_row_workspace_read_budget_title">Single read budget</string>
+    <string name="settings_row_http_tool_max_response_title">Largest web response</string>
     <string name="settings_pipeline_nesting_depth_title">Max nesting depth</string>
     <string name="settings_pipeline_structured_repairs_title">Structured-output repairs</string>
     <string name="settings_memory_summary_limit_title">Memory summary size</string>
@@ -61,8 +62,6 @@
     <string name="settings_memory_stat_avg_score">Avg score</string>
     <string name="settings_memory_stat_dash">—</string>
     <string name="settings_memory_auto_extract_title">Auto-extract from conversations</string>
-    <string name="settings_memory_auto_extract_subtitle">After each chat, the agent saves durable facts you state (preferences, events, relationships) to long-term memory. Small talk is ignored.</string>
-    <string name="settings_memory_auto_summarize_title">Auto-summarize threshold</string>
 
     <!-- Memory tuning sliders. -->
     <string name="settings_memory_param_top_k_title">Search results (top-K)</string>
@@ -76,11 +75,9 @@
 
     <!-- Chat-history compression toggle. -->
     <string name="settings_memory_history_compression_title">Compress long chat history</string>
-    <string name="settings_memory_history_compression_subtitle">Summarizes older messages in long sessions so they keep fitting the on-device context window.</string>
 
     <!-- Background-compaction toggle. -->
     <string name="settings_memory_compaction_title">Background compaction</string>
-    <string name="settings_memory_compaction_subtitle">Clusters stale, unpinned chunks into summaries while the device is charging and idle.</string>
 
     <string name="settings_memory_embedding_title">Embedding model</string>
 
@@ -129,7 +126,7 @@
     <string name="settings_memory_import_failed">Import failed: %1$s</string>
 
     <!-- Restart-required banner -->
-    <string name="settings_restart_required_message">Backend change requires restart.</string>
+    <string name="settings_restart_required_message">This change needs a restart to take effect.</string>
 
     <!-- Destructive typed-confirm dialog -->
     <string name="settings_destructive_clear_memory_title">Clear all memory?</string>
@@ -140,9 +137,6 @@
     <string name="settings_reset_button">Settings reset to defaults.</string>
 
     <!-- Notification channel copy -->
-    <string name="notifications_long_running_channel_name">Long-running tasks</string>
-    <string name="notifications_long_running_channel_description">Background pipeline-runtime updates.</string>
-    <string name="notifications_long_running_body" tools:ignore="PluralsCandidate">Still running · %1$d s elapsed.</string>
     <!-- Mirrors the hardcoded channel name registered by AgentForegroundService so a
          headless-process registration by AgentWorker does not rename the user-visible channel. -->
     <string name="notifications_agent_foreground_channel_name">Agent Service</string>
@@ -175,9 +169,13 @@
     <string name="settings_provider_picker_title">Add provider</string>
     <string name="settings_provider_detail_title">%1$s provider</string>
     <string name="settings_cloud_retry_title">Retry policy</string>
-    <string name="settings_cloud_retry_subtitle">Applies to all cloud providers and cloud embeddings. Transient failures (rate limits, 5xx, timeouts) are retried with exponential backoff; authentication errors are not.</string>
-    <string name="settings_cloud_retry_attempts_label">Max attempts: %1$d (1 disables retries)</string>
-    <string name="settings_cloud_retry_delay_label">Base delay: %1$d ms</string>
+    <string name="settings_cloud_retry_attempts_title">Max attempts</string>
+    <string name="settings_cloud_retry_delay_title">Base delay</string>
+    <string name="settings_cloud_retry_delay_value">%1$d ms</string>
+    <!-- Retry-policy explanations, opened from the section and slider glyphs. -->
+    <string name="settings_cloud_retry_hint">Applies to every cloud provider and cloud embeddings. Rate limits, 5xx and timeouts are retried; a bad key never is.</string>
+    <string name="settings_cloud_retry_attempts_hint">How many times one failed call is tried again before it gives up. Set it to 1 and a failure is reported immediately.</string>
+    <string name="settings_cloud_retry_delay_hint">The wait before the first retry; each further one waits longer. Short reacts faster, long is kinder to a rate limit.</string>
 
     <!-- Entry-surface pipeline bindings (Background category) -->
     <string name="settings_pipeline_not_set">Not set</string>

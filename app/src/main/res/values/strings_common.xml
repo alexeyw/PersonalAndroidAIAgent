@@ -36,7 +36,7 @@
     <string name="more_row_memory">Memory</string>
     <string name="more_row_models">Models</string>
     <string name="more_row_prompts">Prompt library</string>
-    <string name="more_row_task_monitor">Active tasks</string>
+    <string name="more_row_task_monitor">Tasks</string>
     <string name="more_row_monitoring">Live metrics</string>
     <string name="more_row_settings">Settings</string>
     <string name="more_row_about">About</string>
@@ -53,7 +53,15 @@
     <string name="more_row_triggers">Triggers</string>
     <string name="more_triggers_subtitle">Run pipelines on a schedule or device event</string>
     <string name="more_subtitle">Everything else</string>
-    <string name="more_search_cd">Search</string>
+    <!-- More tab section headings. Order is "why you opened More, most often
+         first"; App is last because that is where Android users look for
+         Settings. Diagnostics is deliberately not a section: only Live metrics
+         would live in it, and a section of one is a heading pretending to be
+         structure. -->
+    <string name="more_section_automation">AUTOMATION</string>
+    <string name="more_section_content">YOUR CONTENT</string>
+    <string name="more_section_blocks">BUILDING BLOCKS</string>
+    <string name="more_section_app">APP</string>
 
     <!-- About screen stub -->
     <string name="about_title">About</string>
@@ -62,4 +70,19 @@
     <!-- Prompt preview bottom sheet (reused across orchestrator + prompts) -->
     <string name="prompt_preview_title">Prompt preview</string>
     <string name="prompt_preview_variable_not_found">Variable not found</string>
+
+    <!-- Journal export (shared by the trigger journal and the external-request
+         journal: one operation, so one set of words for its outcomes). -->
+    <string name="journal_export_chooser_title">Share journal</string>
+    <string name="journal_export_share_failed">No app on this phone can receive the file</string>
+    <string name="journal_export_save_failed">Couldn\'t save the journal</string>
+    <!-- Distinct from the two above: nothing was produced to save or share. -->
+    <string name="journal_export_render_failed">Couldn\'t read the journal</string>
+    <!-- The count is in the message on purpose: an export of an empty journal
+         produces a real file, so only the number tells the reader there was
+         nothing in it. -->
+    <plurals name="journal_export_saved">
+        <item quantity="one">Saved %1$d entry</item>
+        <item quantity="other">Saved %1$d entries</item>
+    </plurals>
 </resources>

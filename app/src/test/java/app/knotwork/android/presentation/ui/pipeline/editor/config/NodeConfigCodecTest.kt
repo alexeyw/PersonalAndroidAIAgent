@@ -6,11 +6,14 @@ import app.knotwork.design.components.pipelineeditor.ClarificationConfig
 import app.knotwork.design.components.pipelineeditor.CloudConfig
 import app.knotwork.design.components.pipelineeditor.CloudProvider
 import app.knotwork.design.components.pipelineeditor.DecompositionConfig
+import app.knotwork.design.components.pipelineeditor.EvaluationConfig
 import app.knotwork.design.components.pipelineeditor.IfConditionConfig
+import app.knotwork.design.components.pipelineeditor.IntentRouterConfig
 import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import app.knotwork.design.components.pipelineeditor.PipelineConfig
 import app.knotwork.design.components.pipelineeditor.SkillConfig
 import app.knotwork.design.components.pipelineeditor.SkillEngine
+import app.knotwork.design.components.pipelineeditor.SummaryConfig
 import app.knotwork.design.components.pipelineeditor.ToolConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -160,19 +163,63 @@ class NodeConfigCodecTest {
     }
 
     @Test
-    fun `given IfCondition config when encode-then-decode then expression preserved`() {
+    fun `given IfCondition config when encode-then-decode then every check is preserved`() {
         val src = node(NodeType.IF_CONDITION, "Branch")
         val config = IfConditionConfig(
             title = "Branch",
             expression = "score > 0.8",
-            labelTrue = "Yes",
-            labelFalse = "No",
+            keywords = "urgent, escalate",
+            complexityThreshold = 800,
         )
         val decoded = NodeConfigCodec.decode(src.copy(configJson = NodeConfigCodec.encode(config))) as IfConditionConfig
         assertEquals("score > 0.8", decoded.expression)
-        assertEquals("Yes", decoded.labelTrue)
-        assertEquals("No", decoded.labelFalse)
+        assertEquals("urgent, escalate", decoded.keywords)
+        assertEquals(800, decoded.complexityThreshold)
         assertEquals(false, decoded.branchOnImage)
+    }
+
+    @Test
+    fun `given an imported node carrying keywords when decoded then the sheet shows them`() {
+        // The reverse-class case this repair exists for: `conditionKeywords` and
+        // `conditionComplexity` were read by the engine long before they had a
+        // control, so a pipeline imported with them decided every branch while
+        // the sheet showed nothing. Decode reads the flat fields when the JSON
+        // payload has no key for them.
+        val imported = node(NodeType.IF_CONDITION, "Branch").copy(
+            conditionKeywords = "refund, cancel",
+            conditionComplexity = 250,
+            configJson = null,
+        )
+
+        val decoded = NodeConfigCodec.decode(imported) as IfConditionConfig
+
+        assertEquals("refund, cancel", decoded.keywords)
+        assertEquals(250, decoded.complexityThreshold)
+    }
+
+    @Test
+    fun `given IfCondition config when apply then both checks reach the node`() {
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.IF_CONDITION),
+            IfConditionConfig(title = "Branch", expression = "urgent?", keywords = "asap", complexityThreshold = 120),
+        )
+
+        assertEquals("asap", patched.conditionKeywords)
+        assertEquals(120, patched.conditionComplexity)
+    }
+
+    @Test
+    fun `given blank keywords when apply then the node stores null rather than an empty string`() {
+        // `EvaluateIfConditionUseCase` splits the string and treats an empty
+        // result as "no keyword check", so an empty string and null behave the
+        // same at run time — but only null reads as "not configured" everywhere
+        // else, including an exported file.
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.IF_CONDITION),
+            IfConditionConfig(title = "Branch", expression = "urgent?", keywords = "   "),
+        )
+
+        assertNull(patched.conditionKeywords)
     }
 
     @Test
@@ -256,6 +303,77 @@ class NodeConfigCodecTest {
         assertNotNull(patched.configJson)
         assertTrue(patched.configJson!!.contains("\"title\":\"New\""))
         assertEquals("sp", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given IntentRouter config when apply then the classifier prompt reaches systemPrompt`() {
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.INTENT_ROUTER),
+            IntentRouterConfig(title = "Router", classifierPrompt = "classify this"),
+        )
+        assertEquals("classify this", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given Decomposition config when apply then the planning prompt reaches systemPrompt`() {
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.DECOMPOSITION),
+            DecompositionConfig(title = "Plan", planningPrompt = "break it down"),
+        )
+        assertEquals("break it down", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given Evaluation config when apply then the criteria prompt reaches systemPrompt`() {
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.EVALUATION),
+            EvaluationConfig(title = "Judge", criteriaPrompt = "grade it"),
+        )
+        assertEquals("grade it", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given Summary config when apply then the custom prompt reaches systemPrompt`() {
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.SUMMARY),
+            SummaryConfig(title = "Sum", customPrompt = "condense it"),
+        )
+        assertEquals("condense it", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given an edited prompt when apply then it survives a decode round-trip`() {
+        // The bug this pins was invisible precisely because `decode` reads the
+        // prompt back out of `configJson`: the sheet reopened showing the edit
+        // while the run kept using the prompt the node was created with. Both
+        // halves must agree, so the round-trip is asserted on both surfaces.
+        val patched = NodeConfigCodec.apply(
+            node(NodeType.INTENT_ROUTER),
+            IntentRouterConfig(title = "Router", classifierPrompt = "edited"),
+        )
+        val decoded = NodeConfigCodec.decode(patched) as IntentRouterConfig
+        assertEquals("edited", decoded.classifierPrompt)
+        assertEquals("edited", patched.systemPrompt)
+    }
+
+    @Test
+    fun `given a blank prompt when apply then systemPrompt is null so the executor falls back`() {
+        // Not `""`: `SystemNodeExecutor` and `SummaryNodeExecutor` resolve their
+        // default with `node.systemPrompt ?: FALLBACK`, so an empty string would
+        // run the node with no instructions instead of its default prompt.
+        val router = NodeConfigCodec.apply(
+            node(NodeType.INTENT_ROUTER),
+            IntentRouterConfig(title = "Router", classifierPrompt = "   "),
+        )
+        assertNull(router.systemPrompt)
+
+        // SUMMARY reaches this state legitimately — its prompt is optional, and
+        // blank means "keep the built-in summarisation prompt".
+        val summary = NodeConfigCodec.apply(
+            node(NodeType.SUMMARY),
+            SummaryConfig(title = "Sum", customPrompt = null),
+        )
+        assertNull(summary.systemPrompt)
     }
 
     @Test

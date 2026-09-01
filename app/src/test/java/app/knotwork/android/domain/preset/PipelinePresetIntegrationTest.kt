@@ -44,6 +44,7 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
@@ -110,6 +111,7 @@ class PipelinePresetIntegrationTest {
     private lateinit var metricsRepository: MetricsRepository
     private lateinit var approvalNotifier: ApprovalNotifier
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var ceilingNotifier: CeilingNotifier
     private lateinit var clarificationNotifier: ClarificationNotifier
     private lateinit var koogClientFactory: KoogClientFactory
     private lateinit var cloudLlmModelResolver: KoogCloudLlmModelResolver
@@ -138,6 +140,7 @@ class PipelinePresetIntegrationTest {
         metricsRepository = mockk(relaxed = true)
         approvalNotifier = mockk(relaxed = true)
         pendingInteractionRepository = mockk(relaxed = true)
+        ceilingNotifier = mockk(relaxed = true)
         coEvery { pendingInteractionRepository.getForRun(any()) } returns null
         coEvery { pendingInteractionRepository.save(any()) } returns true
         clarificationNotifier = mockk(relaxed = true)
@@ -239,6 +242,8 @@ class PipelinePresetIntegrationTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
 
         every { llmEngine.generateResponseStream(any()) } returns flowOf(cannedAnswer)
@@ -246,7 +251,6 @@ class PipelinePresetIntegrationTest {
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)

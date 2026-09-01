@@ -61,6 +61,18 @@ sealed interface ChatHomeUiState {
     data object Interrupted : ChatHomeUiState
 
     /**
+     * A run has spent one of the limits the user set for it and is waiting to
+     * be told whether it may carry on. The tail of the conversation hosts the
+     * pause card with Continue / Stop actions; the payload lives in
+     * `ChatHomePendingState.ceiling`.
+     *
+     * Distinct from [Interrupted] because the run is not over: its checkpoint
+     * is intact and the engine is waiting on an answer, so offering Discard
+     * here would settle a run the user may simply want to let finish.
+     */
+    data object CeilingPause : ChatHomeUiState
+
+    /**
      * The run stopped without producing an answer, and the tail of the
      * conversation explains why.
      *
@@ -81,8 +93,18 @@ sealed interface ChatHomeUiState {
      *   terse diagnostic form for a typed termination. Never the user-facing
      *   sentence in the second case — see [reason].
      * @property reason The typed cause, or `null` for an ordinary failure.
+     * @property announcedInThread Whether a settled run already wrote this
+     *   outcome into the conversation as a `SYSTEM` message. True only for the
+     *   orchestrator's terminal state; the other producers of this state are
+     *   local failures with no run behind them — a blocked attachment, a model
+     *   that would not load, a collection that threw — and those have nothing in
+     *   the thread, so their text is the only account the user gets.
      */
-    data class Error(val message: String, val reason: RunTerminationReason? = null) : ChatHomeUiState
+    data class Error(
+        val message: String,
+        val reason: RunTerminationReason? = null,
+        val announcedInThread: Boolean = false,
+    ) : ChatHomeUiState
 
     /** Alternate nav drawer over the chat surface. */
     data object DrawerOpen : ChatHomeUiState

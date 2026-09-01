@@ -57,18 +57,44 @@ class NodeConfigValidationTest {
     }
 
     @Test
-    fun `given LiteRtConfig with out-of-range temperature when validate then OUT_OF_RANGE`() {
+    fun `given LiteRtConfig with out-of-range sampling when validate then no error (fields have no control)`() {
+        // ADR 0005 removed temperature / topP / maxNewTokens from the LITE_RT
+        // sheet. Validating them anyway blocked Save on a field the user cannot
+        // see: an imported pipeline carrying any out-of-range value produced an
+        // error with nothing on screen to correct. The values still round-trip
+        // on `LiteRtConfig`, and nothing reads them during a run.
         val errors = NodeConfigValidation.validate(
             config = LiteRtConfig(
                 title = "node-a",
                 modelId = "gemma-2b-it",
                 systemPrompt = "x",
                 temperature = 5f,
+                topP = 9f,
+                maxNewTokens = 999_999,
             ),
             peerTitles = noPeers,
         )
 
-        assertEquals(ValidationFailure.OUT_OF_RANGE, errors[FieldId.TEMPERATURE])
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun `given CloudConfig with out-of-range sampling when validate then no error (fields have no control)`() {
+        // Same reason as the LITE_RT case above, and as the blank-model case
+        // below: the Cloud sheet offers neither temperature, max tokens nor
+        // timeout since ADR 0005.
+        val errors = NodeConfigValidation.validate(
+            config = CloudConfig(
+                title = "cloud-a",
+                systemPrompt = "x",
+                temperature = 5f,
+                maxTokens = 999_999,
+                timeoutMs = 1,
+            ),
+            peerTitles = noPeers,
+        )
+
+        assertTrue(errors.isEmpty())
     }
 
     @Test
@@ -114,17 +140,6 @@ class NodeConfigValidationTest {
     }
 
     @Test
-    fun `given IfConditionConfig with blank labels when validate then REQUIRED on both`() {
-        val errors = NodeConfigValidation.validate(
-            config = IfConditionConfig(title = "branch", expression = "x", labelTrue = "", labelFalse = ""),
-            peerTitles = noPeers,
-        )
-
-        assertEquals(ValidationFailure.REQUIRED, errors[FieldId.LABEL_TRUE])
-        assertEquals(ValidationFailure.REQUIRED, errors[FieldId.LABEL_FALSE])
-    }
-
-    @Test
     fun `given IfConditionConfig with image branch and blank expression when validate then no expression error`() {
         val errors = NodeConfigValidation.validate(
             config = IfConditionConfig(title = "branch", expression = "", branchOnImage = true),
@@ -161,54 +176,6 @@ class NodeConfigValidationTest {
     }
 
     @Test
-    fun `given ToolConfig with blank argument key when validate then REQUIRED on mapping`() {
-        val errors = NodeConfigValidation.validate(
-            config = ToolConfig(
-                title = "tool",
-                toolId = "fs.write",
-                argumentMapping = listOf(ToolArgument(name = "", expression = "x")),
-            ),
-            peerTitles = noPeers,
-        )
-
-        assertEquals(ValidationFailure.REQUIRED, errors[FieldId.ARGUMENT_MAPPING])
-    }
-
-    @Test
-    fun `given ToolConfig with duplicate argument keys when validate then KEY_DUPLICATE`() {
-        val errors = NodeConfigValidation.validate(
-            config = ToolConfig(
-                title = "tool",
-                toolId = "fs.write",
-                argumentMapping = listOf(
-                    ToolArgument(name = "path", expression = "a"),
-                    ToolArgument(name = "path", expression = "b"),
-                ),
-            ),
-            peerTitles = noPeers,
-        )
-
-        assertEquals(ValidationFailure.KEY_DUPLICATE, errors[FieldId.ARGUMENT_MAPPING])
-    }
-
-    @Test
-    fun `given ToolConfig with unique keys when validate then no ARGUMENT_MAPPING error`() {
-        val errors = NodeConfigValidation.validate(
-            config = ToolConfig(
-                title = "tool",
-                toolId = "fs.write",
-                argumentMapping = listOf(
-                    ToolArgument(name = "path", expression = "a"),
-                    ToolArgument(name = "content", expression = "b"),
-                ),
-            ),
-            peerTitles = noPeers,
-        )
-
-        assertNull(errors[FieldId.ARGUMENT_MAPPING])
-    }
-
-    @Test
     fun `given IntentRouterConfig with duplicate class names when validate then CLASS_NAME_DUPLICATE`() {
         val errors = NodeConfigValidation.validate(
             config = IntentRouterConfig(
@@ -236,34 +203,6 @@ class NodeConfigValidationTest {
     }
 
     @Test
-    fun `given DecompositionConfig with invalid schemaJson when validate then INVALID_JSON`() {
-        val errors = NodeConfigValidation.validate(
-            config = DecompositionConfig(
-                title = "decompose",
-                planningPrompt = "x",
-                outputSchemaJson = "not json",
-            ),
-            peerTitles = noPeers,
-        )
-
-        assertEquals(ValidationFailure.INVALID_JSON, errors[FieldId.OUTPUT_SCHEMA_JSON])
-    }
-
-    @Test
-    fun `given QueueProcessorConfig with parallelism nine when validate then PARALLELISM_RANGE`() {
-        val errors = NodeConfigValidation.validate(
-            config = QueueProcessorConfig(
-                title = "queue",
-                inputList = "items",
-                parallelism = 9,
-            ),
-            peerTitles = noPeers,
-        )
-
-        assertEquals(ValidationFailure.PARALLELISM_RANGE, errors[FieldId.PARALLELISM])
-    }
-
-    @Test
     fun `given EvaluationConfig with maxRetries six when validate then OUT_OF_RANGE`() {
         val errors = NodeConfigValidation.validate(
             config = EvaluationConfig(title = "eval", criteriaPrompt = "x", maxRetries = 6),
@@ -271,35 +210,6 @@ class NodeConfigValidationTest {
         )
 
         assertEquals(ValidationFailure.OUT_OF_RANGE, errors[FieldId.MAX_RETRIES])
-    }
-
-    @Test
-    fun `given SummaryConfig with CUSTOM format and no prompt when validate then REQUIRED`() {
-        val errors = NodeConfigValidation.validate(
-            config = SummaryConfig(
-                title = "sum",
-                format = SummaryFormat.CUSTOM,
-                customPrompt = null,
-                targetLengthChars = 600,
-            ),
-            peerTitles = noPeers,
-        )
-
-        assertEquals(ValidationFailure.REQUIRED, errors[FieldId.CUSTOM_PROMPT])
-    }
-
-    @Test
-    fun `given SummaryConfig with target length five when validate then OUT_OF_RANGE`() {
-        val errors = NodeConfigValidation.validate(
-            config = SummaryConfig(
-                title = "sum",
-                format = SummaryFormat.BULLETS,
-                targetLengthChars = 5,
-            ),
-            peerTitles = noPeers,
-        )
-
-        assertEquals(ValidationFailure.OUT_OF_RANGE, errors[FieldId.TARGET_LENGTH_CHARS])
     }
 
     @Test
@@ -357,16 +267,6 @@ class NodeConfigValidationTest {
     }
 
     @Test
-    fun `given InputConfig with invalid schemaJson when validate then INVALID_JSON`() {
-        val errors = NodeConfigValidation.validate(
-            config = InputConfig(title = "in", schemaJson = "not json"),
-            peerTitles = noPeers,
-        )
-
-        assertEquals(ValidationFailure.INVALID_JSON, errors[FieldId.SCHEMA_JSON])
-    }
-
-    @Test
     fun `given PipelineConfig with no target when validate then TARGET_PIPELINE_MISSING`() {
         val errors = NodeConfigValidation.validate(
             config = PipelineConfig(title = "run sub", targetPipelineId = ""),
@@ -404,5 +304,65 @@ class NodeConfigValidationTest {
         )
 
         assertEquals(null, errors[FieldId.SKILL_ID])
+    }
+
+    @Test
+    fun `given IfConditionConfig with blank keywords and no threshold when validate then no errors`() {
+        // Both deterministic checks are opt-in: blank keywords and a null
+        // threshold mean "do not check", which is the default state of every
+        // IF_CONDITION node and must never block Save.
+        val errors = NodeConfigValidation.validate(
+            IfConditionConfig(title = "Branch", expression = "is it a question?"),
+            peerTitles = emptySet(),
+        )
+
+        assertNull(errors[FieldId.KEYWORDS])
+        assertNull(errors[FieldId.COMPLEXITY_THRESHOLD])
+    }
+
+    @Test
+    fun `given IfConditionConfig with a non-positive threshold when validate then OUT_OF_RANGE`() {
+        // The slider maps 0 to null on the way out, so a zero arriving here came
+        // from an imported file rather than the sheet. It is refused because the
+        // engine reads `threshold > 0` and would silently ignore it.
+        val errors = NodeConfigValidation.validate(
+            IfConditionConfig(title = "Branch", expression = "long?", complexityThreshold = 0),
+            peerTitles = emptySet(),
+        )
+
+        assertEquals(ValidationFailure.OUT_OF_RANGE, errors[FieldId.COMPLEXITY_THRESHOLD])
+    }
+
+    @Test
+    fun `given QueueProcessorConfig when validate then nothing beyond the title can fail`() {
+        // The queue comes from upstream and the only field is a toggle, so the
+        // sheet has no way to be invalid. Asserted rather than assumed: this is
+        // what makes the empty verdict a decision instead of an omission.
+        val errors = NodeConfigValidation.validate(
+            QueueProcessorConfig(title = "Each subtask", stopOnError = false),
+            peerTitles = emptySet(),
+        )
+
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun `given SummaryConfig with no custom prompt when validate then no error`() {
+        // Blank leaves the built-in summarisation prompt in place. It used to be
+        // required whenever a `format` chip said CUSTOM — a rule enforced by a
+        // control that decided nothing.
+        val errors = NodeConfigValidation.validate(
+            SummaryConfig(title = "Summarise"),
+            peerTitles = emptySet(),
+        )
+
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test
+    fun `given InputConfig when validate then nothing beyond the title can fail`() {
+        val errors = NodeConfigValidation.validate(InputConfig(title = "Start"), peerTitles = emptySet())
+
+        assertTrue(errors.isEmpty())
     }
 }

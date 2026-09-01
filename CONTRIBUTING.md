@@ -110,6 +110,13 @@ request:
   the **Konsist** architecture guard (Clean-Architecture layer boundaries; see
   [`docs/static-analysis.md`](docs/static-analysis.md)).
 - **Kover** coverage verification (`koverVerifyFullDebug`).
+- **Documentation gates** — dead internal links and `#anchors`
+  (`verifyDocLinks`), Mermaid diagram structure (`verifyMermaidDiagrams`), and
+  the version number agreeing with itself across `README.md` and
+  `CHANGELOG.md` (`verifyVersionSources`). External `http` links are reported
+  weekly by a separate workflow and never gate a merge. The full roster of
+  gates lives in
+  [`docs/static-analysis.md`](docs/static-analysis.md).
 
 Run `./gradlew check` **locally before pushing**. Pushing without running
 it just trades local feedback for slower CI feedback.
@@ -187,10 +194,10 @@ Before requesting review, please confirm:
       was run on a device or emulator.
 - [ ] Public documentation is updated where the change affects user-
       facing behaviour, the public API surface, or the build / dev setup.
-- [ ] `FILE_MAP.md` (the file map under
-      `app/src/main/java/app/knotwork/android/`, and the root one for
-      top-level changes) is updated when files or directories are added,
-      moved, or removed.
+- [ ] `./gradlew :app:generateFileMap` was run and its result committed
+      when Kotlin files or directories were added, moved, or removed. The
+      task also owns the `catalog/` and test maps; the root `FILE_MAP.md`
+      is still hand-written and covers top-level changes.
 - [ ] The PR description summarises **what** changed, **why** it changed,
       and lists the linked issue.
 

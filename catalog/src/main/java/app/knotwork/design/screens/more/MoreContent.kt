@@ -26,6 +26,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.lists.KnotworkNavListRow
+import app.knotwork.design.components.lists.KnotworkSectionHeader
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
 
@@ -58,22 +59,31 @@ fun MoreContent(state: MoreViewState, modifier: Modifier = Modifier, strings: Mo
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(vertical = KnotworkTheme.spacing.sp2),
         ) {
-            items(items = state.rows, key = { it.id }) { row ->
-                KnotworkNavListRow(
-                    title = row.title,
-                    leadingIcon = row.icon,
-                    onClick = row.onClick,
-                    subtitle = row.subtitle,
-                    trailing = if (row.badge > 0) {
-                        { Badge(count = row.badge) }
-                    } else {
-                        null
-                    },
-                )
-                HorizontalDivider(
-                    color = KnotworkTheme.extended.divider,
-                    modifier = Modifier.padding(horizontal = KnotworkTheme.spacing.sp4),
-                )
+            state.sections.forEach { section ->
+                item(key = "section-${section.id}") {
+                    KnotworkSectionHeader(title = section.title)
+                }
+                items(items = section.rows, key = { it.id }) { row ->
+                    KnotworkNavListRow(
+                        title = row.title,
+                        leadingIcon = row.icon,
+                        onClick = row.onClick,
+                        subtitle = row.subtitle,
+                        // A badge means "something is happening now" — only
+                        // Tasks carries one, which is what keeps it meaningful.
+                        // A stored quantity goes in the subtitle instead, so a
+                        // zero-count row does not look broken.
+                        trailing = if (row.badge > 0) {
+                            { Badge(count = row.badge) }
+                        } else {
+                            null
+                        },
+                    )
+                    HorizontalDivider(
+                        color = KnotworkTheme.extended.divider,
+                        modifier = Modifier.padding(horizontal = KnotworkTheme.spacing.sp4),
+                    )
+                }
             }
         }
     }

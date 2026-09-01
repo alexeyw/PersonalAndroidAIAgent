@@ -92,7 +92,6 @@ fun SkillLibraryScreen(
         strings = skillLibraryStrings(),
         callbacks = SkillLibraryCallbacks(
             onBack = onBack,
-            onSearch = {},
             onTabSelected = viewModel::selectTab,
             onNewSkill = viewModel::openNewSkill,
             onRowClick = viewModel::onRowClick,

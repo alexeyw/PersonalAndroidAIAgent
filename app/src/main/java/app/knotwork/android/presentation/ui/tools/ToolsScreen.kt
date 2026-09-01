@@ -11,7 +11,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.knotwork.android.domain.models.McpConnectionStatus
 import app.knotwork.android.domain.models.McpTool
 import app.knotwork.android.domain.models.ToolRisk
-import app.knotwork.design.screens.tools.BuiltInToolRisk
 import app.knotwork.design.screens.tools.BuiltInToolRow
 import app.knotwork.design.screens.tools.McpConnectionState
 import app.knotwork.design.screens.tools.McpServerRow
@@ -47,7 +46,7 @@ fun ToolsScreen(
                     id = tool.name,
                     name = tool.name.toFriendlyToolName(),
                     description = tool.description,
-                    risk = (tool.risk ?: ToolRisk.READ_ONLY).toBuiltInToolRisk(),
+                    risk = ToolRiskResolution.forLocalTool(tool, uiState.toolRiskOverrides),
                     enabled = tool.name !in uiState.disabledAppFunctions,
                     // http_request owns a domain allowlist; surface the editor sub-row
                     // (and its live host count) only under that tool.
@@ -69,7 +68,12 @@ fun ToolsScreen(
                     toolCount = snapshot.tools.size,
                     latencyLabel = snapshot.status.toLabel(),
                     state = snapshot.status.toCatalogState(),
-                    tools = snapshot.tools.map { it.toEntry(disabled = uiState.disabledMcpTools) },
+                    tools = snapshot.tools.map {
+                        it.toEntry(
+                            disabled = uiState.disabledMcpTools,
+                            overrides = uiState.toolRiskOverrides,
+                        )
+                    },
                     expanded = snapshot.url in uiState.expandedServerUrls,
                 )
             }
@@ -100,7 +104,6 @@ fun ToolsScreen(
         onAddServerOpen = onAddMcpServer,
         onOpenAllowedDomains = onOpenAllowedDomains,
         onErrorRetry = { /* unreachable: discovery errors surface per-server, not as a top-level state. */ },
-        onOpenDrawer = { /* drawer ships post-v0.1. */ },
     )
 
     ToolsContent(
@@ -108,12 +111,6 @@ fun ToolsScreen(
         callbacks = callbacks,
         modifier = modifier.testTag(tag = TOOLS_ROOT_TEST_TAG),
     )
-}
-
-private fun ToolRisk.toBuiltInToolRisk(): BuiltInToolRisk = when (this) {
-    ToolRisk.READ_ONLY -> BuiltInToolRisk.ReadOnly
-    ToolRisk.SENSITIVE -> BuiltInToolRisk.Sensitive
-    ToolRisk.DESTRUCTIVE -> BuiltInToolRisk.Destructive
 }
 
 private fun McpConnectionStatus.toCatalogState(): McpConnectionState = when (this) {
@@ -131,12 +128,21 @@ private fun McpConnectionStatus.toLabel(): String = when (this) {
 /**
  * Projects an [McpTool] to the catalog's [McpToolEntry] for rendering as
  * a nested row underneath the server header.
+ *
+ * The risk goes through [ToolRiskResolution] rather than the advertised value,
+ * so a level the user set on the detail screen shows here too. Reading the
+ * server's own value would leave this row saying *Sensitive* about a tool the
+ * detail screen — and the approval gate — already treat as read-only.
+ *
+ * @param disabled Ids the user has paused.
+ * @param overrides The user's per-tool risk decisions.
+ * @return The catalog row model.
  */
-private fun McpTool.toEntry(disabled: Set<String>): McpToolEntry = McpToolEntry(
+private fun McpTool.toEntry(disabled: Set<String>, overrides: Map<String, ToolRisk>): McpToolEntry = McpToolEntry(
     id = id,
     name = name,
     description = description,
-    risk = (risk ?: ToolRisk.SENSITIVE).toBuiltInToolRisk(),
+    risk = ToolRiskResolution.forMcpTool(this, overrides),
     enabled = id !in disabled,
 )
 

@@ -52,6 +52,7 @@ import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
@@ -174,7 +175,6 @@ class ExternalAutomationBackgroundRunIntegrationTest {
         every { settingsRepository.chatHistoryCompressionThresholdTokens } returns flowOf(3_500)
         every { settingsRepository.chatHistoryLiveWindowSize } returns flowOf(10)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns blockDestructiveTools
         every { settingsRepository.pipelineMaxSteps } returns flowOf(15)
@@ -413,6 +413,7 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             triggerJournal,
             externalJournal,
             externalCallback,
+            mockk(relaxed = true),
         )
         val traceRepository = RunTraceRepositoryImpl(database.traceStepDao())
             .apply { dispatcher = testDispatcher }
@@ -513,6 +514,8 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             runRepository,
             traceRepository,
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingRepository,
+            mockk<CeilingNotifier>(relaxed = true),
         )
         val taskQueueManager = TaskQueueManagerImpl(
             chatRepository = chatRepository,
@@ -545,6 +548,7 @@ class ExternalAutomationBackgroundRunIntegrationTest {
             settingsRepository,
             approvalNotifier,
             clarificationNotifier,
+            mockk<CeilingNotifier>(relaxed = true),
             resumeRun,
             recordTriggerHitlEvent,
         )

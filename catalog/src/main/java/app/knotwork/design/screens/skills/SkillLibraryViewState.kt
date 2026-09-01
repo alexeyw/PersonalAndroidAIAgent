@@ -192,7 +192,6 @@ data class SkillLibraryViewState(
 @Suppress("LongParameterList") // Documented public API.
 class SkillLibraryCallbacks(
     val onBack: () -> Unit = {},
-    val onSearch: () -> Unit = {},
     val onTabSelected: (SkillLibraryTab) -> Unit = {},
     val onNewSkill: () -> Unit = {},
     val onRowClick: (String) -> Unit = {},

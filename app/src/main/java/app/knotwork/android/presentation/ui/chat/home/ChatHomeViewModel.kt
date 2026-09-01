@@ -7,6 +7,7 @@ import app.knotwork.android.domain.engine.LlmInferenceEngine
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.PipelineSamplePrompt
@@ -36,6 +37,7 @@ import app.knotwork.android.domain.usecases.ResolveEntryInferenceUseCase
 import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
+import app.knotwork.android.domain.usecases.SubmitCeilingDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
 import app.knotwork.android.domain.usecases.UnarchiveChatUseCase
@@ -139,6 +141,7 @@ constructor(
     private val pendingInteractionRepository: PendingInteractionRepository,
     private val submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase,
     private val submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase,
+    private val submitCeilingDecisionUseCase: SubmitCeilingDecisionUseCase,
     private val attachmentStore: AttachmentStore,
     private val resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase,
     private val audioRecorder: AudioRecorder,
@@ -309,6 +312,7 @@ constructor(
         settingsRepository = settingsRepository,
         pipelineRepository = pipelineRepository,
         chatRepository = chatRepository,
+        pipelineRunRepository = pipelineRunRepository,
         sessions = { threads.sessionsSnapshot() },
     )
 
@@ -352,6 +356,7 @@ constructor(
         replayTrace = console::replayTrace,
         restoreApproval = { hitl.handleWaitingForApproval(it) },
         restoreClarification = { hitl.handleAwaitingClarification(it) },
+        restoreCeilingPause = { hitl.restoreCeilingPause(it) },
     )
 
     /**
@@ -366,6 +371,7 @@ constructor(
         chatRepository = chatRepository,
         submitApprovalDecisionUseCase = submitApprovalDecisionUseCase,
         submitClarificationAnswerUseCase = submitClarificationAnswerUseCase,
+        submitCeilingDecisionUseCase = submitCeilingDecisionUseCase,
         attachToLiveRun = ::attachToLiveRun,
         emitResumeFeedback = reattach::emitResumeFeedback,
     )
@@ -386,19 +392,6 @@ constructor(
         _state.update { it.copy(composer = it.composer.copy(value = value, voiceNotice = null)) }
     }
 
-    /**
-     * Sends the current composer draft through [AgentOrchestratorUseCase].
-     * No-op when the composer is blank, when generation is already in
-     * flight, or when no LLM model is loaded (in the last case the surface
-     * flips to [ChatHomeUiState.Error] so the user sees actionable
-     * guidance).
-     *
-     * The user prompt itself is persisted by the orchestrator's pipeline
-     * (see `TaskQueueManagerImpl.processTask` step 1), not by this VM —
-     * persisting it twice would surface duplicate rows in the display
-     * flow. Same for the final agent reply: `OutputNodeExecutor` writes
-     * the `isFinal = true` row when the pipeline reaches OUTPUT.
-     */
     /**
      * The three cheap refusals the send path applies before touching the
      * engine: an attachment still being downscaled, a wholly empty send, and an
@@ -424,6 +417,19 @@ constructor(
         return true
     }
 
+    /**
+     * Sends the current composer draft through [AgentOrchestratorUseCase].
+     * No-op when the composer is blank, when generation is already in
+     * flight, or when no LLM model is loaded (in the last case the surface
+     * flips to [ChatHomeUiState.Error] so the user sees actionable
+     * guidance).
+     *
+     * The user prompt itself is persisted by the orchestrator's pipeline
+     * (see `TaskQueueManagerImpl.processTask` step 1), not by this VM —
+     * persisting it twice would surface duplicate rows in the display
+     * flow. Same for the final agent reply: `OutputNodeExecutor` writes
+     * the `isFinal = true` row when the pipeline reaches OUTPUT.
+     */
     fun sendMessage() {
         val draftText = _state.value.composer.value.trim()
         val readyAttachment = (_state.value.composer.attachment as? ComposerAttachmentDraft.Ready)?.attachment
@@ -739,16 +745,23 @@ constructor(
     }
 
     /**
-     * Detaches the UI from the active generation stream. This does NOT
-     * cancel the execution itself: there is no cancel-task API on
-     * [app.knotwork.android.domain.engine.TaskQueueManager], and the run is
-     * driven by the queue's own process-lifetime scope — cancelling the
-     * VM-side collector only stops the screen from rendering its progress.
-     * The run keeps executing in the background (the drawer's in-progress
-     * indicator stays honest about that), its final answer still lands in
-     * the conversation, and reopening the session re-attaches to it via the
-     * reattach protocol. A real cancel path is deliberately deferred to the
-     * background-execution work that owns run lifecycle end-to-end.
+     * Stops the active run: the execution itself, not just the screen's view of
+     * it.
+     *
+     * This used to only detach the collector. The run carried on in the queue's
+     * own scope and its answer still landed in the conversation, so a control
+     * labelled `stop` did something the word does not mean — the user was told
+     * the work had ended while it went on spending steps, tokens and battery.
+     *
+     * The order matters. The collector and the pending "load then send" are cut
+     * first so the surface settles immediately, then the run is cancelled
+     * through the queue, which settles it as
+     * [app.knotwork.android.domain.models.PipelineRunStatus.CANCELLED] and
+     * leaves a line in the conversation saying so.
+     *
+     * Reached only from the composer's Stop button. Switching threads cancels
+     * [generationJob] directly and deliberately does **not** come through here:
+     * leaving a chat is not a decision to end its run.
      */
     fun stopGeneration() {
         generationJob?.cancel()
@@ -757,6 +770,7 @@ constructor(
         // it fire once the load completes.
         modelLoadJob?.cancel()
         reattach.cancel()
+        agentOrchestratorUseCase.cancelRun(_state.value.thread.currentSessionId)
         _state.update { current ->
             // The advisory belongs to the run. Stopping the run ends it — a
             // strip still saying "nearing the step limit" above a composer
@@ -1006,6 +1020,7 @@ constructor(
         when (state) {
             is AgentOrchestratorState.WaitingForApproval -> hitl.handleWaitingForApproval(state)
             is AgentOrchestratorState.AwaitingClarification -> hitl.handleAwaitingClarification(state.request)
+            is AgentOrchestratorState.WaitingForCeilingRaise -> hitl.handleCeilingPause(state)
             is AgentOrchestratorState.ConsoleLog -> console.onConsoleLog(state.events, state.runId)
             is AgentOrchestratorState.PipelineTrace -> console.onPipelineTrace(state.steps)
             is AgentOrchestratorState.NodeIO -> console.onNodeIo(state)
@@ -1051,7 +1066,14 @@ constructor(
                         // surface can render a sentence for it. `state.message`
                         // is the diagnostic when a reason is present, and is
                         // shown verbatim only when it is not.
-                        visual = ChatHomeUiState.Error(state.message, reason = state.reason),
+                        // The run settled, so `PipelineRunRepository.finishRun`
+                        // has already written this outcome into the thread. The
+                        // tile must not repeat it — see `ChatHomeUiState.Error`.
+                        visual = ChatHomeUiState.Error(
+                            state.message,
+                            reason = state.reason,
+                            announcedInThread = true,
+                        ),
                         // The run is over; an advisory about how it was going
                         // has no reader once the outcome is on screen.
                         runNotice = null,
@@ -1137,18 +1159,6 @@ constructor(
     private fun resetConsoleCachesForNewRun() {
         console.resetForNewRun()
         reattach.cancel()
-    }
-
-    /**
-     * Activates the LiteRT model identified by [modelId] and reloads the
-     * inference engine. Subsequent `sendMessage` calls run against the
-     * freshly-loaded model.
-     */
-    fun pickModel(modelId: Long) {
-        viewModelScope.launch {
-            localModelRepository.setActiveModel(modelId)
-            loadModelUseCase()
-        }
     }
 
     companion object {
@@ -1296,6 +1306,35 @@ data class InterruptedRunPending(
     val timestamp: String,
     val resumable: Boolean = true,
 )
+
+/**
+ * Snapshot of a run paused at one of its own ceilings, exposed through
+ * [ChatHomePendingState.ceiling] so the mapping can render the trailing pause
+ * card (Continue / Stop) from real data.
+ *
+ * Carries the breach rather than a rendered sentence: the copy has one owner
+ * ([app.knotwork.android.presentation.ui.common.RunTerminationCopyMapper]), and
+ * a ViewModel holding resolved strings could not be the same words the
+ * notification and the run console use for the same event.
+ *
+ * @property runId Id of the paused run record — the decision settles exactly
+ *   this run, never "whatever is paused now". For a pause raised inside a
+ *   sub-pipeline this is the child run, which is where the record sits; the
+ *   submission path resolves the tree root itself. `null` on the live path,
+ *   where the orchestrator emission carries no id and the decision falls back
+ *   to the session's parked record — which is exactly the record the pause just
+ *   wrote. Naming the session's *active* run instead would be worse than
+ *   naming nothing: for a nested pause the record sits on the child while the
+ *   active run is the parent.
+ * @property breach Which ceiling bound and by how much, exactly as it stood
+ *   when the run stopped. Read off the durable record on reattach, so a pause
+ *   answered after a restart states the same numbers it stated live.
+ * @property timestamp Pre-formatted time the run actually paused, captured once
+ *   here for the reason [InterruptedRunPending.timestamp] is: a pause answered
+ *   the next morning must still say when the run stopped, not what time it is
+ *   now.
+ */
+data class CeilingPausePending(val runId: String?, val breach: HardCeilingBreach, val timestamp: String)
 
 /**
  * One-shot failure outcomes of a Resume tap on the interrupted-run card,

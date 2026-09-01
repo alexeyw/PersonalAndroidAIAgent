@@ -41,17 +41,18 @@ Closes #
       coverage in new `domain` / `data` code; see `docs/testing.md`).
 - [ ] Public documentation updated where relevant (see the *Pull
       requests* section in
-      [`CONTRIBUTING.md`](../blob/main/CONTRIBUTING.md)). Typical
+      [`CONTRIBUTING.md`](https://github.com/alexeyw/knotwork/blob/main/CONTRIBUTING.md)). Typical
       triggers:
       user-visible feature → `README.md` + `docs/user-guide.md`; new
       `NodeType` / `Tool` / prompt variable → `docs/extending.md` and
       `pipeline-editor.html`; architecture change →
       `docs/architecture.md`; any merge to `main` → `CHANGELOG.md`
       `[Unreleased]`.
-- [ ] `FILE_MAP.md` updated when files or directories were added, moved,
-      or removed (package map under
-      `app/src/main/java/app/knotwork/android/FILE_MAP.md` and/or the root
-      `FILE_MAP.md` for top-level changes).
+- [ ] `./gradlew :app:generateFileMap` run and its result committed when
+      Kotlin files or directories were added, moved, or removed. It owns
+      the `app/src/main`, `app/src/test`, `app/src/androidTest` and
+      `catalog/` maps; the root `FILE_MAP.md` is hand-written and covers
+      top-level changes.
 - [ ] Commit messages follow
       [Conventional Commits](https://www.conventionalcommits.org/) (see
       `CONTRIBUTING.md` for the accepted prefixes).

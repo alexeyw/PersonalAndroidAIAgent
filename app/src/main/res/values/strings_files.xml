@@ -9,4 +9,26 @@
 <resources>
     <!-- Title of the system share-sheet chooser when exporting workspace files. -->
     <string name="files_share_chooser_title">Share file</string>
+
+    <!-- Snackbar: an import was refused (over quota, too large, or unreadable). -->
+    <string name="files_message_import_failed">That file was not imported \u2014 it is too large or the workspace is full.</string>
+    <!-- Snackbar: a save-as or share-staging export could not be written. -->
+    <string name="files_message_export_failed">That file could not be saved out.</string>
+    <!-- Snackbar: a file has no readable text preview (binary, or an I/O failure). -->
+    <string name="files_message_preview_failed">There is no preview for this file.</string>
+    <!-- Snackbar: a bulk delete removed some files but not all of them. -->
+    <string name="files_message_delete_partial">Some of those files were not deleted.</string>
+    <!-- Snackbar: not one selected file could be staged, so no share sheet opened. -->
+    <string name="files_message_share_failed">Nothing could be prepared for sharing.</string>
+    <!--
+        Snackbar: some selected files were staged and the rest were dropped.
+        %1$d is how many went, %2$d how many were picked; the quantity is the
+        second. A partial share always involves at least two files, so the
+        "one" form is unreachable in English — it is still declared because
+        other locales pluralise on other counts.
+    -->
+    <plurals name="files_message_share_partial">
+        <item quantity="one">Only %1$d of %2$d file was prepared for sharing.</item>
+        <item quantity="other">Only %1$d of %2$d files were prepared for sharing.</item>
+    </plurals>
 </resources>

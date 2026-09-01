@@ -56,6 +56,7 @@
     <string name="chat_snackbar_console_line_copied">Line copied</string>
     <!-- Shown when a picked/captured image could not be attached (decode/read failed). -->
     <string name="chat_snackbar_attachment_failed">Couldn\'t attach that image. Try a different one.</string>
+    <string name="chat_snackbar_attachment_replaced">Replaced the previous image — one at a time.</string>
     <!-- Shown when voice input fails (recording, audio-file import, or transcription error). -->
     <string name="chat_snackbar_voice_failed">Couldn\'t process the recording. Try again.</string>
     <!-- Shown when a Resume tap finds the run no longer resumable (raced discard, legacy record). -->
@@ -128,7 +129,6 @@
     <!-- Overflow menu -->
     <string name="chat_overflow_export">Export chat</string>
     <string name="chat_overflow_delete">Delete chat</string>
-    <string name="chat_overflow_clear_console">Clear console</string>
 
     <!-- Delete chat confirmation -->
     <string name="chat_delete_dialog_title">Delete this chat?</string>
@@ -148,18 +148,9 @@
     <string name="chat_new_thread_sheet_cancel">Cancel</string>
     <string name="chat_new_thread_sheet_use_default">Use default pipeline</string>
 
-    <!-- Model picker sheet -->
-    <string name="chat_model_picker_sheet_title">Choose model</string>
-    <string name="chat_model_picker_empty">No models installed</string>
-    <string name="chat_model_picker_open_models">Open Models</string>
-    <string name="chat_model_picker_active_cd">Active model</string>
-
     <!-- Import chat -->
     <string name="chat_import_failed">Could not import chat: %1$s</string>
     <string name="chat_import_unreadable">Selected file could not be read.</string>
-
-    <!-- Long-press message context menu. -->
-    <string name="chat_message_rate_coming_soon">Message rating is not yet available.</string>
 
     <!-- Reporting a model-authored response. The disclosure is deliberately blunt:
          there is no reporting back end, so the user must know that submitting means

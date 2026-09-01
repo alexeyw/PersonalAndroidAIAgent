@@ -30,4 +30,4 @@ This is a pre-release. The public surface, the settings layout and the on-device
 - Third-party apps cannot expose AppFunctions - only the device maker's system apps and Google can. The local tool catalogue is what ships, plus whatever you connect over MCP.
 - One maintainer, no company behind it.
 
-Open source under the Apache License 2.0; source and documentation are on the developer website.
+Open source under the Apache License 2.0; source, documentation and an FAQ are on the developer website.

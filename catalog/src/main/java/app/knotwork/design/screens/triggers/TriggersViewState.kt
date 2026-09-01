@@ -177,6 +177,8 @@ class TriggersCallbacks(
     val onEditTrigger: (String) -> Unit = {},
     val onDeleteTrigger: (String) -> Unit = {},
     val onRetry: () -> Unit = {},
+    val onShareJournal: () -> Unit = {},
+    val onSaveJournal: () -> Unit = {},
 )
 
 /** Convenience factory returning a no-op callback bundle. */

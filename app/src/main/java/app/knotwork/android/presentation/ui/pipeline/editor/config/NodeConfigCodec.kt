@@ -7,7 +7,6 @@ import app.knotwork.android.domain.models.CloudProvider
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.design.components.pipelineeditor.ClarificationConfig
 import app.knotwork.design.components.pipelineeditor.CloudConfig
-import app.knotwork.design.components.pipelineeditor.ConfirmPolicy
 import app.knotwork.design.components.pipelineeditor.DecompositionConfig
 import app.knotwork.design.components.pipelineeditor.EvaluationConfig
 import app.knotwork.design.components.pipelineeditor.IfConditionConfig
@@ -17,14 +16,11 @@ import app.knotwork.design.components.pipelineeditor.IntentRouterConfig
 import app.knotwork.design.components.pipelineeditor.LiteRtConfig
 import app.knotwork.design.components.pipelineeditor.NodeConfig
 import app.knotwork.design.components.pipelineeditor.OutputConfig
-import app.knotwork.design.components.pipelineeditor.OutputFormat
 import app.knotwork.design.components.pipelineeditor.PipelineConfig
 import app.knotwork.design.components.pipelineeditor.QueueProcessorConfig
 import app.knotwork.design.components.pipelineeditor.SkillConfig
 import app.knotwork.design.components.pipelineeditor.SkillEngine
 import app.knotwork.design.components.pipelineeditor.SummaryConfig
-import app.knotwork.design.components.pipelineeditor.SummaryFormat
-import app.knotwork.design.components.pipelineeditor.ToolArgument
 import app.knotwork.design.components.pipelineeditor.ToolConfig
 import org.json.JSONArray
 import org.json.JSONException
@@ -92,7 +88,7 @@ internal object NodeConfigCodec {
             .put(TITLE_KEY, config.title)
         config.description?.let { json.put(DESCRIPTION_KEY, it) }
         when (config) {
-            is InputConfig -> encodeInput(json, config)
+            is InputConfig -> Unit // No payload beyond the shared title / description.
             is OutputConfig -> encodeOutput(json, config)
             is LiteRtConfig -> encodeLiteRt(json, config)
             is CloudConfig -> encodeCloud(json, config)
@@ -148,15 +144,32 @@ internal object NodeConfigCodec {
             )
             is ToolConfig -> withJson.copy(
                 toolName = config.toolId.takeIf { it.isNotBlank() },
+                // `false` stored as `null`: the flat field's absence and its
+                // `false` mean the same thing to the gate, and `null` is what an
+                // exported file should carry for "not set".
+                alwaysConfirm = config.alwaysConfirm.takeIf { it },
                 cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
             )
             is IfConditionConfig -> withJson.copy(
                 conditionPrompt = config.expression,
+                // Blank keywords become `null`, not `""`: `EvaluateIfConditionUseCase`
+                // treats an empty split as "no keyword check", and writing an empty
+                // string would leave a field that reads as configured-but-inert.
+                conditionKeywords = config.keywords.takeIf { it.isNotBlank() },
+                conditionComplexity = config.complexityThreshold,
                 conditionHasImage = config.branchOnImage,
                 cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
             )
             is ClarificationConfig -> withJson.copy(
                 clarificationTimeoutMs = config.timeoutMs?.toLong(),
+                // Joined rather than stored as JSON, matching `conditionKeywords`:
+                // the column is a list the user typed, and blank means "let the
+                // model write the options" rather than "no options".
+                quickReplies = config.quickReplies
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .takeIf { it.isNotEmpty() }
+                    ?.joinToString(", "),
                 systemPrompt = config.questionTemplate,
             )
             // OUTPUT mirrors `systemPrompt` onto the domain row so the
@@ -178,16 +191,43 @@ internal object NodeConfigCodec {
                 skillId = config.skillId.takeIf { it.isNotBlank() },
                 cloudProvider = if (config.engine == SkillEngine.CLOUD) CloudProvider.AUTO_KEY else null,
             )
-            is IntentRouterConfig ->
-                withJson.copy(cloudProvider = engineWire(config.engineProvider, source.cloudProvider))
-            is DecompositionConfig ->
-                withJson.copy(cloudProvider = engineWire(config.engineProvider, source.cloudProvider))
-            is EvaluationConfig ->
-                withJson.copy(cloudProvider = engineWire(config.engineProvider, source.cloudProvider))
-            is QueueProcessorConfig,
-            is SummaryConfig,
-            is InputConfig,
-            -> withJson
+            // These four types name their prompt field differently on the
+            // sheet, but the executors read exactly one thing —
+            // `node.systemPrompt` (`SystemNodeExecutor`, `SummaryNodeExecutor`).
+            // Mirroring the rich field onto the flat property is what makes an
+            // edit take effect. Without it the field is *required* by
+            // `NodeConfigValidation`, survives a reopen (because `decode` reads
+            // it back out of `configJson`) and still never reaches the run — an
+            // edit that looks saved and is not.
+            //
+            // Blank maps to `null`, not to `""`: both executors fall back with
+            // `node.systemPrompt ?: FALLBACK`, so an empty string would run the
+            // node with no instructions at all rather than its default prompt.
+            // The browser editor writes `''` here, but its value reaches a node
+            // through `PipelineJsonSerializer`, whose `optStringOrNull` maps an
+            // empty string to `null` — so the two editors agree in effect.
+            is IntentRouterConfig -> withJson.copy(
+                fallbackClass = config.fallbackClass?.takeIf { it.isNotBlank() },
+                systemPrompt = config.classifierPrompt.takeIf { it.isNotBlank() },
+                cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
+            )
+            is DecompositionConfig -> withJson.copy(
+                maxSubtasks = config.maxSubtasks,
+                systemPrompt = config.planningPrompt.takeIf { it.isNotBlank() },
+                cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
+            )
+            is EvaluationConfig -> withJson.copy(
+                systemPrompt = config.criteriaPrompt.takeIf { it.isNotBlank() },
+                cloudProvider = engineWire(config.engineProvider, source.cloudProvider),
+            )
+            // SUMMARY's prompt is required only when the format is CUSTOM, so a
+            // blank value is a legitimate state here rather than an unreachable
+            // one — which is precisely why it must not become `""`.
+            is SummaryConfig -> withJson.copy(
+                systemPrompt = config.customPrompt?.takeIf { it.isNotBlank() },
+            )
+            is QueueProcessorConfig -> withJson.copy(stopOnError = config.stopOnError)
+            is InputConfig -> withJson
         }
     }
 
@@ -291,7 +331,7 @@ internal object NodeConfigCodec {
         val title = payload.optString(TITLE_KEY).ifBlank { fallback.label }
         val description = payload.optStringOrNull(DESCRIPTION_KEY)
         return when (NodeTypeMapper.toCatalog(fallback.type)) {
-            CatalogNodeType.INPUT -> decodeInput(payload, title, description)
+            CatalogNodeType.INPUT -> decodeInput(title, description)
             CatalogNodeType.OUTPUT -> decodeOutput(payload, title, description)
             CatalogNodeType.LITE_RT -> decodeLiteRt(payload, title, description, fallback)
             CatalogNodeType.CLOUD -> decodeCloud(payload, title, description, fallback)
@@ -345,30 +385,45 @@ internal object NodeConfigCodec {
             CatalogNodeType.INTENT_ROUTER -> IntentRouterConfig(
                 title = title,
                 classifierPrompt = systemPromptOrDefault,
+                fallbackClass = node.fallbackClass,
                 engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.IF_CONDITION -> IfConditionConfig(
                 title = title,
                 expression = node.conditionPrompt.orEmpty(),
+                // Carried through here as well as in `decodeIfCondition`: a row
+                // saved before the sheet had these controls has no `configJson`
+                // at all, and that is exactly the pipeline whose branch was
+                // being decided by a keyword the editor never showed.
+                keywords = node.conditionKeywords.orEmpty(),
+                complexityThreshold = node.conditionComplexity?.takeIf { it > 0 },
                 branchOnImage = node.conditionHasImage == true,
                 engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.CLARIFICATION -> ClarificationConfig(
                 title = title,
                 questionTemplate = systemPromptOrDefault,
+                quickReplies = node.quickReplies?.split(",").orEmpty()
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() },
                 timeoutMs = node.clarificationTimeoutMs?.toInt(),
             )
             CatalogNodeType.TOOL -> ToolConfig(
                 title = title,
                 toolId = node.toolName.orEmpty(),
+                alwaysConfirm = node.alwaysConfirm == true,
                 engineProvider = engineProviderFromWire(node.cloudProvider),
             )
             CatalogNodeType.DECOMPOSITION -> DecompositionConfig(
                 title = title,
                 planningPrompt = systemPromptOrDefault,
+                maxSubtasks = node.maxSubtasks ?: DEFAULT_MAX_SUBTASKS,
                 engineProvider = engineProviderFromWire(node.cloudProvider),
             )
-            CatalogNodeType.QUEUE_PROCESSOR -> QueueProcessorConfig(title = title)
+            CatalogNodeType.QUEUE_PROCESSOR -> QueueProcessorConfig(
+                title = title,
+                stopOnError = node.stopOnError ?: true,
+            )
             CatalogNodeType.EVALUATION -> EvaluationConfig(
                 title = title,
                 criteriaPrompt = systemPromptOrDefault,
@@ -394,13 +449,7 @@ internal object NodeConfigCodec {
     // Per-type encoders
     // ─────────────────────────────────────────────────────────────────────
 
-    private fun encodeInput(json: JSONObject, c: InputConfig) {
-        json.put("inputName", c.inputName)
-        c.schemaJson?.let { json.put("schemaJson", it) }
-    }
-
     private fun encodeOutput(json: JSONObject, c: OutputConfig) {
-        json.put("format", c.format.name)
         json.put("systemPrompt", c.systemPrompt)
     }
 
@@ -440,8 +489,8 @@ internal object NodeConfigCodec {
 
     private fun encodeIfCondition(json: JSONObject, c: IfConditionConfig) {
         json.put("expression", c.expression)
-        json.put("labelTrue", c.labelTrue)
-        json.put("labelFalse", c.labelFalse)
+        json.put("keywords", c.keywords)
+        c.complexityThreshold?.let { json.put("complexityThreshold", it) }
         json.put("branchOnImage", c.branchOnImage)
         c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
@@ -454,26 +503,17 @@ internal object NodeConfigCodec {
 
     private fun encodeTool(json: JSONObject, c: ToolConfig) {
         json.put("toolId", c.toolId)
-        val args = JSONArray()
-        c.argumentMapping.forEach { arg ->
-            args.put(JSONObject().put("name", arg.name).put("expression", arg.expression))
-        }
-        json.put("argumentMapping", args)
-        c.confirmOverride?.let { json.put("confirmOverride", it.name) }
+        json.put("alwaysConfirm", c.alwaysConfirm)
         c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
 
     private fun encodeDecomposition(json: JSONObject, c: DecompositionConfig) {
         json.put("planningPrompt", c.planningPrompt)
         json.put("maxSubtasks", c.maxSubtasks)
-        c.outputSchemaJson?.let { json.put("outputSchemaJson", it) }
         c.engineProvider?.let { json.put("engineProvider", it.name) }
     }
 
     private fun encodeQueueProcessor(json: JSONObject, c: QueueProcessorConfig) {
-        json.put("inputList", c.inputList)
-        json.put("itemVariable", c.itemVariable)
-        json.put("parallelism", c.parallelism)
         json.put("stopOnError", c.stopOnError)
     }
 
@@ -484,9 +524,7 @@ internal object NodeConfigCodec {
     }
 
     private fun encodeSummary(json: JSONObject, c: SummaryConfig) {
-        json.put("format", c.format.name)
         c.customPrompt?.let { json.put("customPrompt", it) }
-        json.put("targetLengthChars", c.targetLengthChars)
     }
 
     // Only the target id is persisted; the display name is resolved live by
@@ -508,17 +546,17 @@ internal object NodeConfigCodec {
     // Per-type decoders
     // ─────────────────────────────────────────────────────────────────────
 
-    private fun decodeInput(p: JSONObject, title: String, description: String?): InputConfig = InputConfig(
+    // No `payload` parameter, unlike every sibling: INPUT carries nothing beyond
+    // the shared title and description, and a parameter the body cannot use
+    // would only invite someone to look for a field that is not there.
+    private fun decodeInput(title: String, description: String?): InputConfig = InputConfig(
         title = title,
         description = description,
-        inputName = p.optString("inputName").ifBlank { "user.message" },
-        schemaJson = p.optStringOrNull("schemaJson"),
     )
 
     private fun decodeOutput(p: JSONObject, title: String, description: String?): OutputConfig = OutputConfig(
         title = title,
         description = description,
-        format = enumOrDefault(p.optStringOrNull("format"), OutputFormat.PLAIN_TEXT),
         // Optional — older persisted rows simply lack this key and fall back to the default
         // empty string (echo-through mode).
         systemPrompt = p.optString("systemPrompt"),
@@ -570,7 +608,7 @@ internal object NodeConfigCodec {
             }
         }.orEmpty(),
         classifierPrompt = p.optString("classifierPrompt").ifBlank { fb.systemPrompt.orEmpty() },
-        fallbackClass = p.optStringOrNull("fallbackClass"),
+        fallbackClass = p.optStringOrNull("fallbackClass") ?: fb.fallbackClass,
         engineProvider = decodeEngineProvider(p, fb),
     )
 
@@ -583,8 +621,13 @@ internal object NodeConfigCodec {
         title = title,
         description = description,
         expression = p.optString("expression").ifBlank { fb.conditionPrompt.orEmpty() },
-        labelTrue = p.optString("labelTrue").ifBlank { "True" },
-        labelFalse = p.optString("labelFalse").ifBlank { "False" },
+        // Both deterministic checks read the flat NodeModel field first: they
+        // were runtime inputs for far longer than they were editor fields, so an
+        // imported pipeline's value is the authority over an absent JSON key.
+        keywords = p.optString("keywords").ifBlank { fb.conditionKeywords.orEmpty() },
+        complexityThreshold = (
+            if (p.has("complexityThreshold")) p.optInt("complexityThreshold") else fb.conditionComplexity
+            )?.takeIf { it > 0 },
         branchOnImage = p.optBoolean("branchOnImage", fb.conditionHasImage == true),
         engineProvider = decodeEngineProvider(p, fb),
     )
@@ -598,7 +641,8 @@ internal object NodeConfigCodec {
         title = title,
         description = description,
         questionTemplate = p.optString("questionTemplate").ifBlank { fb.systemPrompt.orEmpty() },
-        quickReplies = p.optStringList("quickReplies"),
+        quickReplies = p.optStringList("quickReplies")
+            .ifEmpty { fb.quickReplies?.split(",").orEmpty().map { it.trim() }.filter { it.isNotEmpty() } },
         timeoutMs = if (p.has("timeoutMs")) p.optInt("timeoutMs") else fb.clarificationTimeoutMs?.toInt(),
     )
 
@@ -606,13 +650,7 @@ internal object NodeConfigCodec {
         title = title,
         description = description,
         toolId = p.optString("toolId").ifBlank { fb.toolName.orEmpty() },
-        argumentMapping = p.optJSONArray("argumentMapping")?.let { arr ->
-            (0 until arr.length()).mapNotNull { i ->
-                val obj = arr.optJSONObject(i) ?: return@mapNotNull null
-                ToolArgument(name = obj.optString("name"), expression = obj.optString("expression"))
-            }
-        }.orEmpty(),
-        confirmOverride = enumOrNull<ConfirmPolicy>(p.optStringOrNull("confirmOverride")),
+        alwaysConfirm = p.optBoolean("alwaysConfirm", fb.alwaysConfirm == true),
         engineProvider = decodeEngineProvider(p, fb),
     )
 
@@ -625,8 +663,7 @@ internal object NodeConfigCodec {
         title = title,
         description = description,
         planningPrompt = p.optString("planningPrompt").ifBlank { fb.systemPrompt.orEmpty() },
-        maxSubtasks = p.optInt("maxSubtasks", DEFAULT_MAX_SUBTASKS),
-        outputSchemaJson = p.optStringOrNull("outputSchemaJson"),
+        maxSubtasks = p.optInt("maxSubtasks", fb.maxSubtasks ?: DEFAULT_MAX_SUBTASKS),
         engineProvider = decodeEngineProvider(p, fb),
     )
 
@@ -634,14 +671,11 @@ internal object NodeConfigCodec {
         p: JSONObject,
         title: String,
         description: String?,
-        @Suppress("UNUSED_PARAMETER") fb: NodeModel,
+        fb: NodeModel,
     ): QueueProcessorConfig = QueueProcessorConfig(
         title = title,
         description = description,
-        inputList = p.optString("inputList"),
-        itemVariable = p.optString("itemVariable").ifBlank { "item" },
-        parallelism = p.optInt("parallelism", DEFAULT_PARALLELISM),
-        stopOnError = p.optBoolean("stopOnError", true),
+        stopOnError = p.optBoolean("stopOnError", fb.stopOnError ?: true),
     )
 
     private fun decodeEvaluation(p: JSONObject, title: String, description: String?, fb: NodeModel): EvaluationConfig =
@@ -657,9 +691,7 @@ internal object NodeConfigCodec {
         SummaryConfig(
             title = title,
             description = description,
-            format = enumOrDefault(p.optStringOrNull("format"), SummaryFormat.BULLETS),
             customPrompt = p.optStringOrNull("customPrompt") ?: fb.systemPrompt,
-            targetLengthChars = p.optInt("targetLengthChars", DEFAULT_SUMMARY_LENGTH),
         )
 
     private fun decodePipeline(p: JSONObject, title: String, description: String?, fb: NodeModel): PipelineConfig =
@@ -723,7 +755,5 @@ internal object NodeConfigCodec {
     private const val DEFAULT_MAX_TOKENS = 1_024
     private const val DEFAULT_TIMEOUT_MS = 30_000
     private const val DEFAULT_MAX_SUBTASKS = 5
-    private const val DEFAULT_PARALLELISM = 1
     private const val DEFAULT_MAX_RETRIES = 2
-    private const val DEFAULT_SUMMARY_LENGTH = 600
 }

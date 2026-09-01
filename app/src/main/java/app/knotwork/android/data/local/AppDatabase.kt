@@ -84,7 +84,7 @@ import app.knotwork.android.data.local.models.UsagePipelineDayEntity
         UsagePipelineDayEntity::class,
         OnboardingMilestoneEntity::class,
     ],
-    version = 59,
+    version = 61,
     exportSchema = true,
 )
 @TypeConverters(Converters::class)
@@ -1458,6 +1458,59 @@ abstract class AppDatabase : RoomDatabase() {
                 db.execSQL("ALTER TABLE `pipeline_runs` ADD COLUMN `stepsSpent` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `pipeline_runs` ADD COLUMN `tokensSpent` INTEGER NOT NULL DEFAULT 0")
                 db.execSQL("ALTER TABLE `pipeline_runs` ADD COLUMN `terminationReason` TEXT")
+            }
+        }
+
+        /**
+         * Five per-node settings the editor could already show and the engine
+         * could not read: the INTENT_ROUTER fallback class, the CLARIFICATION
+         * quick replies, the TOOL always-confirm switch, the DECOMPOSITION
+         * sub-task cap and the QUEUE_PROCESSOR stop-on-error switch.
+         *
+         * Every column is nullable with no default, and `null` means "behave
+         * exactly as before" for all five. That is what lets an existing
+         * pipeline cross this migration without changing how it runs.
+         */
+        val MIGRATION_59_60 = object : Migration(59, 60) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `fallbackClass` TEXT")
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `quickReplies` TEXT")
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `alwaysConfirm` INTEGER")
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `maxSubtasks` INTEGER")
+                db.execSQL("ALTER TABLE `pipeline_nodes` ADD COLUMN `stopOnError` INTEGER")
+            }
+        }
+
+        /**
+         * The ceiling pause: a run that spends a ceiling now stops to ask
+         * instead of ending, and both halves of that exchange need somewhere to
+         * live.
+         *
+         * On `pipeline_runs`, two per-axis grant counters. Two columns rather
+         * than one encoded value because the answer buys a portion **of the axis
+         * that bound** — a run waved past its step ceiling has not been granted
+         * more tokens. `NOT NULL DEFAULT 0` (matching the `@ColumnInfo` on the
+         * entity exactly, or `TableInfo` rejects the schema at open): every
+         * existing run has been granted nothing, which is a number.
+         *
+         * On `pending_interactions`, the question itself — which axis, and the
+         * two numbers the card has to state. Nullable, because the other two
+         * kinds of park have no ceiling to describe, and because every row
+         * written before this migration is one of them.
+         */
+        val MIGRATION_60_61 = object : Migration(60, 61) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "ALTER TABLE `pipeline_runs` ADD COLUMN `stepCeilingExtensions` " +
+                        "INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE `pipeline_runs` ADD COLUMN `tokenCeilingExtensions` " +
+                        "INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL("ALTER TABLE `pending_interactions` ADD COLUMN `ceilingAxis` TEXT")
+                db.execSQL("ALTER TABLE `pending_interactions` ADD COLUMN `ceilingLimit` INTEGER")
+                db.execSQL("ALTER TABLE `pending_interactions` ADD COLUMN `ceilingSpent` INTEGER")
             }
         }
     }

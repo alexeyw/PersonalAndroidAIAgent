@@ -182,11 +182,6 @@ class TriggersContentSnapshotTest {
     }
 
     /**
-     * Wraps the content under the standard test rule, pins reduced-motion so
-     * looping animations don't randomise the snapshot, and writes the PNG to
-     * `src/test/snapshots/trigger_<name>_<theme>.png`.
-     */
-    /**
      * The list at the "Largest" text preset — the only capture that exercises
      * `HealthBadge`'s icon-only collapse, and the one place a long trigger name
      * could squeeze the badge off the row.
@@ -197,6 +192,11 @@ class TriggersContentSnapshotTest {
             TriggersContent(state = TriggersPreview.populated())
         }
 
+    /**
+     * Wraps the content under the standard test rule, pins reduced-motion so
+     * looping animations don't randomise the snapshot, and writes the PNG to
+     * `src/test/snapshots/trigger_<name>_<theme>.png`.
+     */
     private fun snapshot(name: String, dark: Boolean, fontScale: Float = 1f, content: @Composable () -> Unit) {
         composeTestRule.setContent {
             val baseDensity = LocalDensity.current

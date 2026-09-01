@@ -167,6 +167,7 @@ class ToolInvocationGate @Inject constructor(
         runId: String?,
         resolvedToolName: String,
         resolvedToolArgs: String,
+        alwaysConfirm: Boolean = false,
     ) = with(collector) {
         // `getRisk` throws `IllegalArgumentException` when the tool isn't in the
         // catalogue — this is reachable if the LLM hallucinates a tool name, or
@@ -216,11 +217,17 @@ class ToolInvocationGate @Inject constructor(
             return@with
         }
         val approvalPolicy = settingsRepository.toolApprovalPolicy.first()
-        val needsApproval = when (approvalPolicy) {
-            ToolApprovalPolicy.AllCalls -> true
-            ToolApprovalPolicy.NeverPrompt -> false
-            ToolApprovalPolicy.SensitiveOrDestructive -> risk == ToolRisk.SENSITIVE || risk == ToolRisk.DESTRUCTIVE
-        }
+        // The node's own switch can only ADD a prompt, never remove one — which
+        // is why it ORs into the policy instead of replacing it. A pipeline file
+        // is a document that can be shared, and a node able to declare "do not
+        // ask about this destructive call" would let somebody else's document
+        // walk straight past the gate.
+        val needsApproval = alwaysConfirm ||
+            when (approvalPolicy) {
+                ToolApprovalPolicy.AllCalls -> true
+                ToolApprovalPolicy.NeverPrompt -> false
+                ToolApprovalPolicy.SensitiveOrDestructive -> risk == ToolRisk.SENSITIVE || risk == ToolRisk.DESTRUCTIVE
+            }
         var isApproved = true
 
         // Consume any parked approval decision up-front, regardless of the

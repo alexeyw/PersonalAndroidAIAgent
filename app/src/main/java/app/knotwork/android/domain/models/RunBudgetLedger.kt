@@ -41,8 +41,19 @@ package app.knotwork.android.domain.models
  * strictly synchronous within one coroutine (the parent suspends on the
  * child's flow), so no synchronisation is needed.
  *
- * @property ceilings The limits in force for this run tree, resolved once from
- *   the root run's origin.
+ * **Raising a ceiling does not remove it.** When a run breaches, the user is
+ * asked whether it may carry on, and a yes buys exactly one more portion of the
+ * axis that bound — the same allowance again, which is what "continue for
+ * another N steps" means to the person reading it. The grant is counted, not
+ * flagged, so the next crossing asks again; a run that has been waved through
+ * ten times is a run the user has said yes to ten times. The counts are seeded
+ * from the root run record alongside the spend, because an extension that did
+ * not survive the resume would leave the run breaching on its first node after
+ * the very answer that was supposed to let it continue.
+ *
+ * @property ceilings The base limits in force for this run tree, resolved once
+ *   from the root run's origin. What actually binds is [effectiveHard], which
+ *   applies the extensions granted since.
  * @property rootRunId Id of the run at the root of the tree — the record whose
  *   columns hold the persisted counters. `null` for a non-persisted run (an
  *   editor test run), in which case the ledger is purely in-memory and nothing
@@ -53,6 +64,8 @@ class RunBudgetLedger(
     val rootRunId: String? = null,
     stepsAlreadySpent: Int = 0,
     tokensAlreadySpent: Int = 0,
+    stepCeilingExtensions: Int = 0,
+    tokenCeilingExtensions: Int = 0,
 ) {
 
     /** Node executions charged to this tree, across every attempt of the run. */
@@ -62,6 +75,28 @@ class RunBudgetLedger(
     /** Tokens charged to this tree, across every attempt of the run. */
     var tokensSpent: Int = tokensAlreadySpent
         private set
+
+    /**
+     * Extra portions of the step ceiling the user has granted this tree. Each
+     * one multiplies the base ceiling by one further whole allowance — see
+     * [effectiveHard].
+     *
+     * Fixed for the ledger's lifetime, unlike the spend counters beside it, and
+     * deliberately so: a grant is bought while the run is **parked**, by a
+     * coroutine that may well be in another process, and it reaches the run by
+     * seeding the next attempt's ledger from the record. There is no moment at
+     * which a live ledger could usefully raise its own ceiling — by the time an
+     * answer exists, this object is gone.
+     *
+     * That also settles the soft warning: a resumed run builds a fresh ledger
+     * with an empty claim set, so it warns again three quarters of the way
+     * through the allowance it was just granted, without anything having to
+     * re-arm it.
+     */
+    val stepCeilingExtensions: Int = stepCeilingExtensions
+
+    /** Extra portions of the token ceiling granted to this tree. See [stepCeilingExtensions]. */
+    val tokenCeilingExtensions: Int = tokenCeilingExtensions
 
     /**
      * `true` once any charged node reported an estimated rather than a
@@ -84,13 +119,34 @@ class RunBudgetLedger(
      * @return The reason the run must stop, or `null` when it may continue.
      */
     fun hardBreach(): RunTerminationReason? = when {
-        stepsSpent >= ceilings.steps.hard ->
-            RunTerminationReason.StepCeiling(limit = ceilings.steps.hard, spent = stepsSpent)
+        stepsSpent >= effectiveHard(RunCeilingAxis.STEPS) ->
+            RunTerminationReason.StepCeiling(limit = effectiveHard(RunCeilingAxis.STEPS), spent = stepsSpent)
 
-        tokensSpent >= ceilings.tokens.hard ->
-            RunTerminationReason.TokenCeiling(limit = ceilings.tokens.hard, spent = tokensSpent)
+        tokensSpent >= effectiveHard(RunCeilingAxis.TOKENS) ->
+            RunTerminationReason.TokenCeiling(limit = effectiveHard(RunCeilingAxis.TOKENS), spent = tokensSpent)
 
         else -> null
+    }
+
+    /**
+     * The limit actually in force on [axis]: the configured ceiling plus one
+     * whole allowance for every extension the user has granted this tree.
+     *
+     * Computed in `Long` and clamped rather than multiplied in `Int`. Nothing
+     * bounds how many times a user may answer "continue", and an overflow here
+     * would not merely report a wrong number — it would wrap negative and turn
+     * the ceiling into a limit the run is already past, killing the run on the
+     * step *after* the one the user just paid for.
+     *
+     * @param axis The axis to look up. [RunCeilingAxis.MONEY] is unmeasured in
+     *   this release and answers [Int.MAX_VALUE], never a number that could read
+     *   as a limit it does not enforce.
+     * @return The number this ledger stops the run at.
+     */
+    fun effectiveHard(axis: RunCeilingAxis): Int = when (axis) {
+        RunCeilingAxis.STEPS -> extend(ceilings.steps.hard, stepCeilingExtensions)
+        RunCeilingAxis.TOKENS -> extend(ceilings.tokens.hard, tokenCeilingExtensions)
+        RunCeilingAxis.MONEY -> Int.MAX_VALUE
     }
 
     /**
@@ -140,16 +196,48 @@ class RunBudgetLedger(
      */
     fun claimSoftBreach(): SoftCeilingBreach? {
         val breach = when {
-            RunCeilingAxis.STEPS !in softBreachesAnnounced && stepsSpent >= ceilings.steps.soft ->
-                SoftCeilingBreach(RunCeilingAxis.STEPS, spent = stepsSpent, hardLimit = ceilings.steps.hard)
+            RunCeilingAxis.STEPS !in softBreachesAnnounced && stepsSpent >= softThreshold(RunCeilingAxis.STEPS) ->
+                SoftCeilingBreach(
+                    RunCeilingAxis.STEPS,
+                    spent = stepsSpent,
+                    hardLimit = effectiveHard(RunCeilingAxis.STEPS),
+                )
 
-            RunCeilingAxis.TOKENS !in softBreachesAnnounced && tokensSpent >= ceilings.tokens.soft ->
-                SoftCeilingBreach(RunCeilingAxis.TOKENS, spent = tokensSpent, hardLimit = ceilings.tokens.hard)
+            RunCeilingAxis.TOKENS !in softBreachesAnnounced && tokensSpent >= softThreshold(RunCeilingAxis.TOKENS) ->
+                SoftCeilingBreach(
+                    RunCeilingAxis.TOKENS,
+                    spent = tokensSpent,
+                    hardLimit = effectiveHard(RunCeilingAxis.TOKENS),
+                )
 
             else -> null
         } ?: return null
         softBreachesAnnounced += breach.axis
         return breach
+    }
+
+    /**
+     * The soft threshold of [axis] against the ceiling actually in force.
+     *
+     * Derived from [effectiveHard] rather than read off [ceilings], because a
+     * granted extension moves the hard limit and a warning still anchored to the
+     * original would fire on the resumed run's first node — the spend is already
+     * past it — telling a user who has just raised the ceiling that they are
+     * approaching it.
+     */
+    private fun softThreshold(axis: RunCeilingAxis): Int = RunCeilings.softFor(effectiveHard(axis))
+
+    private companion object {
+        /**
+         * One base ceiling raised by [extensions] whole portions, clamped to
+         * [Int.MAX_VALUE].
+         *
+         * @param base The configured hard ceiling.
+         * @param extensions How many further allowances the user granted.
+         * @return The limit in force, never negative and never wrapped.
+         */
+        fun extend(base: Int, extensions: Int): Int =
+            (base.toLong() * (1L + extensions)).coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
     }
 }
 

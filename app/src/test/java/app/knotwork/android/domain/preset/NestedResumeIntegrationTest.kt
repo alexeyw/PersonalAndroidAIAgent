@@ -54,6 +54,7 @@ import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
@@ -114,6 +115,7 @@ class NestedResumeIntegrationTest {
     private lateinit var pipelineRunRepository: PipelineRunRepository
     private lateinit var runTraceRepository: RunTraceRepository
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
+    private lateinit var ceilingNotifier: CeilingNotifier
     private lateinit var clarificationRepository: ClarificationRepository
     private lateinit var engine: GraphExecutionEngine
 
@@ -130,7 +132,6 @@ class NestedResumeIntegrationTest {
         every { settingsRepository.runMaxTokens } returns flowOf(1_000_000)
         every { settingsRepository.runMaxTokensBackground } returns flowOf(100_000)
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("")
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.SensitiveOrDestructive)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)
         every { settingsRepository.verboseMemoryLoggingEnabled } returns flowOf(false)
@@ -176,6 +177,7 @@ class NestedResumeIntegrationTest {
 
         // First phase: no parked record yet, the live wait times out, the park persists.
         pendingInteractionRepository = mockk(relaxed = true)
+        ceilingNotifier = mockk(relaxed = true)
         coEvery { pendingInteractionRepository.getForRun(any()) } returns null
         coEvery { pendingInteractionRepository.save(any()) } returns true
 
@@ -237,6 +239,55 @@ class NestedResumeIntegrationTest {
             // answer, and both pass-through OUTPUT nodes echo it up to the final response.
             assertEquals("Q: What color?\nA: $recordedAnswer", completed!!.finalResponse)
         }
+
+    @Test
+    fun `a ceiling that binds inside a sub-pipeline parks the whole stack and the grant resumes it`() = runTest {
+        // The nested shape has its own failure mode, and it is invisible to the
+        // compiler: WAITING_CEILING has to be in the PIPELINE executor's
+        // resumable-child set, or the resumed parent finds its child in an
+        // "unexpected state" and fails the whole run — after the user answered.
+        // Drop WAITING_CEILING from RESUMABLE_CHILD_STATUSES and this test goes
+        // red on the resume, not on the park.
+        //
+        // Two steps: INPUT charges one in the parent, the child's own INPUT
+        // charges the second, and the ceiling binds inside the child before it
+        // reaches its clarification node.
+        every { settingsRepository.pipelineMaxSteps } returns flowOf(2)
+
+        val first = engine(sessionId, "pick a colour", parentGraph(), runId = "root").toList()
+
+        assertTrue(
+            "The whole stack must park, got: ${first.map { it::class.simpleName }}",
+            first.any { it is AgentOrchestratorState.SuspendedInBackground },
+        )
+        assertTrue("A pause is not a failure", first.none { it is AgentOrchestratorState.Error })
+        val child = runs[childRunId]
+        assertEquals(PipelineRunStatus.WAITING_CEILING, child?.status)
+        // The park belongs to the sub-pipeline that spent the budget, exactly as
+        // a nested clarification's does; the grant it buys lands on the root.
+        coVerify {
+            pendingInteractionRepository.save(
+                match { it.runId == childRunId && it.kind == PendingInteractionKind.CEILING },
+            )
+        }
+
+        // --- The user continues: the root record now carries one granted portion. ---
+        coEvery { pipelineRunRepository.getSpend(any()) } returns RunSpend(stepCeilingExtensions = 1)
+
+        val second = engine(
+            sessionId,
+            "pick a colour",
+            parentGraph(),
+            runId = "root",
+            resume = resumeContextFor("root"),
+        ).toList()
+
+        assertTrue(
+            "Resume must not report the child as unexpected, got: " +
+                second.filterIsInstance<AgentOrchestratorState.Error>().map { it.message },
+            second.none { it is AgentOrchestratorState.Error },
+        )
+    }
 
     /** Reconstructs the checkpoint of [runId] from its persisted trace, as the task queue does. */
     private fun resumeContextFor(runId: String): ResumeContext {
@@ -390,6 +441,8 @@ class NestedResumeIntegrationTest {
             pipelineRunRepository,
             runTraceRepository,
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
     }
 }

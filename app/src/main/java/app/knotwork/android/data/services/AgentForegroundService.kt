@@ -222,6 +222,7 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.ExecutingTool -> "Using tool: ${state.toolName}..."
         is AgentOrchestratorState.WaitingForApproval -> "Awaiting user confirmation..."
         is AgentOrchestratorState.AwaitingClarification -> "Awaiting user clarification..."
+        is AgentOrchestratorState.WaitingForCeilingRaise -> "Waiting: the run reached a limit"
         is AgentOrchestratorState.SuspendedInBackground -> "Waiting for user response in background"
         is AgentOrchestratorState.ObservationResult -> "Processing tool result..."
         is AgentOrchestratorState.Answering -> "Answering..."
@@ -302,6 +303,7 @@ class AgentForegroundService : Service() {
         is AgentOrchestratorState.Error,
         is AgentOrchestratorState.WaitingForApproval,
         is AgentOrchestratorState.AwaitingClarification,
+        is AgentOrchestratorState.WaitingForCeilingRaise,
         is AgentOrchestratorState.SuspendedInBackground,
         -> false
     }

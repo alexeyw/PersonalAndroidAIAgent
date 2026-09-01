@@ -17,9 +17,6 @@ object SettingsRowAnchors {
     /** Generation · system instructions textarea. */
     const val SYSTEM_PROMPT_PREFIX = "SYSTEM_PROMPT_PREFIX"
 
-    /** Generation · tool-usage instruction textarea. */
-    const val TOOL_USAGE_INSTRUCTION = "TOOL_USAGE_INSTRUCTION"
-
     /** Models · local-model backend chooser. */
     const val LOCAL_MODEL_BACKEND = "LOCAL_MODEL_BACKEND"
 
@@ -58,9 +55,6 @@ object SettingsRowAnchors {
 
     /** Tools · allowed-HTTP-domains link. */
     const val LINK_FILES_DOMAINS = "LINK_FILES_DOMAINS"
-
-    /** Background · long-running-task notifications toggle. */
-    const val LONG_RUNNING_TASKS_NOTIFICATIONS = "LONG_RUNNING_TASKS_NOTIFICATIONS"
 
     /** Background · scheduled-task notifications toggle. */
     const val SCHEDULED_TASK_NOTIFICATIONS = "SCHEDULED_TASK_NOTIFICATIONS"
@@ -101,7 +95,6 @@ object SettingsRowAnchors {
     /** Every non-slider row anchor, for the registry-sync guard test. */
     val ALL: Set<String> = setOf(
         SYSTEM_PROMPT_PREFIX,
-        TOOL_USAGE_INSTRUCTION,
         LOCAL_MODEL_BACKEND,
         LINK_PROVIDER_LIST,
         AUTO_EXTRACT_ENABLED,
@@ -115,7 +108,6 @@ object SettingsRowAnchors {
         BLOCK_NETWORK_FROM_LOCAL_MODEL,
         LINK_TOOLS_SCREEN,
         LINK_FILES_DOMAINS,
-        LONG_RUNNING_TASKS_NOTIFICATIONS,
         SCHEDULED_TASK_NOTIFICATIONS,
         SHARE_TARGET_PIPELINE_ID,
         SHARE_REUSE_SESSION,

@@ -66,11 +66,9 @@ private fun row(tier: SettingTier, controlType: SettingControlType, syn: List<St
 
 private val GENERATION_ENTRIES = listOf(
     setting("SYSTEM_PROMPT_PREFIX", BASIC, TEXTAREA, hubBasic = true, syn = listOf("prompt", "persona")),
-    setting("TOOL_USAGE_INSTRUCTION", ADVANCED, TEXTAREA, syn = listOf("tools")),
     setting("TEMPERATURE", ADVANCED, SLIDER, syn = listOf("sampling", "creativity")),
     setting("TOP_K", ADVANCED, SLIDER, syn = listOf("sampling")),
     setting("TOP_P", ADVANCED, SLIDER, syn = listOf("nucleus", "sampling")),
-    setting("REPETITION_PENALTY", ADVANCED, SLIDER, syn = listOf("repeat")),
     setting("MAX_CONTEXT_LENGTH", ADVANCED, SLIDER, syn = listOf("max", "window", "tokens")),
     setting("AUDIO_MAX_DURATION_SEC", ADVANCED, SLIDER, syn = listOf("audio", "mic", "voice", "max")),
 )
@@ -85,7 +83,6 @@ private val MEMORY_ENTRIES = listOf(
     setting("AUTO_EXTRACT_ENABLED", BASIC, TOGGLE, syn = listOf("learn", "extract")),
     setting("MEMORY_COMPACTION_ENABLED", BASIC, TOGGLE, syn = listOf("compact")),
     setting("CHAT_HISTORY_COMPRESSION_ENABLED", BASIC, TOGGLE, syn = listOf("history", "compress")),
-    setting("AUTO_SUMMARIZE_THRESHOLD", ADVANCED, SLIDER, syn = listOf("summary")),
     setting("MEMORY_SEARCH_TOP_K", ADVANCED, SLIDER, syn = listOf("retrieve", "top-k")),
     setting("MEMORY_SEARCH_THRESHOLD", ADVANCED, SLIDER, syn = listOf("retrieve", "similarity")),
     setting("MEMORY_RECENCY_HALF_LIFE_DAYS", ADVANCED, SLIDER, syn = listOf("decay", "recency")),
@@ -105,12 +102,19 @@ private val PIPELINES_ENTRIES = listOf(
     // run-limits screen with the other three and the spend statement, reached
     // through this row — which keeps the category, so the search deep-link and
     // its row highlight still land where they always did.
+    // "pipelines" is carried as an explicit synonym on both pipeline-scoped
+    // rows because the category title no longer contains the word: it was
+    // renamed from "Pipelines & structured output" to "Run limits & structured
+    // output" (closed-test finding `#12` — the old title promised the pipelines
+    // themselves, which live in the Pipelines tab). Search matches the category
+    // title, so without these synonyms the rename would have made the category
+    // unreachable for the term users actually type.
     link(
         BASIC,
         "Run limits",
-        syn = listOf("steps", "tokens", "limit", "cap", "budget", "cost", "spend", "runaway"),
+        syn = listOf("steps", "tokens", "limit", "cap", "budget", "cost", "spend", "runaway", "pipelines"),
     ),
-    setting("PIPELINE_MAX_NESTING_DEPTH", ADVANCED, SLIDER, syn = listOf("nest", "max", "depth")),
+    setting("PIPELINE_MAX_NESTING_DEPTH", ADVANCED, SLIDER, syn = listOf("nest", "max", "depth", "pipelines")),
     setting("STRUCTURED_OUTPUT_MAX_REPAIRS", ADVANCED, SLIDER, syn = listOf("json", "repair", "max")),
     link(ADVANCED, "Provider detail", syn = listOf("retry", "cloud", "delay")),
 )
@@ -120,7 +124,7 @@ private val TOOLS_ENTRIES = listOf(
     setting("BLOCK_DESTRUCTIVE_TOOLS", BASIC, TOGGLE, hubBasic = true, syn = listOf("safety")),
     setting("BLOCK_NETWORK_FROM_LOCAL_MODEL", BASIC, TOGGLE, syn = listOf("network", "offline")),
     link(BASIC, "Tools screen", syn = listOf("mcp", "tools", "servers")),
-    setting("TOOL_CALL_TIMEOUT_MS", ADVANCED, SLIDER, syn = listOf("timeout", "max")),
+    setting("TOOL_CALL_TIMEOUT_MS", ADVANCED, SLIDER, syn = listOf("timeout", "approval", "wait")),
     setting("WORKSPACE_MAX_FILE_SIZE_BYTES", ADVANCED, SLIDER, syn = listOf("file", "max")),
     setting("WORKSPACE_MAX_TOTAL_BYTES", ADVANCED, SLIDER, syn = listOf("workspace", "max", "total")),
     setting("WORKSPACE_READ_TOKEN_BUDGET", ADVANCED, SLIDER, syn = listOf("max", "tokens", "read")),
@@ -129,7 +133,6 @@ private val TOOLS_ENTRIES = listOf(
 )
 
 private val BACKGROUND_ENTRIES = listOf(
-    setting("LONG_RUNNING_TASKS_NOTIFICATIONS", BASIC, TOGGLE, hubBasic = true, syn = listOf("notify")),
     setting("SCHEDULED_TASK_NOTIFICATIONS", BASIC, TOGGLE, syn = listOf("notify", "schedule")),
     setting("SHARE_TARGET_PIPELINE_ID", BASIC, DROPDOWN, syn = listOf("share", "send", "pipeline", "surface")),
     setting("SHARE_REUSE_SESSION", BASIC, TOGGLE, syn = listOf("share", "one", "chat", "same", "reuse")),
@@ -227,7 +230,7 @@ object SettingsRegistry {
     fun allEntries(): List<SettingEntry> = categories.flatMap { it.entries }
 
     /**
-     * The six cross-category rows surfaced inline on the hub. Returned in
+     * The five cross-category rows surfaced inline on the hub. Returned in
      * category display order.
      */
     fun hubBasicEntries(): List<SettingEntry> = allEntries().filter { it.hubBasic }

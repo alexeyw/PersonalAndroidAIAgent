@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import app.knotwork.design.components.buttons.KnotworkButtonSize
 import app.knotwork.design.components.buttons.KnotworkSecondaryButton
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.components.topbar.JournalExportActions
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -178,6 +179,16 @@ private fun JournalTopBar(strings: ExternalAutomationJournalStrings, callbacks: 
                     tint = MaterialTheme.colorScheme.onSurface,
                 )
             }
+        },
+        actions = {
+            // The same pair, in the same place, as the trigger journal: one kind
+            // of artefact, so one affordance for it.
+            JournalExportActions(
+                shareContentDescription = strings.exportShareCd,
+                saveContentDescription = strings.exportSaveCd,
+                onShare = callbacks.onShareJournal,
+                onSave = callbacks.onSaveJournal,
+            )
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,

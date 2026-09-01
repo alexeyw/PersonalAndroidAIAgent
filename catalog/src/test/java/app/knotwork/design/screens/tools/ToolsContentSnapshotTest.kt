@@ -102,6 +102,19 @@ class ToolsContentSnapshotTest {
         ToolDetailContent(state = ToolsPreview.toolDetailDefault())
     }
 
+    // The two risk branches are different controls, not two values of one — a
+    // built-in states its level, an MCP tool offers the choice — so each needs
+    // its own frame.
+    @Test
+    fun tool_detail_fixed_risk_light() = snapshot(name = "tool_detail_fixed_risk", dark = false) {
+        ToolDetailContent(state = ToolsPreview.toolDetailFixedRisk())
+    }
+
+    @Test
+    fun tool_detail_fixed_risk_dark() = snapshot(name = "tool_detail_fixed_risk", dark = true) {
+        ToolDetailContent(state = ToolsPreview.toolDetailFixedRisk())
+    }
+
     @Test
     fun tool_detail_schema_error_light() = snapshot(name = "tool_detail_schema_error", dark = false) {
         ToolDetailContent(state = ToolsPreview.toolDetailSchemaError())
@@ -120,6 +133,18 @@ class ToolsContentSnapshotTest {
     @Test
     fun add_mcp_default_dark() = snapshot(name = "add_mcp_default", dark = true) {
         McpServerConfigContent(form = ToolsPreview.addMcpDefault())
+    }
+
+    /**
+     * The empty form, which is where the placeholder actually shows.
+     *
+     * The `add_mcp_default` boards above all carry a typed URL, so the
+     * placeholder — the string that sent the first external tester looking for a
+     * port number he had no way to know — was in no baseline at all.
+     */
+    @Test
+    fun add_mcp_empty_light() = snapshot(name = "add_mcp_empty", dark = false) {
+        McpServerConfigContent(form = AddMcpServerForm())
     }
 
     @Test
@@ -345,6 +370,17 @@ internal object ToolsPreview {
         ),
     )
 
+    /**
+     * Built-in tools present, no MCP servers yet. Not [ToolsVisualState.Empty]:
+     * the built-in group is never empty, so the screen is a normal Default
+     * surface with one empty group in it.
+     */
+    fun noMcpServers(): ToolsViewState = ToolsViewState(
+        visualState = ToolsVisualState.Default,
+        builtInTools = builtIns(),
+        mcpServers = emptyList(),
+    )
+
     fun error(): ToolsViewState = ToolsViewState(
         visualState = ToolsVisualState.Error,
         errorMessage = "Tool discovery handshake failed: connection refused.",
@@ -364,6 +400,14 @@ internal object ToolsPreview {
 }""",
         lastUsed = "2 hours ago",
         enabled = true,
+        risk = ToolRiskUi.Editable(BuiltInToolRisk.Sensitive),
+    )
+
+    /** A built-in tool: the level is stated, and the app owns it. */
+    fun toolDetailFixedRisk(): ToolDetailViewState = toolDetailDefault().copy(
+        toolName = "read_file",
+        serverDisplayName = "Local tool",
+        risk = ToolRiskUi.Fixed(BuiltInToolRisk.ReadOnly),
     )
 
     fun toolDetailSchemaError(): ToolDetailViewState = ToolDetailViewState(
@@ -374,6 +418,7 @@ internal object ToolsPreview {
         schemaJson = null,
         lastUsed = null,
         enabled = false,
+        risk = ToolRiskUi.Editable(BuiltInToolRisk.Destructive),
     )
 
     fun addMcpDefault(): AddMcpServerForm = AddMcpServerForm(url = "https://server.example.com/mcp")

@@ -33,7 +33,10 @@ before the next release ships.
 10. [Files](#files)
 11. [Memory](#memory)
 12. [Settings](#settings)
-13. [Troubleshooting](#troubleshooting)
+
+Two companion pages sit beside this one: [`faq.md`](faq.md) for whether a
+thing is supported and where it lives, and
+[`troubleshooting.md`](troubleshooting.md) for when something is broken.
 
 ---
 
@@ -61,9 +64,10 @@ The bottom of the screen always shows the four navigation tabs:
 - **More** — secondary screens (Memory, Models, Prompt library,
   Skill library, Active tasks, Live metrics, Settings, About).
 
-The Back gesture returns you up the inner stack of the current tab.
-While you are on the start screen of a tab, Back closes the app — it
-does not switch between tabs.
+The Back gesture returns you up the inner stack of the current tab; from
+Chat, the tab the app opens on, it closes the app. The full contract —
+what the highlighted tab means, and where each entry point lands — is in
+[Getting around](#getting-around).
 
 If you picked a scenario during onboarding, the model it needs is
 already downloading (or ready) and you can skip straight to chatting.
@@ -156,7 +160,7 @@ app:
 Open the **Chat** screen and type a message. The agent should reply
 within a few seconds on a device with hardware acceleration, and
 within a longer wait on CPU-only devices. If the reply never arrives,
-jump to [Troubleshooting](#troubleshooting).
+jump to [Troubleshooting](troubleshooting.md).
 
 ---
 
@@ -173,14 +177,30 @@ now built on the Knotwork design system and shows, top to bottom:
 
 - A **top app bar** with the current thread title, the active model
   name beneath it (e.g. *Gemma 2 · 2B*), a menu icon on the left that
-  opens the thread drawer, and a model picker plus overflow menu on
-  the right.
+  opens the thread drawer, and an overflow menu on the right. The model
+  name is a status line, not a control — switch models under
+  **More → Models**. The bar also names the chat's pipeline: the one it
+  is bound to if you picked one, and otherwise the pipeline that
+  actually produced the conversation you are reading — which is what a
+  chat opened by a trigger, by a scheduled task or by external
+  automation shows, since those carry no binding of their own.
 - A **message list** with user and assistant bubbles, inline tool
   invocations, and any clarification or HITL confirmation card the
-  agent surfaced for the current run.
+  agent surfaced for the current run. A run that ends **without an
+  answer** — it failed, you stopped it, an approval window elapsed, or
+  the app was killed mid-run — leaves a line in the conversation saying
+  so. The line is part of the history, so it is still there when you
+  come back to a chat whose run ended while the app was in the
+  background; you will not find a message of yours sitting there with
+  nothing after it.
 - A pinned **composer** at the bottom — type a message or dictate with
   the microphone. The send button morphs into a **stop** button while
   the agent is generating, and into a **retry** button after an error.
+  **Stop ends the run**, not just the screen's view of it: the work
+  stops and the conversation gets a line saying the run was stopped
+  before it could answer. Only that button ends a run — switching to
+  another chat leaves its run going, which is why you can come back
+  to it.
   Anything you type but do not send is **kept per chat**: switch to
   another conversation and back and your half-written message is still
   there (drafts live for the session and are not kept across an app
@@ -315,9 +335,9 @@ history is portable to any app that handles JSON or plain text.
 
 Long-press any message bubble to open its context menu. From there you
 can **Copy** the text to the clipboard, **Re-run** it (drop the text back
-into the composer), **Rate** the reply, or **Save to memory** — which
-stores the message verbatim in long-term memory as a manual entry and
-confirms with a *Saved to memory* snackbar. Saved entries show up under
+into the composer), or **Save to memory** — which stores the message
+verbatim in long-term memory as a manual entry and confirms with a
+*Saved to memory* snackbar. Saved entries show up under
 **More → Memory** with the **Manual** source.
 
 ### Reporting a response
@@ -446,22 +466,31 @@ your request — which pipeline node is running, which tools were
 called, which memory chunks were retrieved, and any errors that
 occurred.
 
-### Agent-status pill
+### The console strip
 
-Just above the message composer sits a single-line **status pill**
-formatted as `[TAG]  body`. It reflects the agent's current activity
-without flooding the chat — for example:
+Just above the message composer sits a dark one-line strip that says
+what it is and what the agent is doing:
 
-| Pill body                          | When you see it                     |
+```
+console │ [NODE]  idle · ready                              ^
+```
+
+The left side is the strip's name, the middle is the live status, and
+the chevron on the right points at where tapping goes. Status lines:
+
+| Status                             | When you see it                     |
 |------------------------------------|-------------------------------------|
 | `[NODE]  idle · ready`             | The agent is waiting for input.     |
-| `[NODE]  generating · streaming`   | A response is being produced.       |
+| `[NODE]  generating`               | A response is being produced.       |
+| `[NODE]  loading model · please wait` | The model is being loaded.       |
 | `[TOOL]  awaiting approval`        | The HITL card is on screen.         |
 | `[NODE]  waiting on clarification` | A clarification card is on screen.  |
 | `[NODE]  error · see message`      | The latest run failed (see banner). |
 
-Tapping the pill opens the **console pane** — a bottom sheet that
-covers most of the screen with the full chronological event log.
+Tapping the strip opens the **console pane** — a bottom sheet that
+covers most of the screen with the full chronological event log. The
+strip does not disappear when you do: it becomes the pane's header, with
+the chevron flipped, so tapping it again closes the console.
 
 ### Console pane
 
@@ -515,7 +544,12 @@ Three actions are available at the pane footer:
   the clipboard, regardless of which filter chip is active.
 - **Clear console** — wipes the on-screen log baseline for the current
   session after a destructive confirmation dialog. The underlying chat
-  messages and the saved pipeline trace are not affected.
+  messages and the saved pipeline trace are not affected. It is reachable
+  from the console header only; the chat overflow menu no longer carries a
+  second copy of it.
+- **Search** — appears on the **Logs** tab only, because the inline search
+  field it opens filters log lines. Vars and Traces have no search field,
+  so they show no magnifier.
 
 The active tab is persisted between runs, so the pane re-opens to the
 tab you used last. The pane auto-scrolls to the latest event as long as
@@ -550,8 +584,9 @@ Three run-wide limits span the whole call tree:
 
 - **Step limit.** The step ceiling is shared across the parent and every
   sub-pipeline it calls, so a composition cannot loop forever by nesting.
-  If it runs out deep inside a sub-pipeline, the whole run stops and says
-  it was **stopped by a safety limit**.
+  If it runs out deep inside a sub-pipeline, the whole stack pauses and the
+  question appears in the chat like any other — continuing resumes the nested
+  run in place.
 - **Token limit.** Charged against the same shared allowance, on the same
   whole-tree basis.
 - **Approvals and questions.** A tool approval or clarification raised
@@ -796,6 +831,20 @@ leaving the app. Full details, including the callback your profile can
 receive back, are in
 [external-automation.md](external-automation.md).
 
+**Taking the journal with you.** Two actions in the screen's top bar hand you
+the whole request journal as a JSON file: **share** it (the system share
+sheet — mail, a chat, a notes app) or **save** it to a folder you pick. Use
+either when you are reporting a problem with a profile: the file says what
+actually reached the app and what it decided, which is the one thing the
+automation app on the other side cannot tell you.
+
+The file holds the journal and nothing else — the same rows the screen shows,
+with the request id, the action, the pipeline the caller named, the packages
+involved, the decision and its reason. Nothing about the *run* a request
+started travels with it: not the message it was given, not the answer it
+produced. Neither action touches the network; the file goes where you send
+it, and nowhere else.
+
 ### Choosing a pipeline per surface
 
 Bind a pipeline to a surface in either place:
@@ -941,10 +990,14 @@ and the verdict:
 - **Fired** — a run started. The entry is completed later with how that run
   ended: **Completed**, **Failed**, **Stopped by the system** (the app's
   process was killed mid-run), **You stopped it**, **Timed out waiting for
-  approval**, or **Stopped by a safety limit** (the run reached the step or
-  token ceiling in force for background runs — a working guard, so it does not
-  count against the trigger's health indicator). Until the run settles it reads **Running…**. If the run stopped
-  to ask you something, a second line says what became of the request —
+  approval**, or **Stopped by a safety limit** — a working guard, so it does
+  not count against the trigger's health indicator. That last one is not the
+  moment the ceiling was reached: a background run that reaches one **pauses and
+  asks** first (see [When a run reaches a limit](#when-a-run-reaches-a-limit)),
+  and settles here only when you answer *Stop the run* or the response window
+  closes with the question unanswered. Until the run settles it reads
+  **Running…**. If the run stopped to ask you something, a second line says
+  what became of the request —
   **You approved it**, **You denied it**, **You answered it**, **Waiting for
   your response**, **No response before the window closed**, or **The request
   never reached you** — and adds *from the notification* (or *in the
@@ -962,7 +1015,20 @@ the moment it was last checked and the likely cause.
 Entries are kept for **30 days** (with a ceiling on the total number) and age
 out in the same nightly maintenance pass as run history. Like everything else
 on this screen, they are stored in the encrypted on-device database and never
-leave the phone.
+leave the phone unless you send them somewhere yourself.
+
+**Taking the journal with you.** The Triggers list — not a single trigger's
+detail — carries two actions in its top bar: **share** the evaluation journal
+as a JSON file, or **save** it to a folder you pick. The file covers *every*
+trigger, because the question a journal answers is usually about the gaps
+("was there a day nothing was checked at all?"), and a per-trigger file could
+not answer it.
+
+It is the right thing to attach to a bug report about background reliability,
+and it is also how you get the journal off a phone that has been running a
+scenario for a week without you opening the app. The file carries the journal
+rows and nothing else: which trigger, when, what woke the check, the verdict,
+and how the run it started ended. Neither action touches the network.
 
 **Why this is worth trusting.** Every evaluation writes exactly one entry at
 the moment the decision is taken, before anything else happens — so a trigger
@@ -1144,20 +1210,35 @@ is an infinite pan / zoom canvas with the following gestures:
   at the long-press point and immediately opens its configuration sheet.
 - **Toolbar** — inline-editable pipeline name on the left; Undo /
   Redo / Delete (selection-aware: edge if one is selected, otherwise
-  selected nodes) / Auto-layout / Run / overflow on the right.
+  selected nodes) / Auto-layout / overflow on the right.
   Auto-layout re-arranges nodes via a Sugiyama-style hierarchy
   (longest-path layering + median crossing reduction) so the graph
-  reads top-to-bottom.
+  reads top-to-bottom. **Save pipeline** lives in the overflow menu and
+  is the action that writes your edits to disk.
 
-The bottom of the screen alternates between two bars:
+  Beside the node count sits an **Unsaved** marker — a coloured dot and the
+  word — shown from the moment the editor holds anything that is not in
+  storage. Leaving while it shows, by the back gesture or the back arrow, asks
+  **Leave without saving?** and offers **Save and leave** or **Discard**.
 
-- **Validation bar** — lists pipeline errors (missing input, dangling
-  output, cycles, empty context, …). Tapping a row centres the canvas
-  on the offending node and selects it. The bar collapses to a
-  single-line "Pipeline is valid" when there are no errors.
-- **Run-trace bar** — replaces the validation bar while a pipeline run
-  is in progress; the active node header pulses and the connecting
-  edges show a traveling-dot animation. Reduced-motion is respected.
+  Two details decide whether that marker is worth trusting. A save refused by
+  validation leaves the work marked unsaved — because it is: nothing was
+  written. And an edit made while a save is in flight stays unsaved rather than
+  being counted as stored. What the marker compares is the whole pipeline,
+  including its name, its sample prompts and its memory query, not just the
+  nodes and the edges.
+
+  The editor has no Run button: it composes pipelines, it does not
+  execute them. You run a pipeline by binding it to a chat and sending a
+  message, or from a trigger / scheduled task — those paths report
+  progress in the chat console, which the editor cannot show.
+
+At the bottom of the screen sits the **validation bar** — it lists
+pipeline errors (missing input, dangling output, cycles, empty context,
+…). Tapping a row centres the canvas on the offending node and selects
+it. The bar collapses to a single-line "Pipeline is valid" when there are
+no errors. Outstanding errors block saving, and the toolbar subtitle
+says so.
 
 The editor also has an **Import JSON** button that lets you load a
 pipeline exported from the standalone browser editor (see
@@ -1172,12 +1253,15 @@ Reach a node's per-type configuration by either:
 - **Picking the node from the radial quick-add menu** — newly added
   nodes open the sheet immediately.
 
-The sheet is a modal bottom-sheet whose body is documented in
-`node-specs.md`. Every node type — Input, Output, LiteRt, Cloud,
-IntentRouter, IfCondition, Clarification, Tool, Decomposition,
-QueueProcessor, Evaluation, Summary, Pipeline, Skill — has its own
-form, with inline validation that disables Save until every required
-field is filled.
+The sheet is a modal bottom-sheet. Every node type — Input, Output,
+LiteRt, Cloud, IntentRouter, IfCondition, Clarification, Tool,
+Decomposition, QueueProcessor, Evaluation, Summary, Pipeline, Skill —
+has its own form, with inline validation that disables Save until every
+required field is filled. Each form's fields, their defaults, and
+**which of them actually change a run** are listed per node type in the
+[pipeline cookbook](cookbook.md) — worth reading before you spend time
+on a field, because some are stored with the pipeline and never
+consulted while it runs.
 
 By default an **Output** node has **no system prompt** and simply forwards
 the previous node's text to you *verbatim* — what the last model or tool
@@ -1450,6 +1534,13 @@ Tools are how the agent takes real action — looking something up,
 scheduling future work, or delegating a hard subtask to a more
 capable model. They are managed from the **Tools** screen.
 
+The screen is two collapsible groups — **Built-in tools** and **MCP
+servers** — each headed by the number of rows it holds. Folding a group
+away never hides a problem inside it: a collapsed **MCP servers** header
+still reports `⚠ 1 disconnected`. The `+` in the top bar adds an MCP
+server from anywhere on the screen; when you have none yet, the empty
+**MCP servers** group carries a labelled **Add server** button instead.
+
 ### Built-in tools
 
 The app ships with the following tools:
@@ -1562,15 +1653,41 @@ The **Approve tool calls** control in **Settings → Tools & workspace** lets
 you require approval for **every** tool call (`All`), regardless of its risk
 level. Choose it if you want to confirm even read-only lookups.
 
+#### Changing a tool's risk level
+
+Open a tool from the **Tools** screen and its detail page shows a **Risk level**
+control. Which form it takes depends on where the tool came from, and that is
+the honest distinction rather than a cosmetic one:
+
+- **A tool built into the app** states its level and does not offer a choice.
+  Its risk is decided in the code, and the gate reads that before it looks at
+  anything you could set — a control here would not act.
+- **A tool from an MCP server**, or one discovered on the device, offers the
+  three levels. It starts at **Sensitive**, because a tool the app cannot
+  inspect is treated conservatively until you say otherwise. Only you know what
+  a given server's tool actually does: setting it to **Read only** stops the
+  approval prompt for it, and **Destructive** brings it under **Block
+  destructive tools** as well as the prompt.
+
+The choice is remembered per tool, and for MCP tools per *server* — the same
+tool name on two servers stays two separate decisions, because they are two
+different tools. A server's own hints about its tools are deliberately not
+consulted: a server that could declare itself read-only could walk straight past
+the gate.
+
 ### Adding an MCP server
 
-The **Tools** screen has a second section called **MCP Servers** —
-external **Model Context Protocol** endpoints that publish their own
-tools. To add one:
+The **Tools** screen groups your own **MCP Servers** — external **Model
+Context Protocol** endpoints that publish their own tools — separately
+from the built-in catalogue. To add one:
 
-1. Scroll to **MCP Servers**.
-2. Paste the server's URL into the **Add New MCP Server URL** field.
-3. Tap **Add Server**.
+1. Tap **+** in the screen's top bar. (It is always there; the empty MCP
+   group also offers the same action.)
+2. Paste the endpoint into **Add New MCP Server URL** — the address your
+   server prints when it starts, path included, as in
+   `https://mcp.example.com/sse`. There is no separate port field: a
+   non-default port belongs in the URL.
+3. Pick the **transport** to match that endpoint, then tap **Add server**.
 
 The server's tools become available to the agent on the next run.
 Remove a server by tapping the trash icon next to its row.
@@ -1667,7 +1784,7 @@ budget is used out of its limit, with a fill bar. As the workspace fills
 it ramps from neutral to amber (near the limit) to red. If it is full,
 a banner explains that the agent's writes are being refused until space
 is freed; delete files or raise the limit (Settings → Tools & workspace →
-Advanced → Workspace max total size) to recover.
+Advanced → Workspace size limit) to recover.
 
 Pull down to refresh the listing.
 
@@ -1709,6 +1826,19 @@ Delete a single file from its preview or overflow menu, or long-press a
 row to enter multi-select and delete several at once. Deletion asks for
 confirmation and is **permanent** — files removed here cannot be
 recovered.
+
+### When something does not work
+
+An import refused for its size or the workspace quota, a **Save as…**
+that could not be written, a file with no readable preview, and a
+multi-select delete that removed only some of its files each say so in a
+message at the bottom of the screen. If an action appears to do nothing,
+read that message — it names what happened.
+
+**Share** reports the same way. A file that cannot be prepared is left
+out of the share, so if only some of a selection can be sent you are told
+how many of how many went; if none can, no share sheet opens and the
+message says why.
 
 ---
 
@@ -1823,7 +1953,8 @@ relevance score of every hit (turn on **Verbose memory logging** in Settings →
 Memory for a snippet per hit as well).
 Each entry's detail sheet also counts how often it has been recalled. If
 something you expected is missing, work down
-[Memory search isn't finding an obvious entry](#memory-search-isnt-finding-an-obvious-entry).
+[Memory search isn't finding an obvious
+entry](troubleshooting.md#memory-search-isnt-finding-an-obvious-entry).
 
 ### What the agent recalls in a background run
 
@@ -1933,11 +2064,10 @@ Every category leads with its **Basic** settings — the ones that change everyd
 behaviour and are safe to adjust. The **Advanced** disclosure holds tuning
 parameters (sampling internals, retrieval thresholds, workspace and HTTP limits,
 retention windows) that have sensible defaults and rarely need changing; the
-"change deliberately" label is a reminder, not a lock. Six cross-category Basic
+"change deliberately" label is a reminder, not a lock. Five cross-category Basic
 controls are also surfaced inline on the hub so you never have to open a
 sub-screen for them: **System instructions**, **Inference backend**, **Approve
-tool calls**, **Block destructive tools**, **Long-running tasks** notifications
-and **Send anonymous crash reports**.
+tool calls**, **Block destructive tools** and **Send anonymous crash reports**.
 
 ### Search the settings
 
@@ -1957,6 +2087,134 @@ See [`docs/images/settings-search.png`](images/settings-search.png)
 (dark variant: [`settings-search-dark.png`](images/settings-search-dark.png))
 for the search results in action.
 
+### What every setting means
+
+Most rows in Settings carry a small **ⓘ** next to the label. Tapping it opens a
+one-sentence explanation in place, under the row, and closes whichever
+explanation was already open — so the screen never grows by more than one panel,
+and nothing is left open when you come back.
+
+A row carries one when its meaning does not follow from its name: it has a
+number, it borrows a word (*Top-K*, *threshold*, *half-life*, *embedding*), or
+changing it has an effect somewhere other than that row. Links to another
+screen, the identity and version rows, and plain actions like *Export memories*
+carry none, and the table below says which and why.
+
+No explanation begins with *"Not wired up yet"* any more. Seven once did — they
+were rows that stored a value nothing read — and each was closed the only two
+honest ways there are. **Temperature**, **Top-K** and **Top-P** now reach the
+on-device model; they had to arrive together, because the engine's sampler is
+set as a whole or not at all, which is why all three sat unread for so long.
+**Repetition penalty**, **Tool-usage instruction**, **Auto-summarize threshold**
+and **Long-running task alerts** were removed: the first has no equivalent in
+the on-device engine, and the other three had no reader at all. A setting that
+does nothing is worse than a missing one, because it invites you to tune it.
+
+The **tool-call timeout** and the four **workspace and HTTP ceilings** used to be
+in the same table with no screen to open them on — findable by search, drawn by
+nothing. They are now five sliders under **Tools & workspace → Advanced**.
+
+The table is **generated from the very strings the app shows**, so it cannot
+drift from them: where a row has a ⓘ, what you read here is word-for-word what
+it opens. What each
+setting *does* when you change it — the measured timeouts, the retry behaviour,
+the ordering rules — is described in the prose of the sections that follow, not
+repeated here.
+
+<!-- AUTO-GEN:SETTINGS_HELP -->
+#### Generation
+
+| Setting | What it means |
+|---|---|
+| **System instructions** | Goes in front of every Local LLM, Cloud and Skill step, wherever it runs — chats, triggers, background. Other node types skip it. |
+| **Temperature** | Higher values make the on-device model's answers more varied and surprising; lower values keep them predictable. |
+| **Top-K** | Caps how many candidate words the on-device model may choose between at each step. Smaller keeps it on the obvious choice. |
+| **Top-P** | Narrows each step to the likeliest words that together reach this share of the probability. Lower is safer, higher roams. |
+| **Max context length** | The working window of the on-device model. Larger holds more at once and runs slower; cloud models use their own window. |
+| **Voice input length** | Recording stops on its own at this point and sends what it has. |
+
+#### Models
+
+| Setting | What it means |
+|---|---|
+| **Local model backend** | Which chip runs the on-device model. NPU is fastest where it works; the app falls back on its own if it does not. |
+| **External providers** | *(no explanation — opens a screen that explains itself)* |
+| **Default pipeline** | *(no explanation — opens a screen that explains itself)* |
+
+#### Memory
+
+| Setting | What it means |
+|---|---|
+| **Auto-extract memories** | On, durable facts from your chats — names, preferences, project details — are saved and reused later. |
+| **Memory compaction** | Old memories get merged into shorter summaries once there are many. Frees room; loses the exact wording. |
+| **Compress chat history** | Long threads are summarised past the live window, so the agent keeps the gist instead of forgetting the start. |
+| **Memory search top-K** | How many memories are pulled into a reply at most. More context, slower start, and more room for noise. |
+| **Memory search threshold** | Higher recalls only close matches, so less is pulled in; lower recalls more, including memories that miss the point. |
+| **Recency half-life** | How fast old memories lose to new ones when both match. Short favours this week; long treats everything as current. |
+| **Compaction age** | How old a memory must be before compaction may merge it. Fresher facts keep their exact wording until they pass it. |
+| **Max memory chunks** | The ceiling on stored pieces. Reaching it starts a compaction pass, so it does nothing at all while compaction is switched off. |
+| **History compression threshold** | How large a thread grows before everything past the live window is summarised. Lower compresses sooner and keeps less wording. |
+| **Live window size** | How many recent messages stay word-for-word after a thread is summarised. Anything older survives only as the summary. |
+| **Memory summary limit** | How many recent memories the $MEMORY_SUMMARY prompt variable lists. Pipelines that do not use that variable are unaffected. |
+| **Embedding provider** | The model that turns text into the numbers memory search compares. Change it and recall stays poor until you re-embed by hand. |
+| **Verbose memory logging** | Adds each recalled memory, text included, to the console — useful when answers cite the wrong thing, and revealing on a shared screen. |
+| **Export · Import · Re-embed · Clear** | Re-embed rebuilds every vector for the current model. Stay on this screen while it runs, and expect poor recall until it finishes. |
+
+#### Run limits & structured output
+
+| Setting | What it means |
+|---|---|
+| **Run limits** | *(no explanation — opens a screen that explains itself)* |
+| **Max nesting depth** | How many levels of sub-pipeline a run may descend into before it is refused. Deeper composes more; shallow fails a runaway sooner. |
+| **Structured-output repairs** | When a model answers in the wrong shape, how many times it is shown its own output and asked again before the node gives up. |
+| **Cloud retry attempts / base delay** | *(no explanation — opens a screen that explains itself)* |
+
+#### Tools & workspace
+
+| Setting | What it means |
+|---|---|
+| **Approve tool calls** | Which tool calls stop and wait for your approval. Never lets them all through, destructive ones too, unless you also block those. |
+| **Block destructive tools** | On, a destructive tool call is refused outright rather than offered for approval, and the run sees it as a failed call. |
+| **Block network from local model** | On, no cloud provider can be reached even with a key saved. Only a model on this device, or Ollama on your own network, answers. |
+| **Manage tools / MCP servers** | *(no explanation — opens a screen that explains itself)* |
+| **Approval wait** | How long a run waits for you to approve a tool call before it parks and asks again later. It does not bound the call itself. |
+| **Largest file** | The largest single file the workspace accepts, for both writing one and reading one whole. |
+| **Workspace size limit** | How much device storage the whole workspace may hold. A write that would push past it is refused rather than trimmed. |
+| **Single read budget** | How much of a file one read may put in front of the model. The rest is cut, leaving room for the prompt and the thread. |
+| **Largest web response** | How much of a web response reaches the model. Past it the body is cut and marked, so remote text cannot flood the context. |
+| **Allowed HTTP domains** | *(no explanation — opens a screen that explains itself)* |
+
+#### Background & triggers
+
+| Setting | What it means |
+|---|---|
+| **Scheduled task alerts** | A notification arrives when a scheduled task finishes or fails, so a background result does not wait for you to open the app. |
+| **Pipeline for sharing** | Which pipeline runs when you share text or a link into the app from somewhere else. |
+| **Keep shares in one chat** | On, every share lands in one Shared chat. Off, each share opens its own, so the chat list grows with each one. |
+| **Quick Settings pipeline** | Which pipeline the Quick Settings tile runs when you tap it from the notification shade. |
+| **External automation** | Other apps on this device can start a run — Tasker, MacroDroid, adb. Off, those requests are refused. |
+| **Pipeline other apps may run** | The only pipeline an outside app may start. Nothing else can be named in the request, whatever it asks for. |
+| **External request journal** | *(no explanation — opens a screen that explains itself)* |
+| **Resume max age** | How stale a parked run may be and still resume. Past it the run is dropped, because its gathered context no longer holds. |
+| **Background approval window** | How long a background run waits for you to approve a tool call. Unanswered past it, the run ends rather than waiting forever. |
+
+#### Privacy
+
+| Setting | What it means |
+|---|---|
+| **Crash reporting** | Off, nothing leaves the device. On, crashes plus warning and error log lines go out — never your messages, prompts or keys. |
+| **Trace retention · runs** | How many past runs keep their step-by-step trace in a chat. Older traces are dropped; the messages themselves stay. |
+| **Trace retention · age** | How long a trace is kept before it is dropped, whatever the per-chat count. Bounds what accumulates on disk. |
+
+#### About
+
+| Setting | What it means |
+|---|---|
+| **Identity** | *(no explanation — shows a value, decides nothing)* |
+| **App version & licenses** | *(no explanation — opens a screen that explains itself)* |
+| **Reset all settings** | *(no explanation — does what its name says)* |
+<!-- /AUTO-GEN:SETTINGS_HELP -->
+
 ### Generation
 
 System-prompt and sampling controls.
@@ -1966,14 +2224,16 @@ System-prompt and sampling controls.
   of the built-in variables (`$DATE`, `$TIME`, `$LANG`, `$LOCATION`, `$USER`,
   `$DEVICE`) — they expand fresh on every prompt render. The counter shows live
   character usage against the 4 000-character limit.
-- **Tool-usage instruction** *(Advanced)* — extra free-text guidance on when and
-  how the agent should call tools, appended to the tool-calling prompt.
 - **Temperature** (0.0 – 2.0) — higher values produce more varied output.
 - **Top-K** (1 – 100) — keeps only the K most likely tokens.
 - **Top-P** (0.0 – 1.0) — nucleus sampling threshold.
-- **Repetition penalty** (1.0 – 2.0) — `1.0` is neutral; higher values discourage
-  the model from repeating recent tokens.
 - **Max context length** (512 – 8 192) — working window in tokens.
+
+  The three sampling sliders apply to the **on-device** model. They are sent as
+  one sampler configuration, so all three take effect together; cloud providers
+  use their own defaults and ignore these. The structured-output repair pass
+  overrides them deliberately, because that pass exists to get well-formed
+  output back rather than interesting output.
 - **Voice-input length** (seconds, default 30) — the auto-stop limit for voice
   capture before transcription.
 
@@ -2087,7 +2347,6 @@ Basic:
 
 Advanced:
 
-- **Auto-summarize threshold** — `%` of the memory context budget.
 - **Search results (top-K)** (1–20, default 5), **Similarity threshold**
   (0.30–0.90, default 0.55), **Recency half-life** (7–180 days, default 30),
   **Compaction age** (7–90 days, default 30) and **Max stored chunks**
@@ -2113,7 +2372,12 @@ Advanced:
 Each slider only offers in-range values; a rejected value shows an inline message
 and is discarded rather than saved.
 
-### Pipelines & structured output
+### Run limits & structured output
+
+The category holds the *limits and knobs* an autonomous run obeys. The pipelines
+themselves live on the **Pipelines** tab (library and editor) and under
+**More → Library**; this screen never lists them. Searching Settings for
+`pipelines` still lands here.
 
 - **Run limits** *(Basic link)* — opens the [Run limits](#run-limits) screen,
   and shows the current step and token limits on the row itself.
@@ -2126,9 +2390,9 @@ and is discarded rather than saved.
 
 #### Run limits
 
-An autonomous run stops itself when it reaches one of these limits. Everything a
-run starts counts towards them — pipelines it calls, and every time it resumes
-after a pause. There are four numbers and one statement:
+A run that reaches one of these limits pauses and asks whether it may carry on.
+Everything a run starts counts towards them: pipelines it calls, and every time
+it resumes after a pause. There are four numbers and one statement:
 
 - **Steps per run** (5 – 100) — how many steps a run may take before it stops.
   One step is one node execution.
@@ -2175,13 +2439,38 @@ A run that keeps producing *different* results is not repeating itself, however
 long it takes, and this never touches it. That case is what the limits above are
 for.
 
-When a limit is actually reached, the run **ends** — it does not pause and does
-not ask what to do. The chat shows **Stopped by a safety limit**, which allowance
-ran out, how much of it was used, and an **Adjust limits** action. A background
-run that stops this way is announced the same way in its notification and
-recorded in the trigger's journal, where it deliberately does **not** count
-against the trigger's health: a limit you configured doing its job is not a
-fault.
+#### When a run reaches a limit
+
+The run **pauses and asks**. The chat shows **Paused at a safety limit**, which
+allowance ran out, how much of it was used, and two actions: **Continue (+N)**
+and **Stop the run**.
+
+Continuing buys the run **one more portion of the same allowance** — the number
+on the button, which is the limit it just reached. It does not lift the limit:
+when that portion runs out the run asks again, so a run that has been waved
+through five times is one you have said yes to five times. Stopping ends it
+exactly as reaching a limit used to: **Stopped by a safety limit**, with an
+**Adjust limits** action.
+
+The pause survives everything. It is written down the moment it is raised, so a
+run that reaches its limit while you are elsewhere — a trigger firing overnight,
+or the app being killed while you were away — is still waiting when you come
+back, with the same numbers it stopped at. A run that pauses while you are not
+looking at its chat posts a notification; tapping it opens the conversation where
+the question is. The notification carries no buttons on purpose: what you are
+deciding depends on how much the run has already spent, and the shade has nowhere
+to show you that.
+
+Two things bound the wait. An unanswered pause expires with the same
+**background response window** that governs approvals (Settings → Tools &
+workspace), after which the run is ended at its limit; and a run whose pipeline
+you edit while it waits cannot be continued, because its checkpoint no longer
+matches the graph.
+
+A background run that ends at a limit — whether you stopped it or the window
+closed — is announced in its notification and recorded in the trigger's journal,
+where it deliberately does **not** count against the trigger's health: a limit
+you configured doing its job is not a fault.
 
 ### Tools & workspace
 
@@ -2199,13 +2488,24 @@ Basic:
   `null` to the inference pipeline and only the on-device LiteRT engine plus
   LAN-local Ollama remain reachable.
 - **Manage tools / MCP servers** *(link)* — enable tools, set per-tool risk
-  overrides, add MCP servers.
+  overrides, add MCP servers. It opens the same surface as the **Tools** tab but
+  *inside* Settings: the bottom-nav highlight stays on the tab you came from and
+  Back returns to this category, not to the Tools tab.
 
 Advanced:
 
-- **Tool-call timeout**, **Workspace max file size**, **Workspace max total
-  size**, **Workspace read token budget** and **HTTP response cap** — the
-  workspace and `http_request` limits.
+- **Approval wait** (5 – 300 s, default 60) — how long a run holds an approval
+  request open in front of you before parking it and asking again later. It does
+  not bound the tool call itself; that deadline is not a setting.
+- **Largest file** (1 – 50 MB, default 5) and **Workspace size limit**
+  (10 – 1024 MB, default 100) — the per-file and total ceilings on the agent
+  workspace. A write that would cross either is refused.
+- **Single read budget** (200 – 8 000 tokens, default 2 000) — how much of a file
+  one `read_file` call may return. Anything past it is cut, with a marker, so one
+  read cannot fill the model's whole context.
+- **Largest web response** (64 – 8 192 KB, default 1 024) — how much of an
+  `http_request` response is read into the answer. Bounds how much untrusted
+  remote text a single call can put in front of the model.
 - **Files / allowed domains** *(link)* — the `http_request` domain allowlist and
   the workspace file browser.
 
@@ -2215,8 +2515,6 @@ Notifications and the windows that govern parked / resumable runs.
 
 Basic:
 
-- **Long-running tasks** — when on, a low-importance system notification fires
-  when a backgrounded pipeline run exceeds the long-running threshold.
 - **Scheduled task results** — when on, finishing a scheduled background task
   posts a **Task completed** notification with the first line of the answer (or
   **Task failed** with the reason); tapping it opens the conversation the result
@@ -2316,12 +2614,48 @@ Controls:
 
 ---
 
+## Getting around
+
+Four tabs sit at the bottom: **Chat**, **Pipelines**, **Tools**, **More**.
+Everything else is a screen pushed on top of one of them.
+
+- **The highlighted tab is the one you are inside.** It follows the screens you
+  actually opened, not the screen you are looking at — open the tool list from
+  **Settings** and the highlight stays where you were, because that is where
+  Back will take you.
+- **Back returns to where you came from**, one screen at a time — never to a
+  tab you did not open.
+- **A tab is only ever entered by tapping it** (or by a launcher shortcut /
+  notification, which behaves the same way). No link inside a screen drops you
+  onto a different tab: a surface reachable from two places opens in the place
+  you opened it from. `Settings → Tools & workspace → Manage tools` is the
+  example — same screen as the Tools tab, but it stays inside Settings.
+- **Notifications open the chat they belong to**, replacing whatever chat was on
+  screen rather than stacking a second one, so Back closes the app exactly as it
+  would after a normal launch.
+
 ## More tab
 
-The **More** tab is the landing page for every secondary surface.
+The **More** tab is the landing page for every secondary surface. Its
+twelve rows sit in four named sections:
+
+| Section | Rows |
+|---|---|
+| **Automation** | Triggers · Library · Tasks |
+| **Your content** | Memory · Files · Archive |
+| **Building blocks** | Prompts · Skills · Models |
+| **App** | Settings · Live metrics · About |
+
+Automation comes first because it holds the reasons to open More at all,
+and App comes last because that is where Settings is looked for. The
+sections are labels: nothing here is a separate screen, and no row goes
+anywhere different than it did before.
+
 Each row carries a live counter (memory chunks, active model name,
-prompt categories, active-task count + a numeric badge, app
-version), and a footer pill summarises the privacy state — when the
+prompt categories, app version). Only **Tasks** carries a numeric badge,
+which is what keeps a badge meaning "something is running right now" — a
+stored quantity like the archived-chat count lives in the row's subtitle
+instead. A footer pill summarises the privacy state — when the
 agent has not made any outbound LLM or MCP call for a minute, the
 pill reads `on-device · no network calls in last N m`; an in-flight
 cloud call flips the indicator to `online · cloud enabled`. The
@@ -2551,209 +2885,12 @@ detailed privacy stance.
 
 ---
 
-## Troubleshooting
-
-### The model fails to load with "out of memory"
-
-Local LLMs need a large block of contiguous memory. If loading a
-model fails:
-
-- Open **Models** and tap **Make Active** on a smaller model. Quad-
-  or 4-bit-quantised variants tend to fit where full-precision ones
-  do not.
-- If you have multiple models on the device, the previously active
-  one stays loaded until a new one is activated. Switching back and
-  forth a few times can leave the device fragmented — closing the
-  app entirely (swipe it away from the recents list) and reopening
-  it frees the native handle reliably.
-- Make sure other heavy apps are not running in the background.
-
-### Inference is very slow
-
-Without an NPU or a usable GPU, the local model runs on CPU only,
-which is noticeably slower (especially for the first few tokens):
-
-- Open **Settings → Models** and tap **Test backend** to confirm
-  which backend the model is actually using.
-- Try a smaller model from the **Models** screen — even a 1B-2B
-  parameter model can be substantially faster than a 7B+ one on
-  CPU.
-- Lower **Max context length** in **Settings → Generation → Advanced**.
-  Shorter contexts mean less work per token.
-
-### A tool says it is unavailable
-
-Two common causes:
-
-- A built-in tool that delegates to a cloud provider (for example,
-  **delegate_task**) requires at least one cloud API key in
-  **Settings → Models → External providers**. Without a key it is hidden
-  from the agent.
-- An MCP-server tool requires the server itself to be reachable.
-  Open the **Tools** screen and confirm the server is still listed
-  under **MCP Servers**; if the URL changed or the server is down,
-  the tool will fail with an error event in the console.
-
-### An MCP server is connected but a tool I expect isn't there
-
-If the server row says `ok` and the tool still never appears, the server
-is probably not publishing it to this app. Some tools only work with
-clients that support extra features Knotwork does not have yet, and a
-well-behaved server leaves those out of the list rather than offering
-something that would fail. See [What the tool count on a server row
-means](#what-the-tool-count-on-a-server-row-means) — it is a real
-limitation, not a misconfiguration you can fix from the Tools screen.
-
-### The same question goes to the cloud one time and stays local the next
-
-That is usually the router reading the conversation, not a bug. See [Why
-the same question can take a different
-route](#why-the-same-question-can-take-a-different-route) for what to
-change if you want the decision to be repeatable.
-
-### A background run dies the moment I leave the app
-
-Almost always battery restrictions rather than the app: with the default
-setting, the system can reclaim the process within seconds of the app
-going away. See [Battery settings decide whether any of this
-happens](#battery-settings-decide-whether-any-of-this-happens). The same
-cause is behind most triggers and scheduled tasks that never produce a
-result.
-
-### A pipeline went missing
-
-If you delete or rename a pipeline that a chat was bound to, the
-chat falls back to the **default** pipeline marked in the library
-on its next message. There is no broken state — replies keep
-working — but the conversation will start using whichever pipeline
-is currently flagged as the default. Pick a new pipeline for the
-chat by reopening the **Pipelines** screen and using **Set as
-default**, or rebind the chat by creating a new one.
-
-### The agent stopped mid-run
-
-A long run can reach one of its **run limits**. The run does not pause and does
-not ask what to do — it stops, and the chat says **Stopped by a safety limit**
-along with which allowance ran out and how much of it was used. **Adjust limits**
-on that message opens the screen where you can raise it.
-
-Two things worth knowing before you raise anything. The limit that stopped the
-run may be the **token** one rather than the step one, so read the message rather
-than assuming; and a run you did not start yourself is governed by
-the **background** limits, which are set separately on the same screen.
-
-But read the message first, because not every mid-run stop is a limit. **Stopped:
-the run was not getting anywhere** means the run was repeating itself and was
-ended for that — raising a limit would only buy it more circles, so open the
-console and look at which step keeps coming back. **Stopped: the run went quiet**
-is a third thing again: a step stopped responding, most often a tool or a server
-that never answered, and the run was ended so other messages could run. That one
-may well work on a second try.
-
-### A trigger didn't fire
-
-Open the trigger and read its **Evaluation journal** (see
-[Triggers](#checking-what-a-trigger-has-been-doing)) — the answer is almost
-always there, and which of two shapes it takes decides what to do next:
-
-- **There is an entry for the moment you expected, saying it didn't run.**
-  The reason is stated: the condition wasn't met, it had already fired for
-  that window, the trigger was off, or no pipeline is bound. Nothing is
-  broken — either the condition is not what you thought, or the trigger needs
-  binding or enabling.
-- **There is an entry, and it fired but ended badly.** *Failed* points at the
-  pipeline (open the run in the trigger's chat and read the console). Two
-  failures name themselves: *the run was not getting anywhere* means it was
-  repeating itself, and the console's log shows the same step running again and
-  again before the line that ends it;
-  *the run went quiet* means a step stopped responding — the console's log ends
-  with the step it started and never finished, and that step is the thing to
-  look at, though the **Vars** tab will have nothing for it because it never
-  produced anything;
-  *Stopped by the system* means the process was killed mid-run, which is a
-  battery / memory-pressure problem, not a pipeline one; *Timed out waiting
-  for approval* means the run parked on a sensitive tool and the approval
-  window expired before you answered — either respond sooner, widen
-  **Settings → Background & triggers → Approval window**, or use a pipeline
-  whose tools don't need approval. If the entry says *The request never
-  reached you*, the opposite happened: the approval could not be handed over
-  at all, so no notification was worth waiting for.
-- **There is no entry at all around that time,** and the list shows
-  **Overdue**. The app was never woken to check. This is a platform-side
-  problem: exclude the app from battery optimisation, and on phones with an
-  extra vendor layer (Samsung, Xiaomi, OnePlus and others) also take it out
-  of any "sleeping"/"deep sleeping" app list. Note that every non-charging
-  trigger runs on a deferrable background schedule (see [How soon a trigger
-  fires](#how-soon-a-trigger-fires)) — a check arriving late is normal; a
-  gap of many times the trigger's own cadence is not.
-
-A trigger that has never been evaluated at all shows *"No evaluations yet"* —
-expected right after you create one, since the first check is up to the next
-poll.
-
-### Memory search isn't finding an obvious entry
-
-If a memory you know exists never shows up in a reply (or in the Memory
-screen's search), work down this list:
-
-- **The node isn't reading memory.** Only nodes with the **Long-term
-  memory** input flag pull from the store. Open the pipeline, check the
-  node's *Input Data* section, and watch the **Console → Memory** filter:
-  if there is no `Memory: query=… → N hits` line for the run, the active
-  node never queried memory.
-- **The similarity threshold is too high.** A high **Settings → Memory →
-  Similarity threshold** drops loosely-related chunks before they reach
-  the prompt. Lower it (or pin the entry — pinned chunks bypass the
-  threshold entirely and always sort to the top).
-- **Fresher entries won the slots.** Age never disqualifies an entry —
-  a chunk that clears the similarity threshold stays retrievable however
-  old it is — but freshness is a tie-breaker, so when more entries clear
-  the threshold than **Search results (top-K)** allows, newer ones win
-  the slots. Raise top-K, raise **Recency half-life** (it widens the
-  window in which freshness still counts for much), or pin the entry.
-- **Another entry said the same thing.** Entries whose meaning nearly
-  matches a better-ranked one are collapsed into it, so a reworded
-  duplicate does not spend a second slot. The surviving copy is the
-  pinned one if there is one, otherwise the best-ranked.
-- **The entry is queued for re-embedding.** A chunk imported under a
-  different embedding provider can't be matched until the background
-  re-embed finishes (it scores ~0 in the meantime). Give it a moment, or
-  force it with **Settings → Memory → Re-embed**.
-- **The provider changed.** Switching the **Embedding model** leaves
-  existing chunks in the old vector space; run **Re-embed** so the whole
-  store shares the active provider's space again. The Memory card shows
-  a persistent *re-embed recommended* banner while this mismatch holds.
-- **It was never extracted.** Auto-extract only keeps durable facts
-  (preferences, events, relationships) and skips small talk and
-  near-duplicates. If a fact didn't make the cut, add it by hand with
-  **Save to memory** or the **Add memory** FAB.
-
-### "Your data can't be unlocked" appears at startup
-
-All local data is stored in an encrypted database whose key lives in
-Android's hardware keystore. In rare situations — typically right after
-restoring the app from a backup, after an OS update, or due to a
-transient keystore glitch — that key can become temporarily unreadable,
-and the app shows a dedicated recovery screen instead of starting:
-
-- **Tap Retry first — possibly more than once.** Keystore failures are
-  often transient; if the key becomes readable again, the app opens your
-  existing data untouched. Rebooting the device before another retry
-  helps in some cases.
-- **Erase all data is the last resort.** If retrying never gets past the
-  screen, the key is gone for good and the encrypted database can no
-  longer be opened by anyone — including the app itself. **Erase all
-  data** deletes the database and generates a fresh key so you can start
-  over. The action is irreversible and guarded by a typed confirmation.
-
-The app never deletes or re-keys your data automatically in this state:
-without the original key the database contents cannot be recovered, so
-the decision to wipe is always yours.
-
----
-
 ## See also
 
+- [`faq.md`](faq.md) — short answers to the questions that come up most,
+  each one pointing back into this guide.
+- [`troubleshooting.md`](troubleshooting.md) — what to do when something
+  does not work.
 - [`architecture.md`](architecture.md) — internal design of the
   agent for contributors and reviewers.
 - [`extending.md`](extending.md) — recipes for adding new node

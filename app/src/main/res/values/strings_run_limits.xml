@@ -43,7 +43,7 @@
     <!-- Settings-search description for the entry row. Replaces
          settings_search_desc_pipeline_max_steps, which shipped in the app
          promising a pause the engine never performs. -->
-    <string name="run_limits_entry_search">Caps on how much one autonomous run may use — steps, tokens, and why spend cannot be capped.</string>
+    <string name="run_limits_entry_search">Caps on one autonomous run: steps, tokens, and what cannot be capped.</string>
 
     <!-- A limit, with the reader's own digit grouping. -->
     <string name="run_limits_number" tools:ignore="PluralsCandidate">%1$,d</string>
@@ -136,6 +136,37 @@
     <string name="run_termination_meter_steps_live" tools:ignore="PluralsCandidate">Used %1$,d of %2$,d steps</string>
     <string name="run_termination_meter_tokens_live" tools:ignore="PluralsCandidate">Used %1$,d of %2$,d tokens</string>
 
+    <!-- The ceiling pause. Its own title rather than the termination one above,
+         which says "stopped": nothing has stopped yet, and a card headed
+         "Stopped by a safety limit" beside a Continue button reads as an error
+         the user is being invited to override rather than a decision they are
+         being asked to make.
+
+         Both the body and the CTA name the size of the next portion, and the
+         number passed in is the limit that BOUND — including every portion
+         granted before now — not the configured setting. A run on its third
+         extension is being offered the same amount again, and quoting the base
+         ceiling would understate what the user is authorising.
+
+         The CTA says the number for the same reason: "Continue" alone reads as
+         removing the limit, which is exactly what this gate does not do. -->
+    <string name="run_ceiling_pause_title">Paused at a safety limit</string>
+    <string name="run_ceiling_pause_body_steps" tools:ignore="PluralsCandidate">This run has used every step it was allowed. You can let it carry on for another %1$,d steps, or stop it here.</string>
+    <string name="run_ceiling_pause_body_tokens" tools:ignore="PluralsCandidate">This run has used every token it was allowed. You can let it carry on for another %1$,d tokens, or stop it here.</string>
+    <string name="run_ceiling_pause_continue" tools:ignore="PluralsCandidate">Continue (+%1$,d)</string>
+    <string name="run_ceiling_pause_stop">Stop the run</string>
+
+    <!-- Notification copy for a pause raised while the user is elsewhere. The
+         shade carries no Continue / Stop actions on purpose: the decision turns
+         on how much the run has already spent, and two buttons without that
+         number would ask the user to authorise more work blind. Tapping opens
+         the chat, where the card states it. -->
+    <string name="run_ceiling_pause_notification_title">A run is waiting on you</string>
+    <string name="run_ceiling_pause_notification_text_steps" tools:ignore="PluralsCandidate">Used %1$,d of %2$,d steps. Tap to decide whether it carries on.</string>
+    <string name="run_ceiling_pause_notification_text_tokens" tools:ignore="PluralsCandidate">Used %1$,d of %2$,d tokens. Tap to decide whether it carries on.</string>
+    <string name="run_ceiling_channel_name">Run Limits</string>
+    <string name="run_ceiling_channel_description">Runs that reached a limit you set and are waiting to be told whether to carry on.</string>
+
     <!-- The composer banner does NOT share the tile's string. It is clamped to
          two lines, so it gets its own single clause; sharing one sentence is what
          cut the copy in half at large font scales. -->
@@ -174,4 +205,19 @@
     <string name="run_termination_notification_body_step_ceiling" tools:ignore="PluralsCandidate">“%1$s” stopped at its step limit, after %2$,d steps.</string>
     <string name="run_termination_notification_body_token_ceiling" tools:ignore="PluralsCandidate">“%1$s” stopped at its token limit, after %2$,d tokens.</string>
 
+
+    <!--
+        Chat-thread lines for a run that ended without an answer. Written into
+        the thread by `RunOutcomeAnnouncer` so the outcome survives the app
+        being backgrounded; the protective stops reuse the
+        `run_termination_body_*` vocabulary above rather than adding wordings.
+    -->
+    <!-- The run failed and the engine did not classify why; %1$s is its diagnostic. -->
+    <string name="run_outcome_chat_failed_with_diagnostic">This run stopped before it could answer: %1$s</string>
+    <!-- The run failed with nothing concrete to report. -->
+    <string name="run_outcome_chat_failed">This run stopped before it could answer.</string>
+    <!-- The run was cancelled — the user stopped it, or the app was killed mid-run. -->
+    <string name="run_outcome_chat_cancelled">This run was stopped before it could answer.</string>
+    <!-- The run was interrupted and left unfinished. -->
+    <string name="run_outcome_chat_interrupted">This run was interrupted and did not finish.</string>
 </resources>

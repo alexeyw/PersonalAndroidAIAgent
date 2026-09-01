@@ -99,6 +99,23 @@ interface ExternalAutomationJournalRepository {
     fun observeAll(): Flow<List<ExternalAutomationJournalEntry>>
 
     /**
+     * Reads the entire journal as a one-shot snapshot, newest request first.
+     *
+     * Unlike [observeAll] this is a plain suspend read returning a stable
+     * point-in-time copy — it backs the journal export the user hands to a bug
+     * report or an offline analysis, where a subscription would be the wrong
+     * shape (the document is a moment, not a stream). Mirrors
+     * [TriggerJournalRepository.readAll], including its posture: per the
+     * best-effort observer contract it degrades to an **empty list** on any
+     * storage error (logged, never thrown), so an export can never take down the
+     * caller; `CancellationException` is still re-thrown.
+     *
+     * @return Every stored [ExternalAutomationJournalEntry], newest first; empty
+     *   on a read failure or an empty journal.
+     */
+    suspend fun readAll(): List<ExternalAutomationJournalEntry>
+
+    /**
      * Applies the retention policy — age window first, then the hard row cap — in
      * one transaction.
      *

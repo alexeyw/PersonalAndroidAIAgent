@@ -2,6 +2,7 @@ package app.knotwork.android.domain.repositories
 
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
+import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunOrigin
 import app.knotwork.android.domain.models.RunSpend
 import app.knotwork.android.domain.models.RunTerminationReason
@@ -16,7 +17,8 @@ import kotlinx.coroutines.flow.Flow
  * strict split: the task queue owns creation, the RUNNING transition, and all
  * terminal transitions; the execution engine owns per-node progress
  * ([updateCurrentNode]) and the suspension statuses
- * ([PipelineRunStatus.WAITING_APPROVAL] / [PipelineRunStatus.WAITING_CLARIFICATION]).
+ * ([PipelineRunStatus.WAITING_APPROVAL] / [PipelineRunStatus.WAITING_CLARIFICATION]
+ * / [PipelineRunStatus.WAITING_CEILING]).
  *
  * **Best-effort contract.** Run records are an observability layer, never a
  * correctness dependency of the execution they describe. Implementations must
@@ -132,6 +134,30 @@ interface PipelineRunRepository {
     suspend fun getSpend(rootRunId: String): RunSpend
 
     /**
+     * Grants a run tree one more portion of the ceiling on [axis] — the durable
+     * half of a user answering "continue" on a ceiling pause.
+     *
+     * Written to the record rather than to the ledger because the ledger the
+     * question came from is usually gone: the run parked, its coroutine ended,
+     * and the answer may arrive hours later in a process that has yet to build
+     * one. The resumed run reads the grant back through [getSpend].
+     *
+     * The caller must have resolved [rootRunId] to the **root** of the tree —
+     * a park can sit on a sub-pipeline run, but the counters live where the
+     * spend does. Must be called *before* the resume is enqueued, or the
+     * rebuilt ledger breaches again on its first node.
+     *
+     * Best-effort like the rest of this store, with a specific consequence
+     * worth naming: a lost write means the resumed run stops again at the same
+     * ceiling and asks again. The user answers twice; nothing runs past a limit
+     * it was not granted.
+     *
+     * @param rootRunId Id of the run at the root of the tree.
+     * @param axis The ceiling the user granted one more portion of.
+     */
+    suspend fun extendCeiling(rootRunId: String, axis: RunCeilingAxis)
+
+    /**
      * Returns the run with [runId], or `null` when no such run exists (or the
      * store is unreadable — best-effort contract). Checkpoint resume uses it
      * to load and validate the one specific run being resumed.
@@ -193,8 +219,9 @@ interface PipelineRunRepository {
      * Two starting points are sanctioned: [PipelineRunStatus.INTERRUPTED]
      * (the terminal-exit transition next to [discardInterruptedRun]) and the
      * persistent waiting statuses ([PipelineRunStatus.WAITING_APPROVAL] /
-     * [PipelineRunStatus.WAITING_CLARIFICATION]) of a parked run whose
-     * pending interaction was answered. The transition is guarded in SQL by
+     * [PipelineRunStatus.WAITING_CLARIFICATION] /
+     * [PipelineRunStatus.WAITING_CEILING]) of a parked run whose pending
+     * interaction was answered. The transition is guarded in SQL by
      * the expected [fromStatus]: a run in any other status is left untouched
      * and the method reports failure, which is what serialises racing
      * resume / discard attempts.

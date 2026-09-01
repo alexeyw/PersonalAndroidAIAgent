@@ -64,9 +64,8 @@ class InitializeAppUseCase @Inject constructor(
         val isFirstLaunch = settingsRepository.isFirstLaunch.first()
 
         if (isFirstLaunch) {
-            // Save default prompts to settings so they can be modified later by the user
+            // Save the default prompt to settings so the user can edit it later.
             settingsRepository.setSystemPromptPrefix(DefaultPrompts.SYSTEM_PROMPT_PREFIX)
-            settingsRepository.setToolUsageInstruction(DefaultPrompts.TOOL_USAGE_INSTRUCTION)
 
             // Materialise the bundled showcase pipeline as the seed; fall back
             // to the code-level factory if the preset asset is unavailable.

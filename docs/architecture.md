@@ -86,9 +86,17 @@ The presentation layer is hosted by a single `NavHost` declared in
 - **Secondary destinations** live as additional `composable(...)` entries
   reachable from inside a tab. The pipelines tab is a nested `navigation { }`
   graph so the library and editor share a single `OrchestratorViewModel`
-  scoped to the graph entry. The More tab is the umbrella for Memory,
-  Models, Prompt library, Active tasks, Live metrics, Settings, and
-  About.
+  scoped to the graph entry. The More tab is the umbrella for the twelve
+  secondary surfaces, grouped into four named sections (Automation, Your
+  content, Building blocks, App); the sections are labels rendered by
+  `MoreContent`, not destinations.
+- **Which tab is highlighted, and whether Back exits, are derived from the
+  back stack** (`presentation/ui/navigation/TabOwnership.kt`), not from a
+  `route → tab` table. A screen belongs to the tab it was opened from, so a
+  destination added to the graph cannot silently highlight nothing. A tab root
+  is entered only through `navigateToTab`, never pushed on top of another
+  subtree's stack; a surface that must be reachable from two subtrees is
+  registered at two routes instead (`NavRoutes.SETTINGS_TOOLS_MANAGE`).
 - **Modal sheets** (`NodeConfigSheet`, `ConsolePane`, `AddMcpServerScreen`)
   share a single `KnotworkModalRoute` wrapper that combines Material3
   `ModalBottomSheet` with `PredictiveBackHandler` so Android 14+
@@ -1653,14 +1661,38 @@ flowchart TD
     Queue --> Finish["PipelineRunRepositoryImpl.finishRun<br/>(terminal transition)"]
     Finish -.->|"outcome by runId<br/>(origin = TRIGGER only)"| Journal
     Journal --> Health["TriggerHealthEvaluator / TriggerJournalGrouper<br/>→ health badge + detail journal"]
+    Journal --> Export["ExportTriggerJournalUseCase<br/>(readAll + render)"]
+    Export --> Debug["TriggerJournalDumpReceiver<br/>(src/debug, adb → soak file)"]
+    Export --> InApp["Share sheet / SAF document<br/>(any build, explicit user action)"]
 ```
+
+**Getting the journal out.** The renderer has exactly one caller-facing seam,
+`ExportTriggerJournalUseCase`, and both doors go through it: the debug-only
+`TriggerJournalDumpReceiver` (adb, during a soak run where the app is never
+opened) and the two top-bar actions on the Triggers list, which exist on a
+release build as well. Filename and `generatedAt` formatting are shared too, so
+the two produce the identical document and one parser reads both — the property
+`JournalExportRoundTripTest` pins.
+
+The export is the whole journal rather than the open trigger's slice, which is
+why the action sits on the list and not on the detail screen: the questions a
+journal is read for span triggers ("was there a day with no evaluation at
+all?"). The external-request journal — the entry-surface screen described
+earlier in this section — carries the same pair of actions over its own
+format, from the same catalog component. Nothing about a *run* travels in either document — the
+journals never held it — and no file on the path may import a network client
+(`JournalExportNoNetworkKonsistTest`).
 
 ---
 
 ## 7. Further reading
 
 - [`docs/user-guide.md`](user-guide.md) — using the app as an end user
-  (chats, console, pipelines, memory, settings, troubleshooting).
+  (chats, console, pipelines, memory, settings).
+- [`docs/faq.md`](faq.md) — short answers to recurring questions, and the
+  standing list of what the app deliberately does not do.
+- [`docs/troubleshooting.md`](troubleshooting.md) — the failures that have
+  actually come up, and what to change for each.
 - [`docs/extending.md`](extending.md) — recipes for adding new
   `NodeType`s, `Tool`s, cloud providers, and prompt variables.
 - [`docs/code-style.md`](code-style.md) — Kotlin conventions and

@@ -24,7 +24,6 @@ internal object SettingsPreview {
         backendLabel = "NPU (QNN) · auto-fallback to GPU then CPU.",
         selectedBackend = "NPU · auto",
         backendOptions = listOf("NPU · auto", "GPU", "CPU"),
-        longRunningEnabled = true,
         crashReportingEnabled = false,
     )
 
@@ -52,7 +51,7 @@ internal object SettingsPreview {
                 synonym = "max",
             ),
             searchRow("MAX_MEMORY_CHUNKS", SettingsCategoryId.Memory, "Max memory chunks", 0, 3),
-            searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Workspace max file size", 10, 3),
+            searchRow("WORKSPACE_MAX_FILE_SIZE_BYTES", SettingsCategoryId.Tools, "Largest file", 10, 3),
             searchRow("RESUME_MAX_AGE_HOURS", SettingsCategoryId.Background, "Resume max age", 7, 3),
         ),
     )
@@ -95,15 +94,27 @@ internal object SettingsPreview {
 
     fun generation(): GenerationSettingsViewState = GenerationSettingsViewState(
         systemInstructions = systemInstructions(),
-        toolUsageValue = "Prefer the workspace file tools over inlining large outputs into chat.",
-        toolUsageHelper = "Extra guidance on when and how to call tools.",
         advancedSliders = listOf(
             SettingSliderRow(SLIDER_TEMPERATURE, "Temperature", "0.7", 0.7f, 0f..2f),
             SettingSliderRow(SLIDER_TOP_K, "Top-K", "40", 40f, 1f..100f, steps = 99),
             SettingSliderRow(SLIDER_TOP_P, "Top-P", "0.90", 0.9f, 0f..1f),
-            SettingSliderRow(SLIDER_REPETITION_PENALTY, "Repetition penalty", "1.10", 1.10f, 1f..2f),
-            SettingSliderRow(SLIDER_MAX_CONTEXT, "Max context", "4096 tok", 4096f, 512f..8192f, steps = 14),
-            SettingSliderRow(SLIDER_AUDIO_MAX_DURATION, "Voice input length", "60 s", 60f, 5f..120f),
+            SettingSliderRow(
+                SLIDER_MAX_CONTEXT,
+                "Max context",
+                "4096 tok",
+                4096f,
+                512f..8192f,
+                steps = 14,
+                anchorKey = "MAX_CONTEXT_LENGTH",
+            ),
+            SettingSliderRow(
+                SLIDER_AUDIO_MAX_DURATION,
+                "Voice input length",
+                "60 s",
+                60f,
+                5f..120f,
+                anchorKey = "AUDIO_MAX_DURATION_SEC",
+            ),
         ),
     )
 
@@ -128,13 +139,10 @@ internal object SettingsPreview {
         ),
         autoExtractEnabled = true,
         autoExtractLabel = "Auto-extract from conversations",
-        autoExtractSubtitle = "Saves durable facts to memory after each chat",
         compactionEnabled = true,
         compactionLabel = "Background compaction",
-        compactionSubtitle = "Daily clustering of stale chunks while charging",
         chatHistoryCompressionEnabled = true,
         chatHistoryCompressionLabel = "Compress chat history",
-        chatHistoryCompressionSubtitle = "Summarise long threads past the live window",
         advancedSliders = memorySliders(),
         verboseLoggingEnabled = false,
         embeddingTitle = "Embedding model",
@@ -272,15 +280,56 @@ internal object SettingsPreview {
         approveSensitiveLabel = "Sensitive",
         approveNeverLabel = "Never",
         blockDestructive = true,
-        blockDestructiveSubtitle = "Always require a typed confirm for destructive calls.",
         blockNetwork = true,
-        blockNetworkSubtitle = "LiteRT runs offline · cloud gated separately.",
+        advancedSliders = toolsSliders(),
+    )
+
+    private fun toolsSliders(): List<SettingSliderRow> = listOf(
+        SettingSliderRow(
+            SLIDER_TOOL_CALL_TIMEOUT,
+            "Approval wait",
+            "60 s",
+            60f,
+            5f..300f,
+            anchorKey = "TOOL_CALL_TIMEOUT_MS",
+        ),
+        SettingSliderRow(
+            SLIDER_WORKSPACE_MAX_FILE_SIZE,
+            "Largest file",
+            "5 MB",
+            5f,
+            1f..50f,
+            anchorKey = "WORKSPACE_MAX_FILE_SIZE_BYTES",
+        ),
+        SettingSliderRow(
+            SLIDER_WORKSPACE_MAX_TOTAL,
+            "Workspace size limit",
+            "100 MB",
+            100f,
+            10f..1024f,
+            anchorKey = "WORKSPACE_MAX_TOTAL_BYTES",
+        ),
+        SettingSliderRow(
+            SLIDER_WORKSPACE_READ_TOKEN_BUDGET,
+            "Single read budget",
+            "2000 tok",
+            2000f,
+            200f..8000f,
+            anchorKey = "WORKSPACE_READ_TOKEN_BUDGET",
+        ),
+        SettingSliderRow(
+            SLIDER_HTTP_TOOL_MAX_RESPONSE,
+            "Largest web response",
+            "1024 KB",
+            1024f,
+            64f..8192f,
+            anchorKey = "HTTP_TOOL_MAX_RESPONSE_BYTES",
+        ),
     )
 
     // ─── Background ──────────────────────────────────────────────────────────
 
     fun background(): BackgroundSettingsViewState = BackgroundSettingsViewState(
-        longRunningEnabled = true,
         scheduledResultsEnabled = true,
         shareTargetPipelineLabel = "Default System Pipeline",
         shareReuseSessionEnabled = true,
@@ -430,14 +479,160 @@ internal object SettingsPreview {
     )
 
     private fun memorySliders(): List<SettingSliderRow> = listOf(
-        SettingSliderRow(SLIDER_MEMORY_AUTO_SUMMARIZE, "Auto-summarize threshold", "80 %", 80f, 0f..100f),
-        SettingSliderRow(SLIDER_MEMORY_SEARCH_TOP_K, "Search results (top-K)", "5", 5f, 1f..20f),
-        SettingSliderRow(SLIDER_MEMORY_SEARCH_THRESHOLD, "Similarity threshold", "0.55", 0.55f, 0.3f..0.9f),
-        SettingSliderRow(SLIDER_MEMORY_RECENCY_HALF_LIFE, "Recency half-life", "30 d", 30f, 7f..180f),
-        SettingSliderRow(SLIDER_MEMORY_COMPACTION_AGE, "Compaction age", "30 d", 30f, 7f..90f),
-        SettingSliderRow(SLIDER_MEMORY_MAX_CHUNKS, "Max chunks", "5 000", 5000f, 1000f..20000f),
-        SettingSliderRow(SLIDER_MEMORY_COMPRESSION_THRESHOLD, "Compression threshold", "3 500", 3500f, 1000f..8000f),
-        SettingSliderRow(SLIDER_MEMORY_LIVE_WINDOW, "Live message window", "10", 10f, 2f..50f),
-        SettingSliderRow(SLIDER_MEMORY_SUMMARY_LIMIT, "Memory summary size", "5", 5f, 1f..50f),
+        SettingSliderRow(
+            SLIDER_MEMORY_SEARCH_TOP_K,
+            "Search results (top-K)",
+            "5",
+            5f,
+            1f..20f,
+            anchorKey = "MEMORY_SEARCH_TOP_K",
+        ),
+        SettingSliderRow(
+            SLIDER_MEMORY_SEARCH_THRESHOLD,
+            "Similarity threshold",
+            "0.55",
+            0.55f,
+            0.3f..0.9f,
+            anchorKey = "MEMORY_SEARCH_THRESHOLD",
+        ),
+        SettingSliderRow(
+            SLIDER_MEMORY_RECENCY_HALF_LIFE,
+            "Recency half-life",
+            "30 d",
+            30f,
+            7f..180f,
+            anchorKey = "MEMORY_RECENCY_HALF_LIFE_DAYS",
+        ),
+        SettingSliderRow(
+            SLIDER_MEMORY_COMPACTION_AGE,
+            "Compaction age",
+            "30 d",
+            30f,
+            7f..90f,
+            anchorKey = "MEMORY_COMPACTION_AGE_DAYS",
+        ),
+        SettingSliderRow(
+            SLIDER_MEMORY_MAX_CHUNKS,
+            "Max chunks",
+            "5 000",
+            5000f,
+            1000f..20000f,
+            anchorKey = "MAX_MEMORY_CHUNKS",
+        ),
+        SettingSliderRow(
+            SLIDER_MEMORY_COMPRESSION_THRESHOLD,
+            "Compression threshold",
+            "3 500",
+            3500f,
+            1000f..8000f,
+            anchorKey = "CHAT_HISTORY_COMPRESSION_THRESHOLD_TOKENS",
+        ),
+        SettingSliderRow(
+            SLIDER_MEMORY_LIVE_WINDOW,
+            "Live message window",
+            "10",
+            10f,
+            2f..50f,
+            anchorKey = "CHAT_HISTORY_LIVE_WINDOW_SIZE",
+        ),
+        SettingSliderRow(
+            SLIDER_MEMORY_SUMMARY_LIMIT,
+            "Memory summary size",
+            "5",
+            5f,
+            1f..50f,
+            anchorKey = "MEMORY_SUMMARY_DEFAULT_LIMIT",
+        ),
+    )
+
+    // ─── Provider detail ─────────────────────────────────────────────────────
+
+    /**
+     * A key-based provider. Every string arrives resolved, as it does in
+     * production — this module never learns which providers exist.
+     */
+    fun providerDetail(): ProviderDetailViewState = ProviderDetailViewState(
+        title = "OpenAI settings",
+        providerLabel = "OpenAI",
+        backContentDescription = "Back",
+        apiKey = "sk-live-4f2b9c",
+        apiKeyLabel = "OpenAI API key",
+        model = "gpt-4o-mini",
+        modelLabel = "OpenAI model",
+        availableModels = listOf("gpt-4o", "gpt-4o-mini", "o3-mini"),
+        retry = cloudRetry(),
+    )
+
+    /**
+     * Ollama: `apiKey = null`, which hides the field rather than showing an
+     * empty one. It runs LAN-local without authentication, and a blank key box
+     * would read as one the user had forgotten to fill.
+     */
+    fun providerDetailOllama(): ProviderDetailViewState = providerDetail().copy(
+        title = "Ollama settings",
+        providerLabel = "Ollama",
+        apiKey = null,
+        apiKeyLabel = "",
+        model = "llama3.1",
+        modelLabel = "Model name",
+        availableModels = emptyList(),
+        ollama = OllamaProviderInputs(
+            baseUrl = "http://192.168.1.24:11434",
+            baseUrlPlaceholder = "http://localhost:11434",
+            baseUrlValidationError = null,
+            contextWindow = "8192",
+            contextWindowLabel = "Context window",
+            baseUrlLabel = "Base URL",
+        ),
+    )
+
+    /**
+     * The state the whole screen was migrated for: an unencrypted origin waiting
+     * to be allowed. It had no baseline at all, on a screen that had quietly
+     * grown a visual language of its own.
+     */
+    fun providerDetailCleartext(): ProviderDetailViewState = providerDetailOllama().copy(
+        cleartextConsent = CleartextConsentUi(
+            body = "Traffic to 192.168.1.24:11434 is not encrypted. Allow it for this address?",
+            actionLabel = "Allow",
+        ),
+    )
+
+    /** A base URL the parser rejected — the error sits under the field, not in a dialog. */
+    fun providerDetailInvalidUrl(): ProviderDetailViewState = providerDetailOllama().copy(
+        ollama = requireNotNull(providerDetailOllama().ollama).copy(
+            baseUrl = "192.168.1.24",
+            baseUrlValidationError = "Enter a full URL, including http:// or https://",
+        ),
+    )
+
+    /** Retry policy at its defaults; bounds match `SettingsDefaults`. */
+    private fun cloudRetry(): CloudRetryViewState = CloudRetryViewState(
+        sectionTitle = "Retry policy",
+        sectionAnchor = "CLOUD_RETRY_POLICY",
+        attempts = 3,
+        attemptsLabel = "Attempts",
+        attemptsValueLabel = "3",
+        attemptsRange = 1f..5f,
+        attemptsSteps = 3,
+        attemptsAnchor = "CLOUD_RETRY_MAX_ATTEMPTS",
+        delayMs = 1_000L,
+        delayLabel = "Base delay",
+        delayValueLabel = "1000 ms",
+        delayRange = 100f..10_000f,
+        delayAnchor = "CLOUD_RETRY_BASE_DELAY_MS",
+    )
+
+    /** Every provider on offer, in the order the picker lists them. */
+    fun providerPicker(): ProviderPickerViewState = ProviderPickerViewState(
+        title = "Add provider",
+        backContentDescription = "Back",
+        rows = listOf(
+            ProviderPickerRowUi(id = "OpenAi", title = "OpenAI"),
+            ProviderPickerRowUi(id = "Anthropic", title = "Anthropic"),
+            ProviderPickerRowUi(id = "Google", title = "Google"),
+            ProviderPickerRowUi(id = "DeepSeek", title = "DeepSeek"),
+            ProviderPickerRowUi(id = "Ollama", title = "Ollama"),
+        ),
     )
 }

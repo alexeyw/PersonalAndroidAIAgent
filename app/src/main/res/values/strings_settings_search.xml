@@ -14,16 +14,12 @@
     <!-- Generation -->
     <string name="settings_search_name_system_prompt_prefix">System instructions</string>
     <string name="settings_search_desc_system_prompt_prefix">Prepended to every system prompt the agent sends.</string>
-    <string name="settings_search_name_tool_usage_instruction">Tool-usage instruction</string>
-    <string name="settings_search_desc_tool_usage_instruction">Extra guidance on when and how to call tools.</string>
     <string name="settings_search_name_temperature">Temperature</string>
     <string name="settings_search_desc_temperature">Sampling randomness — higher is more creative.</string>
     <string name="settings_search_name_top_k">Top-K</string>
     <string name="settings_search_desc_top_k">Sample only from the K most-likely tokens.</string>
     <string name="settings_search_name_top_p">Top-P</string>
     <string name="settings_search_desc_top_p">Nucleus sampling probability mass.</string>
-    <string name="settings_search_name_repetition_penalty">Repetition penalty</string>
-    <string name="settings_search_desc_repetition_penalty">Discourage repeating the same tokens.</string>
     <string name="settings_search_name_max_context_length">Max context length</string>
     <string name="settings_search_desc_max_context_length">Token window the model reads each turn.</string>
     <string name="settings_search_name_audio_max_duration_sec">Voice input length</string>
@@ -44,8 +40,6 @@
     <string name="settings_search_desc_memory_compaction_enabled">Merge &amp; summarise old memories to save space.</string>
     <string name="settings_search_name_chat_history_compression_enabled">Compress chat history</string>
     <string name="settings_search_desc_chat_history_compression_enabled">Summarise long threads past the live window.</string>
-    <string name="settings_search_name_auto_summarize_threshold">Auto-summarize threshold</string>
-    <string name="settings_search_desc_auto_summarize_threshold">When a thread is summarised into memory.</string>
     <string name="settings_search_name_memory_search_top_k">Memory search top-K</string>
     <string name="settings_search_desc_memory_search_top_k">How many chunks a single retrieval returns.</string>
     <string name="settings_search_name_memory_search_threshold">Memory search threshold</string>
@@ -69,7 +63,7 @@
     <string name="settings_search_name_memory_actions">Export · Import · Re-embed · Clear</string>
     <string name="settings_search_desc_memory_actions">Back up, restore, re-embed or wipe memory.</string>
 
-    <!-- Pipelines &amp; structured output -->
+    <!-- Run limits &amp; structured output -->
     <string name="settings_search_name_pipeline_max_nesting_depth">Max nesting depth</string>
     <string name="settings_search_desc_pipeline_max_nesting_depth">Deepest sub-pipeline expansion allowed.</string>
     <string name="settings_search_name_structured_output_max_repairs">Structured-output repairs</string>
@@ -81,27 +75,25 @@
     <string name="settings_search_name_tool_approval_policy">Approve tool calls</string>
     <string name="settings_search_desc_tool_approval_policy">When to pause for a human yes.</string>
     <string name="settings_search_name_block_destructive_tools">Block destructive tools</string>
-    <string name="settings_search_desc_block_destructive_tools">Always require a typed confirm for destructive calls.</string>
+    <string name="settings_search_desc_block_destructive_tools">Refuse destructive calls outright instead of asking.</string>
     <string name="settings_search_name_block_network_from_local_model">Block network from local model</string>
     <string name="settings_search_desc_block_network_from_local_model">LiteRT runs offline · cloud gated separately.</string>
     <string name="settings_search_name_link_tools_screen">Manage tools / MCP servers</string>
     <string name="settings_search_desc_link_tools_screen">Enable/disable tools, risk overrides, MCP servers.</string>
-    <string name="settings_search_name_tool_call_timeout_ms">Tool-call timeout</string>
-    <string name="settings_search_desc_tool_call_timeout_ms">Abort a tool call after this long.</string>
-    <string name="settings_search_name_workspace_max_file_size_bytes">Workspace max file size</string>
-    <string name="settings_search_desc_workspace_max_file_size_bytes">Largest single workspace file the agent reads.</string>
-    <string name="settings_search_name_workspace_max_total_bytes">Workspace max total size</string>
+    <string name="settings_search_name_tool_call_timeout_ms">Approval wait</string>
+    <string name="settings_search_desc_tool_call_timeout_ms">How long a run waits for your approval before parking.</string>
+    <string name="settings_search_name_workspace_max_file_size_bytes">Largest file</string>
+    <string name="settings_search_desc_workspace_max_file_size_bytes">Largest single file the workspace will write or read.</string>
+    <string name="settings_search_name_workspace_max_total_bytes">Workspace size limit</string>
     <string name="settings_search_desc_workspace_max_total_bytes">Total workspace footprint the agent may use.</string>
-    <string name="settings_search_name_workspace_read_token_budget">Workspace read budget</string>
+    <string name="settings_search_name_workspace_read_token_budget">Single read budget</string>
     <string name="settings_search_desc_workspace_read_token_budget">Token budget for a single workspace read.</string>
-    <string name="settings_search_name_http_tool_max_response_bytes">HTTP response cap</string>
+    <string name="settings_search_name_http_tool_max_response_bytes">Largest web response</string>
     <string name="settings_search_desc_http_tool_max_response_bytes">Largest HTTP tool response kept.</string>
     <string name="settings_search_name_link_files_domains">Allowed HTTP domains</string>
     <string name="settings_search_desc_link_files_domains">Managed on the Files/domains surface.</string>
 
     <!-- Background &amp; triggers -->
-    <string name="settings_search_name_long_running_tasks_notifications">Long-running task alerts</string>
-    <string name="settings_search_desc_long_running_tasks_notifications">Ping when a pipeline runs long in the background.</string>
     <string name="settings_search_name_scheduled_task_notifications">Scheduled task alerts</string>
     <string name="settings_search_desc_scheduled_task_notifications">Notify when a scheduled task fires.</string>
     <string name="settings_search_name_share_target_pipeline_id">Pipeline for sharing</string>

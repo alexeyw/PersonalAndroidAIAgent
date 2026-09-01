@@ -29,12 +29,9 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
@@ -81,10 +78,11 @@ import app.knotwork.design.components.chat.ImageViewer
 import app.knotwork.design.components.chat.SourceChooserSheet
 import app.knotwork.design.components.controls.KnotworkField
 import app.knotwork.design.components.controls.KnotworkTextField
+import app.knotwork.design.components.dialogs.ConfirmDialog
+import app.knotwork.design.components.dialogs.ConfirmDialogUi
 import app.knotwork.design.components.knotworkMarkdownColor
 import app.knotwork.design.components.knotworkMarkdownTypography
 import app.knotwork.design.components.misc.KnotworkSnackbar
-import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.chat.ChatHomeCallbacks
 import app.knotwork.design.screens.chat.ChatHomeContent
 import app.knotwork.design.theme.KnotworkTheme
@@ -203,7 +201,6 @@ fun ChatHomeScreen(
     var renameTargetId by remember { mutableStateOf<String?>(null) }
     var renameDraft by remember { mutableStateOf("") }
     var newThreadSheetVisible by remember { mutableStateOf(false) }
-    var modelPickerVisible by remember { mutableStateOf(false) }
     var deleteDialogVisible by remember { mutableStateOf(false) }
     var deleteThreadTargetId by remember { mutableStateOf<String?>(null) }
     // Report dialog state: the flagged row plus the category and note the user
@@ -226,11 +223,11 @@ fun ChatHomeScreen(
     val importFailedTemplate = stringResource(R.string.chat_import_failed)
     val importUnreadableMessage = stringResource(R.string.chat_import_unreadable)
     val messageCopiedMessage = stringResource(R.string.chat_snackbar_copied)
-    val rateComingSoonMessage = stringResource(R.string.chat_message_rate_coming_soon)
     val reportCopiedMessage = stringResource(R.string.chat_report_snackbar_copied)
     val reportNoBrowserMessage = stringResource(R.string.chat_report_snackbar_no_browser)
     val savedToMemoryMessage = stringResource(R.string.chat_snackbar_saved_to_memory)
     val attachmentFailedMessage = stringResource(R.string.chat_snackbar_attachment_failed)
+    val attachmentReplacedMessage = stringResource(R.string.chat_snackbar_attachment_replaced)
     val voiceFailedMessage = stringResource(R.string.chat_snackbar_voice_failed)
     val saveToMemoryFailedMessage = stringResource(R.string.chat_snackbar_save_to_memory_failed)
     val resumeGraphChangedMessage = stringResource(R.string.chat_snackbar_resume_graph_changed)
@@ -288,6 +285,11 @@ fun ChatHomeScreen(
     LaunchedEffect(viewModel) {
         viewModel.attachments.attachmentErrorEvents.collect {
             snackbarHostState.showSnackbar(message = attachmentFailedMessage)
+        }
+    }
+    LaunchedEffect(viewModel) {
+        viewModel.attachments.attachmentReplacedEvents.collect {
+            snackbarHostState.showSnackbar(message = attachmentReplacedMessage)
         }
     }
     LaunchedEffect(viewModel) {
@@ -389,7 +391,6 @@ fun ChatHomeScreen(
         onCloseDrawer = viewModel.threads::closeDrawer,
         onSelectThread = viewModel::selectThread,
         onNewThread = { newThreadSheetVisible = true },
-        onOpenModelPicker = { modelPickerVisible = true },
         onOverflow = { overflowExpanded = true },
         onSamplePrompt = viewModel::onComposerValueChange,
         onConsoleSnapChange = viewModel.console::setConsoleSnap,
@@ -435,6 +436,8 @@ fun ChatHomeScreen(
         onClarificationReply = viewModel.hitl::submitClarificationReply,
         onResumeRun = viewModel.reattach::resumeInterruptedRun,
         onDiscardRun = viewModel.reattach::discardInterruptedRun,
+        onContinuePastCeiling = viewModel.hitl::continuePastCeiling,
+        onStopAtCeiling = viewModel.hitl::stopAtCeiling,
         onErrorRetry = viewModel::retryAfterError,
         // One slot, three destinations. The tile carries a label, not a verb,
         // so what the action *does* is decided here from the typed reason the
@@ -502,11 +505,6 @@ fun ChatHomeScreen(
                 }
                 ChatContextAction.SaveToMemory -> {
                     viewModel.transfer.saveMessageToMemory(rowId)
-                }
-                ChatContextAction.Rate -> {
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar(message = rateComingSoonMessage)
-                    }
                 }
                 ChatContextAction.Report -> {
                     reportReason = ContentReportReason.HARMFUL_OR_UNSAFE
@@ -602,78 +600,50 @@ fun ChatHomeScreen(
                         deleteDialogVisible = true
                     },
                 )
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.chat_overflow_clear_console)) },
-                    onClick = {
-                        overflowExpanded = false
-                        viewModel.console.requestConsoleClear()
-                    },
-                )
             }
         }
         if (screenState.consoleClearConfirmRequested) {
-            AlertDialog(
-                onDismissRequest = viewModel.console::dismissConsoleClear,
-                title = { Text(stringResource(R.string.chat_console_clear_dialog_title)) },
-                text = { Text(stringResource(R.string.chat_console_clear_dialog_text)) },
-                confirmButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_console_clear_dialog_confirm),
-                        onClick = viewModel.console::confirmConsoleClear,
-                    )
-                },
-                dismissButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_console_clear_dialog_cancel),
-                        onClick = viewModel.console::dismissConsoleClear,
-                    )
-                },
+            ConfirmDialog(
+                ui = ConfirmDialogUi(
+                    title = stringResource(R.string.chat_console_clear_dialog_title),
+                    body = stringResource(R.string.chat_console_clear_dialog_text),
+                    confirmLabel = stringResource(R.string.chat_console_clear_dialog_confirm),
+                    cancelLabel = stringResource(R.string.chat_console_clear_dialog_cancel),
+                ),
+                onConfirm = viewModel.console::confirmConsoleClear,
+                onDismiss = viewModel.console::dismissConsoleClear,
             )
         }
         deleteThreadTargetId?.let { targetId ->
-            AlertDialog(
-                onDismissRequest = { deleteThreadTargetId = null },
-                title = { Text(stringResource(R.string.chat_delete_dialog_title)) },
-                text = { Text(stringResource(R.string.chat_delete_dialog_text)) },
-                confirmButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_delete_dialog_confirm),
-                        destructive = true,
-                        onClick = {
-                            deleteThreadTargetId = null
-                            viewModel.threads.deleteThread(targetId)
-                        },
-                    )
+            ConfirmDialog(
+                ui = ConfirmDialogUi(
+                    title = stringResource(R.string.chat_delete_dialog_title),
+                    body = stringResource(R.string.chat_delete_dialog_text),
+                    confirmLabel = stringResource(R.string.chat_delete_dialog_confirm),
+                    cancelLabel = stringResource(R.string.chat_delete_dialog_cancel),
+                    destructive = true,
+                ),
+                onConfirm = {
+                    deleteThreadTargetId = null
+                    viewModel.threads.deleteThread(targetId)
                 },
-                dismissButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_delete_dialog_cancel),
-                        onClick = { deleteThreadTargetId = null },
-                    )
-                },
+                onDismiss = { deleteThreadTargetId = null },
             )
         }
         if (deleteDialogVisible) {
-            AlertDialog(
-                onDismissRequest = { deleteDialogVisible = false },
-                title = { Text(stringResource(R.string.chat_delete_dialog_title)) },
-                text = { Text(stringResource(R.string.chat_delete_dialog_text)) },
-                confirmButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_delete_dialog_confirm),
-                        destructive = true,
-                        onClick = {
-                            deleteDialogVisible = false
-                            viewModel.threads.deleteCurrentSession()
-                        },
-                    )
+            ConfirmDialog(
+                ui = ConfirmDialogUi(
+                    title = stringResource(R.string.chat_delete_dialog_title),
+                    body = stringResource(R.string.chat_delete_dialog_text),
+                    confirmLabel = stringResource(R.string.chat_delete_dialog_confirm),
+                    cancelLabel = stringResource(R.string.chat_delete_dialog_cancel),
+                    destructive = true,
+                ),
+                onConfirm = {
+                    deleteDialogVisible = false
+                    viewModel.threads.deleteCurrentSession()
                 },
-                dismissButton = {
-                    KnotworkTextButton(
-                        text = stringResource(R.string.chat_delete_dialog_cancel),
-                        onClick = { deleteDialogVisible = false },
-                    )
-                },
+                onDismiss = { deleteDialogVisible = false },
             )
         }
         reportTargetRowId?.let { rowId ->
@@ -764,26 +734,6 @@ fun ChatHomeScreen(
                     onCreate = { pipelineId ->
                         newThreadSheetVisible = false
                         viewModel.threads.createNewSessionWithPipeline(pipelineId)
-                    },
-                )
-            }
-        }
-        if (modelPickerVisible) {
-            val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            ModalBottomSheet(
-                onDismissRequest = { modelPickerVisible = false },
-                sheetState = sheetState,
-            ) {
-                ModelPickerSheetContent(
-                    models = screenState.model.installed.map { ModelPickerRow(id = it.id, name = it.name) },
-                    activeId = screenState.model.activeId,
-                    onPick = { id ->
-                        modelPickerVisible = false
-                        viewModel.pickModel(id)
-                    },
-                    onOpenModels = {
-                        modelPickerVisible = false
-                        onOpenModels()
                     },
                 )
             }
@@ -1050,78 +1000,6 @@ private fun PipelinePickerRow(label: String, selected: Boolean, onClick: () -> U
             style = KnotworkTextStyles.BodyBase,
             modifier = Modifier.weight(1f),
         )
-    }
-}
-
-/** Minimal projection of a local model row in the model-picker sheet. */
-private data class ModelPickerRow(val id: Long, val name: String)
-
-/**
- * Body of the model-picker `ModalBottomSheet`. Empty list shows a single
- * "Open Models" pill that deep-links to the Models tab via [onOpenModels].
- */
-@Composable
-private fun ModelPickerSheetContent(
-    models: List<ModelPickerRow>,
-    activeId: Long?,
-    onPick: (Long) -> Unit,
-    onOpenModels: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(
-                horizontal = KnotworkTheme.spacing.sp6,
-                vertical = KnotworkTheme.spacing.sp4,
-            )
-            .navigationBarsPadding(),
-    ) {
-        Text(
-            text = stringResource(R.string.chat_model_picker_sheet_title),
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
-        if (models.isEmpty()) {
-            Text(text = stringResource(R.string.chat_model_picker_empty))
-            Spacer(modifier = Modifier.height(KnotworkTheme.spacing.sp3))
-            KnotworkPrimaryButton(
-                text = stringResource(R.string.chat_model_picker_open_models),
-                onClick = onOpenModels,
-            )
-        } else {
-            // Same pinned-footer scroll discipline as the pipeline picker: a long
-            // model list scrolls instead of overflowing the sheet.
-            Column(
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(rememberScrollState()),
-            ) {
-                models.forEach { model ->
-                    ListItem(
-                        headlineContent = { Text(model.name, style = KnotworkTextStyles.BodyBase) },
-                        trailingContent = if (model.id == activeId) {
-                            {
-                                Icon(
-                                    imageVector = AppIcons.Check,
-                                    contentDescription =
-                                    stringResource(R.string.chat_model_picker_active_cd),
-                                )
-                            }
-                        } else {
-                            {
-                                Icon(
-                                    imageVector = AppIcons.Circle,
-                                    contentDescription = null,
-                                )
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onPick(model.id) },
-                    )
-                }
-            }
-        }
     }
 }
 

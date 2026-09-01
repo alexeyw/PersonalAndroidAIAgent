@@ -50,6 +50,7 @@ import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
 import app.knotwork.android.domain.repositories.ToolRepository
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.NativeMemorySampler
 import app.knotwork.android.domain.usecases.EvaluateIfConditionUseCase
@@ -146,6 +147,7 @@ class ShowcaseResearchToFilePresetIntegrationTest {
         val metricsRepository = mockk<MetricsRepository>(relaxed = true)
         val approvalNotifier = mockk<ApprovalNotifier>(relaxed = true)
         val pendingInteractionRepository = mockk<PendingInteractionRepository>(relaxed = true)
+        val ceilingNotifier = mockk<CeilingNotifier>(relaxed = true)
         val clarificationNotifier = mockk<ClarificationNotifier>(relaxed = true)
         val koogClientFactory = mockk<KoogClientFactory>(relaxed = true)
         val cloudLlmModelResolver = mockk<KoogCloudLlmModelResolver>(relaxed = true)
@@ -251,6 +253,8 @@ class ShowcaseResearchToFilePresetIntegrationTest {
             mockk(relaxed = true),
             mockk(relaxed = true),
             ResolveRunCeilingsUseCase(settingsRepository),
+            pendingInteractionRepository,
+            ceilingNotifier,
         )
 
         // Scripted LLM: one canned answer per node / arg-generation pass. The second
@@ -263,7 +267,6 @@ class ShowcaseResearchToFilePresetIntegrationTest {
         coEvery { retrieveRelevantMemoryUseCase(any()) } returns emptyList()
         every { chatRepository.getMessagesForSession(any()) } returns flowOf(emptyList())
         every { settingsRepository.systemPromptPrefix } returns flowOf("")
-        every { settingsRepository.toolUsageInstruction } returns flowOf("")
         // NeverPrompt so the SENSITIVE write_file call runs without a HITL gate.
         every { settingsRepository.toolApprovalPolicy } returns flowOf(ToolApprovalPolicy.NeverPrompt)
         every { settingsRepository.blockDestructiveTools } returns flowOf(false)

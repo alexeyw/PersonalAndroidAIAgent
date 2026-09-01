@@ -12,6 +12,7 @@ import app.knotwork.android.R
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.more.MoreContent
 import app.knotwork.design.screens.more.MoreRow
+import app.knotwork.design.screens.more.MoreSection
 import app.knotwork.design.screens.more.MoreStrings
 import app.knotwork.design.screens.more.MoreViewState
 
@@ -39,6 +40,10 @@ fun MoreScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val state = uiState.toViewState(
+        titleSectionAutomation = stringResource(R.string.more_section_automation),
+        titleSectionContent = stringResource(R.string.more_section_content),
+        titleSectionBlocks = stringResource(R.string.more_section_blocks),
+        titleSectionApp = stringResource(R.string.more_section_app),
         titleMemory = stringResource(R.string.more_row_memory),
         titleModels = stringResource(R.string.more_row_models),
         titlePrompts = stringResource(R.string.more_row_prompts),
@@ -81,7 +86,6 @@ fun MoreScreen(
         strings = MoreStrings(
             title = stringResource(R.string.nav_tab_more),
             subtitle = stringResource(R.string.more_subtitle),
-            searchCd = stringResource(R.string.more_search_cd),
         ),
     )
 }
@@ -89,6 +93,10 @@ fun MoreScreen(
 /** Build the catalog view state from the live UI state + localized labels. */
 @Suppress("LongParameterList") // Mapper bundles localised strings + navigation lambdas.
 internal fun MoreUiState.toViewState(
+    titleSectionAutomation: String,
+    titleSectionContent: String,
+    titleSectionBlocks: String,
+    titleSectionApp: String,
     titleMemory: String,
     titleModels: String,
     titlePrompts: String,
@@ -117,95 +125,124 @@ internal fun MoreUiState.toViewState(
     onFiles: () -> Unit,
     onArchive: () -> Unit,
 ): MoreViewState = MoreViewState(
-    rows = listOf(
-        MoreRow(
-            id = "memory",
-            title = titleMemory,
-            subtitle = memorySubtitle,
-            icon = AppIcons.Brain,
-            onClick = onMemory,
+    // Four named sections of three, in the order "why you opened More, most
+    // often first". Triggers moves from the seventh row to the first: a closed
+    // test found it after two hours of looking. `Diagnostics` is deliberately
+    // not a section — only Live metrics would live in it, and a section of one
+    // is a heading pretending to be structure, so it joins App.
+    sections = listOf(
+        MoreSection(
+            id = "automation",
+            title = titleSectionAutomation,
+            rows = listOf(
+                MoreRow(
+                    id = "triggers",
+                    title = titleTriggers,
+                    subtitle = subtitleTriggers,
+                    icon = AppIcons.Trigger,
+                    onClick = onTriggers,
+                ),
+                MoreRow(
+                    id = "library",
+                    title = titleLibrary,
+                    subtitle = librarySubtitle,
+                    icon = AppIcons.Bookmark,
+                    onClick = onLibrary,
+                ),
+                MoreRow(
+                    id = "tasks",
+                    title = titleTasks,
+                    subtitle = tasksSubtitle,
+                    icon = AppIcons.History,
+                    badge = tasksBadge,
+                    onClick = onTasks,
+                ),
+            ),
         ),
-        // Directly after Memory and above Files — grouped with "your content",
-        // not with tools. Always shown, even at zero, because the drawer's own
-        // entry is hidden then and the feature must stay discoverable. The
-        // count lives in the subtitle, never a badge.
-        MoreRow(
-            id = "archive",
-            title = titleArchive,
-            subtitle = subtitleArchive,
-            icon = AppIcons.Archive,
-            onClick = onArchive,
+        MoreSection(
+            id = "content",
+            title = titleSectionContent,
+            rows = listOf(
+                MoreRow(
+                    id = "memory",
+                    title = titleMemory,
+                    subtitle = memorySubtitle,
+                    icon = AppIcons.Brain,
+                    onClick = onMemory,
+                ),
+                MoreRow(
+                    id = "files",
+                    title = titleFiles,
+                    subtitle = filesSubtitle,
+                    icon = AppIcons.Folder,
+                    onClick = onFiles,
+                ),
+                // Always shown, even at zero, because the drawer's own entry is
+                // hidden then and the feature must stay discoverable. The count
+                // lives in the subtitle, never a badge.
+                MoreRow(
+                    id = "archive",
+                    title = titleArchive,
+                    subtitle = subtitleArchive,
+                    icon = AppIcons.Archive,
+                    onClick = onArchive,
+                ),
+            ),
         ),
-        MoreRow(
-            id = "files",
-            title = titleFiles,
-            subtitle = filesSubtitle,
-            icon = AppIcons.Folder,
-            onClick = onFiles,
+        MoreSection(
+            id = "blocks",
+            title = titleSectionBlocks,
+            rows = listOf(
+                MoreRow(
+                    id = "prompts",
+                    title = titlePrompts,
+                    subtitle = promptsSubtitle,
+                    icon = AppIcons.Sliders,
+                    onClick = onPrompts,
+                ),
+                MoreRow(
+                    id = "skills",
+                    title = titleSkills,
+                    subtitle = subtitleSkills,
+                    icon = AppIcons.Skill,
+                    onClick = onSkills,
+                ),
+                // Models is not content: you do not author it, you install it.
+                MoreRow(
+                    id = "models",
+                    title = titleModels,
+                    subtitle = modelsSubtitle,
+                    icon = AppIcons.Ram,
+                    onClick = onModels,
+                ),
+            ),
         ),
-        MoreRow(
-            id = "models",
-            title = titleModels,
-            subtitle = modelsSubtitle,
-            icon = AppIcons.Ram,
-            onClick = onModels,
-        ),
-        MoreRow(
-            id = "prompts",
-            title = titlePrompts,
-            subtitle = promptsSubtitle,
-            icon = AppIcons.Sliders,
-            onClick = onPrompts,
-        ),
-        MoreRow(
-            id = "skills",
-            title = titleSkills,
-            subtitle = subtitleSkills,
-            icon = AppIcons.Skill,
-            onClick = onSkills,
-        ),
-        MoreRow(
-            id = "triggers",
-            title = titleTriggers,
-            subtitle = subtitleTriggers,
-            icon = AppIcons.Trigger,
-            onClick = onTriggers,
-        ),
-        MoreRow(
-            id = "library",
-            title = titleLibrary,
-            subtitle = librarySubtitle,
-            icon = AppIcons.Bookmark,
-            onClick = onLibrary,
-        ),
-        MoreRow(
-            id = "tasks",
-            title = titleTasks,
-            subtitle = tasksSubtitle,
-            icon = AppIcons.History,
-            badge = tasksBadge,
-            onClick = onTasks,
-        ),
-        MoreRow(
-            id = "metrics",
-            title = titleMetrics,
-            subtitle = metricsSubtitle,
-            icon = AppIcons.Bolt,
-            onClick = onMetrics,
-        ),
-        MoreRow(
-            id = "settings",
-            title = titleSettings,
-            subtitle = settingsSubtitle,
-            icon = AppIcons.Cog,
-            onClick = onSettings,
-        ),
-        MoreRow(
-            id = "about",
-            title = titleAbout,
-            subtitle = aboutSubtitle,
-            icon = AppIcons.Info,
-            onClick = onAbout,
+        MoreSection(
+            id = "app",
+            title = titleSectionApp,
+            rows = listOf(
+                MoreRow(
+                    id = "settings",
+                    title = titleSettings,
+                    subtitle = settingsSubtitle,
+                    icon = AppIcons.Cog,
+                    onClick = onSettings,
+                ),
+                MoreRow(
+                    id = "metrics",
+                    title = titleMetrics,
+                    subtitle = metricsSubtitle,
+                    icon = AppIcons.Bolt,
+                    onClick = onMetrics,
+                ),
+                MoreRow(
+                    id = "about",
+                    title = titleAbout,
+                    subtitle = aboutSubtitle,
+                    icon = AppIcons.Spark,
+                    onClick = onAbout,
+                ),
+            ),
         ),
     ),
     networkStatus = networkStatusText.takeIf { it.isNotEmpty() },

@@ -39,12 +39,16 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import app.knotwork.design.components.buttons.KnotworkTextButton
 import app.knotwork.design.components.chips.HealthBadge
 import app.knotwork.design.components.misc.EmptyState
+import app.knotwork.design.components.topbar.JournalExportActions
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.theme.KnotworkTheme
 import app.knotwork.design.tokens.KnotworkTextStyles
@@ -161,7 +165,18 @@ private fun TriggersTopBar(state: TriggersViewState, strings: TriggersStrings, c
                 )
             }
         },
-        actions = {},
+        actions = {
+            // Deliberately not gated on the list's own load state: the journal is
+            // read separately, so a screen that failed to list its triggers can
+            // still hand over the journal — which is exactly the file worth
+            // sending when that happens.
+            JournalExportActions(
+                shareContentDescription = strings.exportShareCd,
+                saveContentDescription = strings.exportSaveCd,
+                onShare = callbacks.onShareJournal,
+                onSave = callbacks.onSaveJournal,
+            )
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.surface,
             titleContentColor = MaterialTheme.colorScheme.onSurface,
@@ -287,8 +302,29 @@ private fun TriggerRow(row: TriggerRowUi, strings: TriggersStrings, menuOpen: Bo
                 TriggerTile(type = row.conditionType, inert = !row.isBound)
                 TriggerRowText(row = row, strings = strings, modifier = Modifier.weight(1f))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    RowSwitch(checked = row.isBound && row.enabled, enabled = row.isBound) {
-                        callbacks.onRowToggle(row.id)
+                    // An unbound trigger cannot be switched on, and the greyed
+                    // switch that used to say so said the wrong thing: the first
+                    // external tester read dimmed controls as broken rather than
+                    // as waiting on him — "Не выглядят как выключенными, а
+                    // выглядят как недоступные". So the control is absent, and
+                    // its place is taken by the verb that fixes it. The reason
+                    // is already on the row, in words, above.
+                    if (row.isBound) {
+                        RowSwitch(checked = row.enabled, enabled = true) {
+                            callbacks.onRowToggle(row.id)
+                        }
+                    } else {
+                        KnotworkTextButton(
+                            text = strings.bind,
+                            onClick = { callbacks.onRowClick(row.id) },
+                            // Named per row: in a list of unbound triggers a bare
+                            // "Bind, button" repeated N times tells a screen-reader
+                            // user which rows need attention but not which one they
+                            // are on. The switch it replaced inherited the row label.
+                            modifier = Modifier.semantics {
+                                contentDescription = strings.bindCd.format(row.name)
+                            },
+                        )
                     }
                     Box {
                         IconButton(
@@ -472,7 +508,9 @@ data class TriggersStrings(
     val backCd: String = "Back",
     val moreCd: String = "More actions",
     val fab: String = "New trigger",
-    val unboundHint: String = "No pipeline — tap to bind",
+    val unboundHint: String = "No pipeline yet",
+    val bind: String = "Bind",
+    val bindCd: String = "Bind a pipeline to %1\$s",
     val menuEdit: String = "Edit",
     val menuDelete: String = "Delete",
     val emptyTitle: String = "Run the agent on its own",
@@ -488,6 +526,12 @@ data class TriggersStrings(
     val healthHealthy: String = "Healthy",
     val healthOverdue: String = "Overdue",
     val healthLastRunFailed: String = "Last run failed",
+    // Journal export. The two actions live on the list and not on a trigger's
+    // detail screen because the document they produce is the whole journal, every
+    // trigger at once — the only shape an analysis of "which day had no
+    // evaluation at all" can be answered from.
+    val exportShareCd: String = "Share the evaluation journal",
+    val exportSaveCd: String = "Save the evaluation journal",
 )
 
 /** Resolves the localised health-badge label for a row's health state. */

@@ -139,17 +139,6 @@ constructor(
      */
     val focusNodeRequest: SharedFlow<String> = _focusNodeRequest.asSharedFlow()
 
-    private val _runState = MutableStateFlow(PipelineRunState())
-
-    /**
-     * Live run state surfaced by the editor's `RunStatusBanner`.
-     *
-     * Wired by [setRunning] / [setActiveRunningNode] today; the real orchestrator
-     * integration that drives these fields end-to-end lands post-v0.1 alongside the
-     * chat home → agent backend wiring.
-     */
-    val runState: StateFlow<PipelineRunState> = _runState.asStateFlow()
-
     init {
         observeSavedPipelines()
         observeProviderKeys()
@@ -307,7 +296,19 @@ constructor(
                         } else {
                             state.currentPipeline
                         }
-                        state.copy(savedPipelines = pipelines, currentPipeline = newCurrent)
+                        state.copy(
+                            savedPipelines = pipelines,
+                            currentPipeline = newCurrent,
+                            // Adopting the first saved pipeline is a load, not an
+                            // edit: it starts clean. Any other emission leaves the
+                            // baseline alone, or an edit made while the list
+                            // refreshed would look saved.
+                            persistedPipeline = if (newCurrent !== state.currentPipeline) {
+                                newCurrent
+                            } else {
+                                state.persistedPipeline
+                            },
+                        )
                     }
                 }
         }
@@ -750,6 +751,8 @@ constructor(
                         val saved = collision == null && saveErr == null
                         state.copy(
                             currentPipeline = if (saved) outcome.graph else state.currentPipeline,
+                            // An import that reached storage IS the saved state.
+                            persistedPipeline = if (saved) outcome.graph else state.persistedPipeline,
                             isLoading = false,
                             pendingImport = null,
                             pendingCollision = collision,
@@ -803,12 +806,10 @@ constructor(
             val result = importPipelineUseCase.persistWithResolution(graph, resolution)
             _uiState.update { state ->
                 val saveErr = result.exceptionOrNull()?.let(::messageForSaveError)
+                val replaced = saveErr == null && resolution == ImportCollisionResolution.REPLACE
                 state.copy(
-                    currentPipeline = if (saveErr == null && resolution == ImportCollisionResolution.REPLACE) {
-                        graph
-                    } else {
-                        state.currentPipeline
-                    },
+                    currentPipeline = if (replaced) graph else state.currentPipeline,
+                    persistedPipeline = if (replaced) graph else state.persistedPipeline,
                     isLoading = false,
                     errorMessage = saveErr,
                 )
@@ -983,6 +984,7 @@ constructor(
                         val saveErr = confirmed.result.exceptionOrNull()?.let(::messageForSaveError)
                         state.copy(
                             currentPipeline = if (saveErr == null) pending.graph else state.currentPipeline,
+                            persistedPipeline = if (saveErr == null) pending.graph else state.persistedPipeline,
                             isLoading = false,
                             errorMessage = saveErr,
                         )
@@ -1002,12 +1004,33 @@ constructor(
      * Saves the current pipeline.
      */
     fun saveCurrentPipeline() {
+        // Captured before the launch, not inside it: Save means "save what is on
+        // screen now". Reading it in the coroutine would pick up whatever the
+        // user did between the tap and the dispatch, and then record THAT as
+        // the persisted baseline — quietly marking an edit as saved that never
+        // reached storage.
+        val saved = _uiState.value.currentPipeline
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val result = savePipelineUseCase(_uiState.value.currentPipeline)
+            val result = savePipelineUseCase(saved)
             _uiState.update { state ->
                 state.copy(
                     isLoading = false,
+                    // The baseline moves only on success, and to the exact graph
+                    // that was persisted rather than to whatever is on screen
+                    // now: an edit made while the save was in flight is still
+                    // unsaved, and saying otherwise is how work goes missing.
+                    persistedPipeline = if (result.isSuccess) saved else state.persistedPipeline,
+                    // Confirmation follows the outcome. The editor's overflow
+                    // used to announce "Pipeline saved." the moment the item was
+                    // tapped, so a save the validator rejected reported success
+                    // and failure at once — invisible until the toolbar started
+                    // carrying an Unsaved marker to contradict it.
+                    feedbackMessage = if (result.isSuccess) {
+                        UiText(R.string.pipeline_editor_save_done)
+                    } else {
+                        state.feedbackMessage
+                    },
                     errorMessage = result.exceptionOrNull()?.let(::messageForSaveError),
                 )
             }
@@ -1113,7 +1136,12 @@ constructor(
             val pipeline = loadPipelineUseCase.getPipelineById(pipelineId)
             _uiState.update { state ->
                 if (pipeline != null) {
-                    state.copy(currentPipeline = pipeline, isLoading = false, errorMessage = null)
+                    state.copy(
+                        currentPipeline = pipeline,
+                        persistedPipeline = pipeline,
+                        isLoading = false,
+                        errorMessage = null,
+                    )
                 } else {
                     state.copy(
                         isLoading = false,
@@ -1198,17 +1226,6 @@ constructor(
     }
 
     /**
-     * Deletes the pipeline identified by [pipelineId] from the library.
-     *
-     * Forwards the active pipeline id (taken from [OrchestratorUiState.currentPipeline])
-     * to [DeletePipelineUseCase] so attempts to delete the pipeline being edited are
-     * blocked at the use-case layer. The error message wired into the UI is
-     * deliberately UI-friendly ("Active pipeline cannot be deleted") so the
-     * Snackbar reads the same regardless of how the deletion was triggered.
-     *
-     * @param pipelineId Unique identifier of the pipeline to delete.
-     */
-    /**
      * The saved pipelines that run [pipelineId] through a `NodeType.PIPELINE`
      * node — i.e. the dependents that would be left with a dangling target if
      * [pipelineId] were deleted. Read straight off the current library snapshot;
@@ -1262,6 +1279,17 @@ constructor(
         emptyList()
     }
 
+    /**
+     * Deletes the pipeline identified by [pipelineId] from the library.
+     *
+     * Forwards the active pipeline id (taken from [OrchestratorUiState.currentPipeline])
+     * to [DeletePipelineUseCase] so attempts to delete the pipeline being edited are
+     * blocked at the use-case layer. The error message wired into the UI is
+     * deliberately UI-friendly ("Active pipeline cannot be deleted") so the
+     * Snackbar reads the same regardless of how the deletion was triggered.
+     *
+     * @param pipelineId Unique identifier of the pipeline to delete.
+     */
     fun deletePipeline(pipelineId: String) {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
@@ -1307,6 +1335,10 @@ constructor(
      * [CreatePipelineUseCase], which validates the name and seeds the graph so
      * the freshly created pipeline already passes [PipelineGraph.validate].
      *
+     * The created graph becomes the saved baseline as well as the current one:
+     * it went to storage on the way here, so opening the editor on it must not
+     * greet the user with an Unsaved marker for work they have not done yet.
+     *
      * @param name Display name for the new pipeline.
      */
     fun createNewPipeline(name: String) {
@@ -1318,6 +1350,7 @@ constructor(
                 state.copy(
                     isLoading = false,
                     currentPipeline = created ?: state.currentPipeline,
+                    persistedPipeline = created ?: state.persistedPipeline,
                     errorMessage = result.exceptionOrNull()?.message?.let { UiText.Dynamic(it) },
                     feedbackMessage = if (created != null) {
                         UiText(R.string.orchestrator_feedback_pipeline_created)
@@ -1441,41 +1474,6 @@ constructor(
      */
     fun requestFocusNode(nodeId: String) {
         _focusNodeRequest.tryEmit(nodeId)
-    }
-
-    /**
-     * Flips the editor's run banner between idle and active. Placeholder —
-     * the real run loop lands post-v0.1; until then the editor exposes a debug toggle
-     * so the banner can be exercised end-to-end.
-     *
-     * Clearing the flag (`running = false`) also wipes [PipelineRunState.activeNodeId]
-     * so the banner / per-node dimming reset cleanly. Without this, a paused-mid-run
-     * `activeNodeId` would leak across runs (and across screen reopens — see
-     * [stopRunAndReset]).
-     */
-    fun setRunning(running: Boolean) {
-        _runState.update {
-            if (running) it.copy(isRunning = true) else PipelineRunState()
-        }
-    }
-
-    /**
-     * Fully resets the run banner state. Called from the editor when the user taps
-     * `Stop` on the banner, and from the screen's `DisposableEffect` when the user
-     * leaves the editor — both paths must clear `activeNodeId` and `isRunning`
-     * together, otherwise a stale banner would surface on the next pipeline open.
-     */
-    fun stopRunAndReset() {
-        _runState.value = PipelineRunState()
-    }
-
-    /**
-     * Sets (or clears with `null`) the currently-running node id during a pipeline run.
-     * Drives both the [app.knotwork.design.components.pipelineeditor.NodeCard]
-     * `running` parameter and the toolbar subtitle / run banner labels.
-     */
-    fun setActiveRunningNode(nodeId: String?) {
-        _runState.update { it.copy(activeNodeId = nodeId) }
     }
 
     /**

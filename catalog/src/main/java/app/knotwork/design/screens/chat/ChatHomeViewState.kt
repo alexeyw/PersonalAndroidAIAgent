@@ -54,6 +54,19 @@ enum class ChatHomeVisualState {
      */
     Interrupted,
 
+    /**
+     * A run has spent one of the limits the user set for it and is waiting to
+     * be told whether it may carry on. Run-ceiling pause card (Continue / Stop)
+     * pinned to the last bubble.
+     *
+     * Its own state rather than a flavour of [Interrupted]: both pin a status
+     * card and leave the composer idle, but an interrupted run is over unless
+     * the user revives it, while this one is alive and waiting. A host that
+     * could not tell them apart would offer Discard for a run that is still
+     * holding its checkpoint.
+     */
+    CeilingPause,
+
     /** Inline error tile + retry. */
     Error,
 
@@ -229,7 +242,7 @@ data class ChatHomeViewState(
      */
     val samplePromptCards: List<ChatHomeSamplePromptCard> = emptyList(),
     /**
-     * Single-line agent status pill rendered above the composer
+     * Single-line agent status rendered in the console entry strip
      * (`"[NODE]  idle · ready"`). `null` hides the pill.
      */
     val agentStatusLine: String? = null,
@@ -270,10 +283,25 @@ data class ChatHomeViewState(
      * state — and archiving is a user decision that only the user reverses.
      */
     val archivedReadOnly: Boolean = false,
+    /**
+     * `true` when the failure is already written into the conversation as a
+     * message, so this surface owes the user no tile of its own.
+     *
+     * The invariant below is about the user being told, not about a particular
+     * widget: a run settles its outcome into the thread whether or not anyone
+     * was watching, and a tile repeating a line two rows above it is the
+     * duplication this flag exists to end. A failure with no run behind it — a
+     * blocked attachment, a model that would not load — has no such line, and
+     * still has to carry [errorMessage].
+     */
+    val explainedInThread: Boolean = false,
 ) {
     init {
-        require((visualState == ChatHomeVisualState.Error) == (errorMessage != null || termination != null)) {
-            "the Error visual must carry exactly one explanation: errorMessage or termination"
+        require(
+            (visualState == ChatHomeVisualState.Error) ==
+                (errorMessage != null || termination != null || explainedInThread),
+        ) {
+            "the Error visual must be explained somewhere: errorMessage, termination, or the thread itself"
         }
         require(errorMessage == null || termination == null) {
             "a stopped run is either an untyped failure or a typed termination, never both"
@@ -315,7 +343,6 @@ class ChatHomeCallbacks(
     val onCloseDrawer: () -> Unit = {},
     val onSelectThread: (String) -> Unit = {},
     val onNewThread: () -> Unit = {},
-    val onOpenModelPicker: () -> Unit = {},
     val onOverflow: () -> Unit = {},
     val onSamplePrompt: (String) -> Unit = {},
     val onConsoleSnapChange: (ConsoleSnap) -> Unit = {},
@@ -345,6 +372,20 @@ class ChatHomeCallbacks(
      * Hosts settle the interrupted run as failed and drop the card.
      */
     val onDiscardRun: () -> Unit = {},
+    /**
+     * Fired when the user taps the continue CTA on the run-ceiling pause card.
+     * Hosts grant the run one more portion of the limit it reached and resume
+     * it from its checkpoint. Deliberately not [onResumeRun]: that one continues
+     * a run that was interrupted, this one authorises a run to spend more than
+     * it was allowed, and a host wiring the two together would let a Resume tap
+     * quietly raise a limit.
+     */
+    val onContinuePastCeiling: () -> Unit = {},
+    /**
+     * Fired when the user taps the stop CTA on the run-ceiling pause card.
+     * Hosts settle the run at the ceiling it reached.
+     */
+    val onStopAtCeiling: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
     /**
      * Invoked by the single action on a typed termination tile. What it does is
@@ -372,7 +413,7 @@ class ChatHomeCallbacks(
     val onOpenSettings: () -> Unit = {},
     val onSamplePromptCard: (ChatHomeSamplePromptCard) -> Unit = {},
     /**
-     * Fired when the user taps the agent-status pill above the composer.
+     * Fired when the user taps the console entry strip above the composer.
      * Hosts wire this to opening the console pane at the Partial snap so
      * the user can drill into pipeline activity in one tap (the pill
      * itself surfaces only a one-line summary).
@@ -452,7 +493,6 @@ data class ChatTerminationUi(
     val tone: RunTerminationToneUi,
     val toneLabel: String,
     val title: String,
-    val body: String,
     val banner: String,
     val meter: String? = null,
     val actionLabel: String? = null,

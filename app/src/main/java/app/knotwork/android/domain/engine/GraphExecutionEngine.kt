@@ -10,15 +10,19 @@ import app.knotwork.android.domain.engine.stuck.RunStepObservation
 import app.knotwork.android.domain.engine.stuck.StuckVerdict
 import app.knotwork.android.domain.models.AgentOrchestratorState
 import app.knotwork.android.domain.models.ChatHistorySummary
+import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.ConsoleEvent
 import app.knotwork.android.domain.models.ConsoleEventType
 import app.knotwork.android.domain.models.EngineImageInput
 import app.knotwork.android.domain.models.ExecutionScope
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.MemoryChunk
 import app.knotwork.android.domain.models.NodeExecutionResult
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeOutput
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteraction
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRunStatus
 import app.knotwork.android.domain.models.ResumeContext
@@ -32,6 +36,7 @@ import app.knotwork.android.domain.models.RunSpend
 import app.knotwork.android.domain.models.RunTerminationReason
 import app.knotwork.android.domain.models.RunTraceRecord
 import app.knotwork.android.domain.models.ToolInvocationResult
+import app.knotwork.android.domain.models.asCeilingBreach
 import app.knotwork.android.domain.models.diagnostic
 import app.knotwork.android.domain.models.usesContextConfig
 import app.knotwork.android.domain.prompt.PromptTemplateEngine
@@ -41,9 +46,11 @@ import app.knotwork.android.domain.repositories.CrashReportingRepository
 import app.knotwork.android.domain.repositories.LocalModelRepository
 import app.knotwork.android.domain.repositories.MemoryRepository
 import app.knotwork.android.domain.repositories.MetricsRepository
+import app.knotwork.android.domain.repositories.PendingInteractionRepository
 import app.knotwork.android.domain.repositories.PipelineRunRepository
 import app.knotwork.android.domain.repositories.RunTraceRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.usecases.ResolveRunCeilingsUseCase
 import app.knotwork.android.domain.usecases.RetrieveRelevantMemoryUseCase
 import kotlinx.coroutines.NonCancellable
@@ -97,6 +104,8 @@ constructor(
     private val pipelineRunRepository: PipelineRunRepository,
     private val runTraceRepository: RunTraceRepository,
     private val resolveRunCeilingsUseCase: ResolveRunCeilingsUseCase,
+    private val pendingInteractionRepository: PendingInteractionRepository,
+    private val ceilingNotifier: CeilingNotifier,
 ) {
 
     /**
@@ -365,6 +374,21 @@ constructor(
             )
         }
 
+        // A run resumed from a ceiling pause still holds the record of the
+        // question it parked on. Nothing else will consume it — the other two
+        // kinds are consumed by the node executor that raised them, and a
+        // ceiling belongs to no node — so it is consumed here, at the one point
+        // every attempt of every run in the tree passes through. Leaving it
+        // would hand the maintenance sweep a park whose run is happily running
+        // again, and the sweep's job is to fail exactly those.
+        if (runId != null) {
+            val parkedCeiling = pendingInteractionRepository.getForRun(runId)
+            if (parkedCeiling?.kind == PendingInteractionKind.CEILING) {
+                pendingInteractionRepository.delete(runId)
+                ceilingNotifier.cancelCeilingNotification(sessionId)
+            }
+        }
+
         // Spend ledger shared across the whole run tree. A sub-pipeline run
         // reuses the parent's instance (threaded in via [budget]) so nested
         // execution cannot side-step the parent's ceilings; a top-level run
@@ -385,6 +409,8 @@ constructor(
                 rootRunId = runId,
                 stepsAlreadySpent = spent.steps,
                 tokensAlreadySpent = spent.tokens,
+                stepCeilingExtensions = spent.stepCeilingExtensions,
+                tokenCeilingExtensions = spent.tokenCeilingExtensions,
             )
         }
         // The repetition detector for this tree. Built fresh rather than seeded
@@ -592,8 +618,49 @@ constructor(
             // Ask the ledger before charging, so a node that is refused is never
             // counted: a run stopped at the ceiling has spent exactly the
             // ceiling, not one more than it.
-            terminationReason = runBudget.hardBreach()
-            if (terminationReason != null) break
+            val breach = runBudget.hardBreach()
+            if (breach != null) {
+                // A ceiling is a number the user chose, and reaching it says
+                // nothing went wrong — so the run asks whether it may carry on
+                // instead of ending on the spot, which is what it used to do.
+                //
+                // The park is durable from the first moment, with no live
+                // in-process phase before it. The two HITL gates have one
+                // because something is in flight — a resolved tool call, a
+                // generated question — that a park would have to persist and a
+                // resume re-consume. Here the walk is *between* nodes: the
+                // checkpoint already holds everything, so a live wait would
+                // hold the foreground service open buying nothing.
+                val ceiling = breach.asCeilingBreach()
+                if (runId != null && ceiling != null && parkOnCeiling(runId, sessionId, ceiling)) {
+                    // The diagnostic plus one stable word, not a sentence. The
+                    // suffix is load-bearing: without it a pause and a stop
+                    // produce byte-identical console lines, and whoever greps
+                    // this later cannot tell a run that ended from one that is
+                    // still waiting.
+                    pushConsole(ConsoleEventType.RunCeiling, "${breach.diagnostic()} — paused")
+                    val pause = AgentOrchestratorState.WaitingForCeilingRaise(
+                        axis = ceiling.axis,
+                        limit = ceiling.limit,
+                        spent = ceiling.spent,
+                    )
+                    persistSuspensionTransition(runId, pause, runSuspended)
+                    emit(pause)
+                    // Ends the walk without a terminal state, exactly as an
+                    // approval park does — and, from a sub-pipeline, tells the
+                    // parent PIPELINE node to park the whole stack rather than
+                    // settle this run.
+                    emit(AgentOrchestratorState.SuspendedInBackground(PendingInteractionKind.CEILING))
+                    runTraceRepository.flush()
+                    return@flow
+                }
+                // Non-persisted runs (editor test runs) and storage failures
+                // keep the old behaviour. A pause the user cannot be asked
+                // about, or one recorded nowhere and so unanswerable after this
+                // coroutine ends, is worse than a stop that says why it stopped.
+                terminationReason = breach
+                break
+            }
 
             stepCount++
 
@@ -998,6 +1065,28 @@ constructor(
                     ConsoleEventType.Error,
                     "${currentNode.type.name}: ${nodeResult?.error}",
                 )
+                // A queue whose author turned `stopOnError` off keeps going: the
+                // failure becomes this item's result and the next item starts.
+                // Opt-in on purpose — `null` and `true` both fail the run, which
+                // is what every pipeline saved before this field did.
+                //
+                // A typed cause is never survivable, whatever the switch says. A
+                // `PIPELINE` node forwards a sub-pipeline's ceiling breach or
+                // stuck-detector verdict through this same field, and those are
+                // not "this subtask failed" — they are the run being out of
+                // budget or going in circles. Carrying on would spend the very
+                // budget the breach reported as gone.
+                val failedQueueId = activeQueueProcessorId
+                val queueNode = failedQueueId?.let { id -> graph.nodes.find { it.id == id } }
+                val survivable = nodeResult?.terminationReason == null
+                if (survivable && failedQueueId != null && queueNode?.stopOnError == false) {
+                    queueResults.add("Subtask failed: ${nodeResult?.error}")
+                    val step = stepQueue(graph, failedQueueId, activeQueue, queueResults)
+                    if (step.queueFinished) activeQueueProcessorId = null
+                    currentInputText = step.inputText
+                    currentNode = step.node
+                    continue
+                }
                 // A `PIPELINE` node forwards its sub-pipeline's typed cause here.
                 // Re-emitting it is what keeps a ceiling breach one nesting
                 // level down from settling the root run as an ordinary failure.
@@ -1239,36 +1328,14 @@ constructor(
                 estimatedTotalSteps = stepCount + countNodesOnPath(nextNode, graph)
             }
 
-            if (activeQueueProcessorId != null && (nextNode == null || nextNode.type == NodeType.QUEUE_PROCESSOR)) {
+            val activeQueueId = activeQueueProcessorId
+            if (activeQueueId != null && (nextNode == null || nextNode.type == NodeType.QUEUE_PROCESSOR)) {
                 queueResults.add(currentInputText)
-
-                val edges = graph.connections.filter { it.sourceNodeId == activeQueueProcessorId }
-                val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId
-                    ?: edges.firstOrNull()?.targetNodeId
-                val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
-
-                if (activeQueue.isNotEmpty() && itemNodeId != null) {
-                    val nextItem = activeQueue.removeAt(0)
-                    val contextStr = queueResults.mapIndexed { i, res ->
-                        "Result of Subtask ${i + 1}:\n$res"
-                    }.joinToString("\n\n")
-                    val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
-                    if (contextStr.isNotEmpty()) {
-                        currentInputText =
-                            "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
-                    } else {
-                        currentInputText = "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
-                    }
-                    currentNode = graph.nodes.find { it.id == itemNodeId }
-                    continue
-                } else {
-                    currentInputText =
-                        "Queue execution completed.\nResults:\n" +
-                        queueResults.mapIndexed { i, res -> "${i + 1}. $res" }.joinToString("\n")
-                    activeQueueProcessorId = null
-                    currentNode = graph.nodes.find { it.id == doneNodeId }
-                    continue
-                }
+                val step = stepQueue(graph, activeQueueId, activeQueue, queueResults)
+                if (step.queueFinished) activeQueueProcessorId = null
+                currentInputText = step.inputText
+                currentNode = step.node
+                continue
             }
 
             currentNode = nextNode
@@ -1374,10 +1441,18 @@ constructor(
                 // legacy fall-through so an unlabelled pass-through still routes.
                 else -> edges.firstOrNull()?.targetNodeId
             }
-        } else if (currentNode.type == NodeType.INTENT_ROUTER && routingKey != null) {
-            val matchedEdge = edges.find { it.label?.equals(routingKey, ignoreCase = true) == true }
-                ?: edges.find { !it.label.isNullOrBlank() && routingKeyContainsLabelAsWord(routingKey, it.label) }
-            matchedEdge?.targetNodeId ?: edges.firstOrNull()?.targetNodeId
+        } else if (currentNode.type == NodeType.INTENT_ROUTER) {
+            // `routingKey == null` is the router's real failure mode, not an
+            // absent one: the structured gate constrains the answer to the
+            // labelled edges, so a *successful* verdict always names one of
+            // them. What actually goes unrouted is a gate that gave up after its
+            // repair attempts — which is why the fallback has to cover the null
+            // case, and why it was reachable by nothing when it did not.
+            val matchedEdge = routingKey?.let { key ->
+                edges.find { it.label?.equals(key, ignoreCase = true) == true }
+                    ?: edges.find { !it.label.isNullOrBlank() && routingKeyContainsLabelAsWord(key, it.label) }
+            }
+            matchedEdge?.targetNodeId ?: unmatchedRouterTarget(currentNode, edges)
         } else if (currentNode.type == NodeType.EVALUATION && routingKey != null) {
             // EVALUATION emits a Pass / Retry / Fail verdict as the routing key;
             // route to the edge whose label matches the verdict, falling back to
@@ -1391,6 +1466,95 @@ constructor(
         val edgeLabel = edges.find { it.targetNodeId == targetNodeId }?.label ?: "null"
         Timber.tag("PipelineDebug").d("[ROUTE] from=${currentNode.id} label=$edgeLabel -> to=$targetNodeId")
         return targetNodeId
+    }
+
+    /**
+     * One QUEUE_PROCESSOR iteration boundary: the node the walk moves to next,
+     * and the input it carries there.
+     *
+     * @property node Next node, or `null` when the `Done` edge is unwired.
+     * @property inputText Input for [node].
+     * @property queueFinished `true` when the queue is exhausted and the walk is
+     *   leaving it by the `Done` edge — the caller clears its active-queue
+     *   cursor on that.
+     */
+    private data class QueueStep(val node: NodeModel?, val inputText: String, val queueFinished: Boolean)
+
+    /**
+     * Ends one QUEUE_PROCESSOR iteration and begins the next, or leaves the
+     * queue by its `Done` edge when nothing is left.
+     *
+     * Extracted from the walk when a second caller appeared: an item failing
+     * inside a queue whose author set `stopOnError = false` has to advance to
+     * the next item exactly as a successful one does. Written as a member
+     * function taking what it needs rather than a closure over the walk's
+     * locals, because capturing the walk's `currentNode` would cost every smart
+     * cast in the loop — a large, unrelated edit in the app's most load-bearing
+     * function.
+     *
+     * @param graph The running graph.
+     * @param queueProcessorId Id of the QUEUE_PROCESSOR that owns the loop.
+     * @param remainingItems Items not yet executed; the next one is **removed**.
+     * @param results Results accumulated so far, rendered into the next input.
+     * @return Where the walk goes next.
+     */
+    private fun stepQueue(
+        graph: PipelineGraph,
+        queueProcessorId: String,
+        remainingItems: MutableList<String>,
+        results: List<String>,
+    ): QueueStep {
+        val edges = graph.connections.filter { it.sourceNodeId == queueProcessorId }
+        val itemNodeId = edges.find { it.label.equals("Item", ignoreCase = true) }?.targetNodeId
+            ?: edges.firstOrNull()?.targetNodeId
+        val doneNodeId = edges.find { it.label.equals("Done", ignoreCase = true) }?.targetNodeId
+
+        if (remainingItems.isEmpty() || itemNodeId == null) {
+            val summary = "Queue execution completed.\nResults:\n" +
+                results.mapIndexed { i, res -> "${i + 1}. $res" }.joinToString("\n")
+            return QueueStep(graph.nodes.find { it.id == doneNodeId }, summary, queueFinished = true)
+        }
+
+        val nextItem = remainingItems.removeAt(0)
+        val contextStr = results.mapIndexed { i, res -> "Result of Subtask ${i + 1}:\n$res" }.joinToString("\n\n")
+        val subtaskInstruction = DefaultPrompts.QueueProcessor.SUBTASK_INSTRUCTION
+        val input = if (contextStr.isNotEmpty()) {
+            "PREVIOUS RESULTS CONTEXT:\n$contextStr\n\n---\n\n$subtaskInstruction" +
+                "\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+        } else {
+            "$subtaskInstruction\n\nCURRENT SUBTASK TO EXECUTE:\n$nextItem"
+        }
+        return QueueStep(graph.nodes.find { it.id == itemNodeId }, input, queueFinished = false)
+    }
+
+    /**
+     * Where an INTENT_ROUTER sends a run it could not route.
+     *
+     * Reached when the structured gate gave up after its repair attempts (no
+     * verdict at all) or, rarely, when a verdict names no wired edge. The first
+     * is the common one: the gate constrains the model to the labelled edges, so
+     * a successful answer already names one.
+     *
+     * With a [NodeModel.fallbackClass] set, the run takes the edge labelled with
+     * it — and **terminates** when no such edge is wired, for the same reason
+     * IF_CONDITION does above: an author who named a fallback and then failed to
+     * connect it is better served by "terminated without OUTPUT" than by the
+     * wrong branch running on a verdict nobody chose.
+     *
+     * With no fallback class — every pipeline saved before this field existed —
+     * the historical first-edge-in-storage-order behaviour is kept. Changing it
+     * would silently re-route graphs whose authors never made this decision, and
+     * the workaround those authors were told to use (put the fallback branch
+     * first) depends on exactly that behaviour.
+     *
+     * @param node The routing node.
+     * @param edges Its outgoing connections.
+     * @return The next node id, or `null` to terminate the branch.
+     */
+    private fun unmatchedRouterTarget(node: NodeModel, edges: List<ConnectionModel>): String? {
+        val fallback = node.fallbackClass?.takeIf { it.isNotBlank() }
+            ?: return edges.firstOrNull()?.targetNodeId
+        return edges.find { it.label?.equals(fallback, ignoreCase = true) == true }?.targetNodeId
     }
 
     /**
@@ -1454,6 +1618,18 @@ constructor(
             runTraceRepository.flush()
             true
         }
+        state is AgentOrchestratorState.WaitingForCeilingRaise -> {
+            // Reached twice for one pause, and both are wanted. The engine that
+            // raised it calls this directly, before parking. A *parent* engine
+            // reaches it when a sub-pipeline forwards the pause upwards, which
+            // is what puts the whole stack into WAITING_CEILING rather than
+            // leaving the root RUNNING behind a child that is waiting — the
+            // shape of phase-40 finding F7, which made every answer to a nested
+            // park bounce off the resume guard.
+            pipelineRunRepository.updateStatus(runId, PipelineRunStatus.WAITING_CEILING)
+            runTraceRepository.flush()
+            true
+        }
         // Console lines, node-I/O snapshots and run notices are observations
         // *about* the run, not progress of it: they keep arriving while a HITL
         // gate is waiting (a sub-pipeline forwards its child's console traffic
@@ -1476,6 +1652,45 @@ constructor(
             false
         }
         else -> false
+    }
+
+    /**
+     * Makes a ceiling pause durable and, unless the user is already looking at
+     * the session, tells them about it.
+     *
+     * The record is what the pause *is*: the engine coroutine ends immediately
+     * after this returns, so from here on the question exists only in the
+     * pending-interaction store. It carries the axis and both numbers because
+     * the card that asks it has to state the limit **this run** was stopped at —
+     * the setting behind that number may well have been edited by the time the
+     * answer comes, hours later and in another process.
+     *
+     * @param runId Id of the run being parked. For a sub-pipeline this is the
+     *   child's id: the park sits where the pause happened, while the grant it
+     *   buys lands on the tree's root, which the submission path resolves.
+     * @param sessionId Id of the owning chat session.
+     * @param ceiling Which ceiling bound, and by how much.
+     * @return `true` when the park is durable and the caller may end the walk;
+     *   `false` when the store refused it and the run must stop instead — a
+     *   question recorded nowhere would leave the run waiting for an answer no
+     *   surface could ever offer.
+     */
+    private suspend fun parkOnCeiling(runId: String, sessionId: String, ceiling: HardCeilingBreach): Boolean {
+        val saved = pendingInteractionRepository.save(
+            PendingInteraction(
+                runId = runId,
+                sessionId = sessionId,
+                kind = PendingInteractionKind.CEILING,
+                ceilingAxis = ceiling.axis,
+                ceilingLimit = ceiling.limit,
+                ceilingSpent = ceiling.spent,
+                requestedAt = System.currentTimeMillis(),
+            ),
+        )
+        if (saved) {
+            ceilingNotifier.sendCeilingPauseRequest(runId, sessionId, ceiling)
+        }
+        return saved
     }
 
     /**

@@ -2,6 +2,7 @@ package app.knotwork.design.screens.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
@@ -40,7 +41,14 @@ import app.knotwork.design.tokens.KnotworkTextStyles
  *  `PendingChange` transition.
  * @param errorText optional validation message rendered beneath the slider
  *  (e.g. for the pipeline node-config fields); `null` (default) shows nothing.
+ *
+ * Sliders had no description slot at all before this — which is why the controls
+ * whose meaning is least guessable (`Top-K`, thresholds, the run ceilings) were
+ * the ones with nothing on screen to explain them. The explanation is summoned
+ * from the enclosing `SettingsAnchor`, and appears under the track so the
+ * label-to-value pair never moves while the reader drags.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Suppress("LongParameterList") // Stable public API; each parameter maps to a row attribute.
 @Composable
 fun KnotworkParamSlider(
@@ -62,12 +70,18 @@ fun KnotworkParamSlider(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(
-                text = label,
-                style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface,
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f),
-            )
+            ) {
+                Text(
+                    text = label,
+                    style = KnotworkTextStyles.BodySm.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                SettingsHintGlyph(settingName = label)
+            }
             Text(
                 text = valueLabel,
                 style = KnotworkTextStyles.MonoSm,
@@ -88,5 +102,8 @@ fun KnotworkParamSlider(
                 color = KnotworkTheme.extended.signalError,
             )
         }
+        // Under the track, so the label-to-value pair the reader is watching
+        // while dragging never moves.
+        SettingsHintBody()
     }
 }

@@ -2,39 +2,28 @@
 
 package app.knotwork.android.presentation.ui.orchestrator.presets
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import app.knotwork.android.R
 import app.knotwork.android.domain.models.PresetCategory
-import app.knotwork.design.components.controls.KnotworkField
-import app.knotwork.design.components.controls.KnotworkTextField
-import app.knotwork.design.theme.KnotworkTheme
+import app.knotwork.design.screens.pipelines.PresetCategoryOptionUi
+import app.knotwork.design.screens.pipelines.SaveAsPresetDialogUi
+import app.knotwork.design.screens.pipelines.SaveAsPresetDialog as CatalogSaveAsPresetDialog
 
 /**
  * Result payload emitted by [SaveAsPresetDialog] when the user submits.
  *
- * @property name Display name; trimmed by the caller.
+ * Kept in `:app` rather than reusing the catalog's form result, because
+ * [category] is a domain type and the catalog cannot name it. The mapping from
+ * the catalog's opaque category id back to [PresetCategory] happens here, in
+ * the one place that knows both vocabularies.
+ *
+ * @property name Display name; trimmed by the dialog.
  * @property description Free-form description.
  * @property category Picker category bucket.
- * @property tags Comma-separated tags as the user typed them. The
- *   [SavePipelineAsPresetUseCase] normalises (trim / dedupe / blank-drop)
- *   so the dialog stays dumb.
+ * @property tags Tags as the user typed them, split and trimmed. The
+ *   `SavePipelineAsPresetUseCase` normalises further (dedupe / blank-drop) so
+ *   the dialog stays dumb.
  */
 data class SaveAsPresetResult(
     val name: String,
@@ -44,86 +33,50 @@ data class SaveAsPresetResult(
 )
 
 /**
- * Modal dialog used by both the pipeline-library row overflow ("Save as
- * preset") and the editor overflow. Captures name, description, category
- * and tags before delegating to the matching `OrchestratorViewModel`
- * method.
+ * `:app` binding of the catalog's save-as-preset dialog: resolves the copy,
+ * turns [PresetCategory] into opaque chip options, and maps the chosen id back.
  *
- * The dialog owns its own internal form state. Submission gates on a
- * non-blank name to mirror [SavePipelineAsPresetUseCase].
+ * The dialog itself lives in `:catalog` so it can be photographed. It had no
+ * baseline while it lived here, and that is exactly how "the selected category
+ * is not marked" survived to a manual device run.
  *
- * @param initialName Initial value for the name field (typically the
- *   source pipeline's name).
+ * @param initialName Initial value for the name field (typically the source
+ *   pipeline's name).
  * @param onDismiss Invoked when the user taps Cancel or the dialog scrim.
- * @param onConfirm Invoked with the captured [SaveAsPresetResult] when the
- *   user taps Save.
+ * @param onConfirm Invoked with the captured [SaveAsPresetResult] on Save.
  */
-@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun SaveAsPresetDialog(initialName: String, onDismiss: () -> Unit, onConfirm: (SaveAsPresetResult) -> Unit) {
-    var name by remember { mutableStateOf(initialName) }
-    var description by remember { mutableStateOf("") }
-    var tagsRaw by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(PresetCategory.OTHER) }
-
-    val canSubmit = name.trim().isNotEmpty()
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        modifier = Modifier.testTag(tag = SAVE_AS_PRESET_DIALOG_TEST_TAG),
-        title = { Text(stringResource(R.string.orchestrator_preset_save_title)) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3)) {
-                KnotworkField(label = stringResource(R.string.orchestrator_preset_save_name_label)) {
-                    KnotworkTextField(value = name, onValueChange = { name = it })
-                }
-                KnotworkField(label = stringResource(R.string.orchestrator_preset_save_description_label)) {
-                    KnotworkTextField(value = description, onValueChange = { description = it })
-                }
-                KnotworkField(label = stringResource(R.string.orchestrator_preset_save_category_label)) {
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-                        verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp2),
-                    ) {
-                        PresetCategory.entries.forEach { entry ->
-                            FilterChip(
-                                selected = category == entry,
-                                onClick = { category = entry },
-                                label = { Text(presetCategoryLabelText(entry)) },
-                                colors = FilterChipDefaults.filterChipColors(),
-                            )
-                        }
-                    }
-                }
-                KnotworkField(label = stringResource(R.string.orchestrator_preset_save_tags_label)) {
-                    KnotworkTextField(value = tagsRaw, onValueChange = { tagsRaw = it })
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                enabled = canSubmit,
-                onClick = {
-                    val tags = tagsRaw
-                        .split(',')
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                    onConfirm(
-                        SaveAsPresetResult(
-                            name = name.trim(),
-                            description = description.trim(),
-                            category = category,
-                            tags = tags,
-                        ),
-                    )
-                },
-            ) { Text(stringResource(R.string.common_save)) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
+    val options = PresetCategory.entries.map { entry ->
+        PresetCategoryOptionUi(id = entry.name, label = presetCategoryLabelText(entry))
+    }
+    CatalogSaveAsPresetDialog(
+        ui = SaveAsPresetDialogUi(
+            initialName = initialName,
+            categories = options,
+            initialCategoryId = PresetCategory.OTHER.name,
+            title = stringResource(R.string.orchestrator_preset_save_title),
+            nameLabel = stringResource(R.string.orchestrator_preset_save_name_label),
+            descriptionLabel = stringResource(R.string.orchestrator_preset_save_description_label),
+            categoryLabel = stringResource(R.string.orchestrator_preset_save_category_label),
+            tagsLabel = stringResource(R.string.orchestrator_preset_save_tags_label),
+            saveLabel = stringResource(R.string.common_save),
+            cancelLabel = stringResource(R.string.common_cancel),
+        ),
+        onDismiss = onDismiss,
+        onConfirm = { form ->
+            onConfirm(
+                SaveAsPresetResult(
+                    name = form.name,
+                    description = form.description,
+                    // The id is the enum's own name, so an unknown value can only
+                    // mean the two lists have drifted apart; OTHER is the bucket
+                    // that says "uncategorised" rather than guessing a wrong one.
+                    category = PresetCategory.entries.firstOrNull { it.name == form.categoryId }
+                        ?: PresetCategory.OTHER,
+                    tags = form.tags,
+                ),
+            )
         },
     )
 }
-
-/** Test-tag applied to the Save-as-preset dialog root for Compose tests. */
-internal const val SAVE_AS_PRESET_DIALOG_TEST_TAG = "save_as_preset_dialog"

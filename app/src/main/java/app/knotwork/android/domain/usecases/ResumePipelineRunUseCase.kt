@@ -29,10 +29,15 @@ import javax.inject.Inject
  *    user resumes explicitly from the status card. Bounded by the
  *    `resumeMaxAgeHours` setting counted from the interruption.
  *  - [PipelineRunStatus.WAITING_APPROVAL] / [PipelineRunStatus.WAITING_CLARIFICATION]
- *    with a parked pending-interaction record — the run waits for a
- *    background HITL response; the decision use cases resume it after
- *    recording the user's answer. Bounded by the
- *    `backgroundApprovalWindowHours` setting counted from the park.
+ *    / [PipelineRunStatus.WAITING_CEILING] with a parked pending-interaction
+ *    record — the run waits for a response it cannot hold in memory; the
+ *    decision use cases resume it after recording the user's answer. Bounded by
+ *    the `backgroundApprovalWindowHours` setting counted from the park. The
+ *    ceiling case differs from the other two in only one way, and it is the
+ *    caller's business rather than this use case's: the grant that makes the
+ *    resumed run able to take another step must already be on the record when
+ *    the resume is enqueued, or the rebuilt ledger breaches on its first node
+ *    and parks again.
  *
  * **Run tree.** The acted-on run may be a sub-pipeline run (a background HITL
  * park raised *inside* a sub-pipeline). Resume always re-enqueues the **root**
@@ -213,6 +218,7 @@ class ResumePipelineRunUseCase @Inject constructor(
             PipelineRunStatus.INTERRUPTED,
             PipelineRunStatus.WAITING_APPROVAL,
             PipelineRunStatus.WAITING_CLARIFICATION,
+            PipelineRunStatus.WAITING_CEILING,
         )
     }
 }

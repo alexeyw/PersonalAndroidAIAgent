@@ -5874,9 +5874,6 @@
         { id: 'GOOGLE',    label: 'Google' },
         { id: 'COMPATIBLE', label: 'Compatible (DeepSeek / Ollama / OpenAI-compatible)' },
     ];
-    const OUTPUT_FORMATS = ['PLAIN_TEXT', 'MARKDOWN', 'JSON'];
-    const SUMMARY_FORMATS = ['BULLETS', 'PARAGRAPH', 'CUSTOM'];
-    const CONFIRM_POLICIES = ['', 'ALWAYS_CONFIRM', 'ALLOW_READONLY', 'ALLOW_SENSITIVE'];
 
     /** Maps the rich CLOUD `provider` value to the flat domain wire id. */
     function richCloudToFlat(provider) {
@@ -5932,8 +5929,8 @@
         const D = DEFAULT_SYSTEM_PROMPTS;
         const base = { title: t.label, description: null };
         switch (typeId) {
-            case 'INPUT':       return { ...base, inputName: 'user.message', schemaJson: null };
-            case 'OUTPUT':      return { ...base, format: 'PLAIN_TEXT', systemPrompt: '' };
+            case 'INPUT':       return { ...base };
+            case 'OUTPUT':      return { ...base, systemPrompt: '' };
             case 'LITE_RT':     return { ...base, modelId: '', systemPrompt: D.LITE_RT || '',
                 temperature: 0.7, topP: 0.9, maxNewTokens: 512, stopTokens: [] };
             case 'CLOUD':       return { ...base, provider: 'AUTO', model: '', systemPrompt: D.CLOUD || '',
@@ -5942,20 +5939,17 @@
                 classes: [{ name: 'simple', description: '', examples: [] },
                           { name: 'complex', description: '', examples: [] }],
                 classifierPrompt: D.INTENT_ROUTER || '', fallbackClass: null, engineProvider: '' };
-            case 'IF_CONDITION': return { ...base, expression: '', labelTrue: 'True', labelFalse: 'False',
+            case 'IF_CONDITION': return { ...base, expression: '', keywords: '', complexityThreshold: null,
                 engineProvider: '' };
             case 'CLARIFICATION': return { ...base, questionTemplate: D.CLARIFICATION || '',
                 quickReplies: [], timeoutMs: null };
-            case 'TOOL':        return { ...base, toolId: '', argumentMapping: [], confirmOverride: null,
-                engineProvider: '' };
+            case 'TOOL':        return { ...base, toolId: '', alwaysConfirm: false, engineProvider: '' };
             case 'DECOMPOSITION': return { ...base, planningPrompt: D.DECOMPOSITION || '',
-                maxSubtasks: 5, outputSchemaJson: null, engineProvider: '' };
-            case 'QUEUE_PROCESSOR': return { ...base, inputList: '', itemVariable: 'item',
-                parallelism: 1, stopOnError: true };
+                maxSubtasks: 5, engineProvider: '' };
+            case 'QUEUE_PROCESSOR': return { ...base, stopOnError: true };
             case 'EVALUATION':  return { ...base, criteriaPrompt: D.EVALUATION || '', maxRetries: 2,
                 engineProvider: '' };
-            case 'SUMMARY':     return { ...base, format: 'BULLETS', customPrompt: D.SUMMARY || null,
-                targetLengthChars: 600 };
+            case 'SUMMARY':     return { ...base, customPrompt: D.SUMMARY || null };
             // Composition nodes. Mirror the catalog PipelineConfig / SkillConfig
             // (NodeConfig.kt): only the durable reference id (+ SKILL engine) is
             // persisted; display names are resolved live by the host app.
@@ -5986,17 +5980,24 @@
             case 'CLOUD':   flat.systemPrompt = cfg.systemPrompt || ''; flat.cloudProvider = richCloudToFlat(cfg.provider); break;
             case 'OUTPUT':  flat.systemPrompt = cfg.systemPrompt || ''; break;
             case 'INTENT_ROUTER': flat.systemPrompt = cfg.classifierPrompt || '';
+                flat.fallbackClass = cfg.fallbackClass || null;
                 flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
             case 'DECOMPOSITION': flat.systemPrompt = cfg.planningPrompt || '';
+                flat.maxSubtasks = (cfg.maxSubtasks ?? null);
                 flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
             case 'EVALUATION':    flat.systemPrompt = cfg.criteriaPrompt || '';
                 flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
             case 'SUMMARY':       flat.systemPrompt = cfg.customPrompt || ''; break;
             case 'CLARIFICATION': flat.systemPrompt = cfg.questionTemplate || '';
+                flat.quickReplies = (cfg.quickReplies || []).map(s => String(s).trim())
+                    .filter(s => s.length > 0).join(', ') || null;
                 flat.clarificationTimeoutMs = (cfg.timeoutMs ?? null); break;
             case 'IF_CONDITION':  flat.conditionPrompt = cfg.expression || '';
+                flat.conditionKeywords = cfg.keywords || null;
+                flat.conditionComplexity = (cfg.complexityThreshold ?? null);
                 flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
             case 'TOOL':          flat.toolName = cfg.toolId || '';
+                flat.alwaysConfirm = cfg.alwaysConfirm === true ? true : null;
                 flat.cloudProvider = engineProviderToFlat(cfg.engineProvider); break;
             // SKILL engine maps onto the flat cloudProvider exactly as
             // NodeConfigCodec.apply does: CLOUD → the "auto" sentinel, LITE_RT →
@@ -6022,11 +6023,8 @@
         const nonBlank = v => v != null && String(v).trim().length > 0;
         switch (typeId) {
             case 'INPUT':
-                env.inputName = cfg.inputName ?? 'user.message';
-                if (nonBlank(cfg.schemaJson)) env.schemaJson = cfg.schemaJson;
                 break;
             case 'OUTPUT':
-                env.format = cfg.format || 'PLAIN_TEXT';
                 env.systemPrompt = cfg.systemPrompt ?? '';
                 break;
             case 'LITE_RT':
@@ -6059,8 +6057,8 @@
                 break;
             case 'IF_CONDITION':
                 env.expression = cfg.expression ?? '';
-                env.labelTrue = cfg.labelTrue || 'True';
-                env.labelFalse = cfg.labelFalse || 'False';
+                env.keywords = cfg.keywords ?? '';
+                if (cfg.complexityThreshold != null) env.complexityThreshold = Number(cfg.complexityThreshold);
                 if (nonBlank(cfg.engineProvider)) env.engineProvider = cfg.engineProvider;
                 break;
             case 'CLARIFICATION':
@@ -6070,22 +6068,15 @@
                 break;
             case 'TOOL':
                 env.toolId = cfg.toolId ?? '';
-                env.argumentMapping = (cfg.argumentMapping || []).map(a => ({
-                    name: a.name ?? '', expression: a.expression ?? '',
-                }));
-                if (nonBlank(cfg.confirmOverride)) env.confirmOverride = cfg.confirmOverride;
+                env.alwaysConfirm = cfg.alwaysConfirm === true;
                 if (nonBlank(cfg.engineProvider)) env.engineProvider = cfg.engineProvider;
                 break;
             case 'DECOMPOSITION':
                 env.planningPrompt = cfg.planningPrompt ?? '';
                 env.maxSubtasks = Number(cfg.maxSubtasks ?? 5);
-                if (nonBlank(cfg.outputSchemaJson)) env.outputSchemaJson = cfg.outputSchemaJson;
                 if (nonBlank(cfg.engineProvider)) env.engineProvider = cfg.engineProvider;
                 break;
             case 'QUEUE_PROCESSOR':
-                env.inputList = cfg.inputList ?? '';
-                env.itemVariable = cfg.itemVariable || 'item';
-                env.parallelism = Number(cfg.parallelism ?? 1);
                 env.stopOnError = cfg.stopOnError !== false;
                 break;
             case 'EVALUATION':
@@ -6094,9 +6085,7 @@
                 if (nonBlank(cfg.engineProvider)) env.engineProvider = cfg.engineProvider;
                 break;
             case 'SUMMARY':
-                env.format = cfg.format || 'BULLETS';
                 if (cfg.customPrompt != null) env.customPrompt = cfg.customPrompt;
-                env.targetLengthChars = Number(cfg.targetLengthChars ?? 600);
                 break;
             case 'PIPELINE':
                 // Mirror NodeConfigCodec.encodePipeline: only the target id.
@@ -6122,11 +6111,8 @@
         const strArr = v => Array.isArray(v) ? v.map(String) : [];
         switch (typeId) {
             case 'INPUT':
-                if (env.inputName != null) cfg.inputName = String(env.inputName);
-                cfg.schemaJson = env.schemaJson != null ? String(env.schemaJson) : null;
                 break;
             case 'OUTPUT':
-                if (env.format) cfg.format = String(env.format);
                 cfg.systemPrompt = env.systemPrompt != null ? String(env.systemPrompt) : '';
                 break;
             case 'LITE_RT':
@@ -6156,8 +6142,9 @@
                 break;
             case 'IF_CONDITION':
                 if (env.expression != null) cfg.expression = String(env.expression);
-                if (env.labelTrue) cfg.labelTrue = String(env.labelTrue);
-                if (env.labelFalse) cfg.labelFalse = String(env.labelFalse);
+                if (env.keywords != null) cfg.keywords = String(env.keywords);
+                cfg.complexityThreshold = env.complexityThreshold != null
+                    ? num(env.complexityThreshold, null) : null;
                 cfg.engineProvider = env.engineProvider != null ? String(env.engineProvider) : '';
                 break;
             case 'CLARIFICATION':
@@ -6167,22 +6154,15 @@
                 break;
             case 'TOOL':
                 if (env.toolId != null) cfg.toolId = String(env.toolId);
-                if (Array.isArray(env.argumentMapping)) cfg.argumentMapping = env.argumentMapping.map(a => ({
-                    name: String(a.name ?? ''), expression: String(a.expression ?? ''),
-                }));
-                cfg.confirmOverride = env.confirmOverride != null ? String(env.confirmOverride) : null;
+                cfg.alwaysConfirm = env.alwaysConfirm === true;
                 cfg.engineProvider = env.engineProvider != null ? String(env.engineProvider) : '';
                 break;
             case 'DECOMPOSITION':
                 if (env.planningPrompt != null) cfg.planningPrompt = String(env.planningPrompt);
                 cfg.maxSubtasks = num(env.maxSubtasks, 5);
-                cfg.outputSchemaJson = env.outputSchemaJson != null ? String(env.outputSchemaJson) : null;
                 cfg.engineProvider = env.engineProvider != null ? String(env.engineProvider) : '';
                 break;
             case 'QUEUE_PROCESSOR':
-                if (env.inputList != null) cfg.inputList = String(env.inputList);
-                if (env.itemVariable) cfg.itemVariable = String(env.itemVariable);
-                cfg.parallelism = num(env.parallelism, 1);
                 cfg.stopOnError = env.stopOnError !== false;
                 break;
             case 'EVALUATION':
@@ -6191,9 +6171,7 @@
                 cfg.engineProvider = env.engineProvider != null ? String(env.engineProvider) : '';
                 break;
             case 'SUMMARY':
-                if (env.format) cfg.format = String(env.format);
                 cfg.customPrompt = env.customPrompt != null ? String(env.customPrompt) : null;
-                cfg.targetLengthChars = num(env.targetLengthChars, 600);
                 break;
             case 'PIPELINE':
                 if (env.targetPipelineId != null) cfg.targetPipelineId = String(env.targetPipelineId);
@@ -6421,11 +6399,10 @@
 
         switch (typeId) {
             case 'INPUT':
-                fields.push(cfgText('inputName', 'Input variable name', cfg.inputName ?? 'user.message', 'user.message'));
-                fields.push(cfgTextarea('schemaJson', 'Input JSON schema (optional)', cfg.schemaJson ?? '', 3));
+                // Nothing to configure: the entry contract is fixed and the run's
+                // text arrives as it is.
                 break;
             case 'OUTPUT':
-                fields.push(cfgSelect('format', 'Output format', OUTPUT_FORMATS.map(f => ({ id: f, label: f })), cfg.format || 'PLAIN_TEXT'));
                 fields.push(prompt('systemPrompt', 'System prompt (blank = echo upstream verbatim)', typeId, true));
                 break;
             case 'LITE_RT':
@@ -6454,9 +6431,13 @@
                 // EvaluateIfConditionUseCase runs the LLM on `conditionPrompt`
                 // (the rich `expression`), never `systemPrompt`; no variable
                 // chips (IF prompts bypass PromptTemplateEngine — DESCRIPTION §5).
-                fields.push(prompt('expression', 'Condition expression', 'IF_CONDITION', false));
-                fields.push(cfgText('labelTrue', 'True branch label', cfg.labelTrue || 'True'));
-                fields.push(cfgText('labelFalse', 'False branch label', cfg.labelFalse || 'False'));
+                // Listed in the order the engine checks them: keywords, then
+                // input length, then the question. The port labels are fixed at
+                // True / False because that is what the engine matches an
+                // outgoing edge against.
+                fields.push(cfgText('keywords', 'Keywords (comma-separated, checked first)', cfg.keywords ?? '', 'e.g. urgent, asap'));
+                fields.push(cfgNumber('complexityThreshold', 'Length threshold (chars, blank = off)', cfg.complexityThreshold, { min: 1, max: 2000, step: 10, kind: 'int' }));
+                fields.push(prompt('expression', 'Question for the model (asked last)', 'IF_CONDITION', false));
                 fields.push(cfgSelect('engineProvider', 'Engine', ENGINE_PROVIDER_OPTIONS, cfg.engineProvider ?? ''));
                 break;
             case 'CLARIFICATION':
@@ -6466,20 +6447,17 @@
                 break;
             case 'TOOL':
                 fields.push(cfgSelect('toolId', 'Tool', [{ id: '', label: 'Auto (pick at runtime)' }, ...AVAILABLE_TOOLS], cfg.toolId ?? ''));
-                fields.push(cfgArgMapping(cfg.argumentMapping, 'Argument mapping (name → expression)'));
-                fields.push(cfgSelect('confirmOverride', 'Confirmation override', CONFIRM_POLICIES.map(p => ({ id: p, label: p || '— inherit declared risk —' })), cfg.confirmOverride || ''));
+                fields.push(cfgCheckbox('alwaysConfirm', 'Always ask before this call', cfg.alwaysConfirm === true));
                 fields.push(cfgSelect('engineProvider', 'Engine', ENGINE_PROVIDER_OPTIONS, cfg.engineProvider ?? ''));
                 break;
             case 'DECOMPOSITION':
                 fields.push(prompt('planningPrompt', 'Planning prompt', typeId, true));
                 fields.push(cfgNumber('maxSubtasks', 'Max subtasks (1–20)', cfg.maxSubtasks, { min: 1, max: 20, step: 1, kind: 'int' }));
-                fields.push(cfgTextarea('outputSchemaJson', 'Output JSON schema (optional)', cfg.outputSchemaJson ?? '', 3));
                 fields.push(cfgSelect('engineProvider', 'Engine', ENGINE_PROVIDER_OPTIONS, cfg.engineProvider ?? ''));
                 break;
             case 'QUEUE_PROCESSOR':
-                fields.push(cfgText('inputList', 'Input list expression', cfg.inputList ?? '', 'blank = previous node output'));
-                fields.push(cfgText('itemVariable', 'Item variable', cfg.itemVariable || 'item'));
-                fields.push(cfgNumber('parallelism', 'Parallelism (1–8)', cfg.parallelism, { min: 1, max: 8, step: 1, kind: 'int' }));
+                // The queue is the list the previous node produced, one item at
+                // a time; the only decision is what a failing item does.
                 fields.push(cfgCheckbox('stopOnError', 'Stop on first error', cfg.stopOnError !== false));
                 break;
             case 'EVALUATION':
@@ -6488,9 +6466,9 @@
                 fields.push(cfgSelect('engineProvider', 'Engine', ENGINE_PROVIDER_OPTIONS, cfg.engineProvider ?? ''));
                 break;
             case 'SUMMARY':
-                fields.push(cfgSelect('format', 'Format', SUMMARY_FORMATS.map(f => ({ id: f, label: f })), cfg.format || 'BULLETS'));
-                fields.push(prompt('customPrompt', 'Custom prompt (required when format = CUSTOM)', typeId, true));
-                fields.push(cfgNumber('targetLengthChars', 'Target length (chars, 200–4000)', cfg.targetLengthChars, { min: 200, max: 4000, step: 50, kind: 'int' }));
+                // Shape and length are asked for in the prompt — it is the only
+                // lever the executor reads.
+                fields.push(prompt('customPrompt', 'Custom prompt (blank = built-in summarisation prompt)', typeId, true));
                 break;
             case 'PIPELINE':
                 fields.push(cfgPipelinePicker(cfg));
@@ -6755,46 +6733,6 @@
             add.className = 'list-add';
             add.textContent = '+ Add class';
             add.addEventListener('click', () => { arr.push({ name: '', description: '', examples: [] }); render(); });
-            list.appendChild(add);
-        };
-        render();
-        wrap.appendChild(list);
-        return wrap;
-    }
-
-    /** Editable list of tool arguments ({name, expression}); mutates [arr] live. */
-    function cfgArgMapping(arr, label) {
-        const wrap = fieldWrap(label);
-        const list = document.createElement('div');
-        list.className = 'list-editor';
-        const render = () => {
-            list.innerHTML = '';
-            arr.forEach((row, i) => {
-                const r = document.createElement('div');
-                r.className = 'list-row';
-                const name = document.createElement('input');
-                name.type = 'text';
-                name.placeholder = 'arg name';
-                name.value = row.name || '';
-                name.addEventListener('input', () => { row.name = name.value; });
-                const expr = document.createElement('input');
-                expr.type = 'text';
-                expr.placeholder = 'expression';
-                expr.value = row.expression || '';
-                expr.addEventListener('input', () => { row.expression = expr.value; });
-                const del = document.createElement('button');
-                del.type = 'button';
-                del.className = 'list-del';
-                del.textContent = '✕';
-                del.addEventListener('click', () => { arr.splice(i, 1); render(); });
-                r.append(name, expr, del);
-                list.appendChild(r);
-            });
-            const add = document.createElement('button');
-            add.type = 'button';
-            add.className = 'list-add';
-            add.textContent = '+ Add argument';
-            add.addEventListener('click', () => { arr.push({ name: '', expression: '' }); render(); });
             list.appendChild(add);
         };
         render();
@@ -7211,13 +7149,8 @@
      */
     function validateRichConfig(typeId, cfg) {
         const inRange = (v, lo, hi) => v != null && !Number.isNaN(v) && v >= lo && v <= hi;
-        const jsonOk = s => { if (!s || !String(s).trim()) return true; try { JSON.parse(s); return true; } catch (e) { return false; } };
         if (!cfg.title || !String(cfg.title).trim()) return 'Node name must not be empty.';
         switch (typeId) {
-            case 'INPUT':
-                if (!cfg.inputName || !cfg.inputName.trim()) return 'Input variable name is required.';
-                if (!jsonOk(cfg.schemaJson)) return 'Input JSON schema is not valid JSON.';
-                break;
             case 'LITE_RT':
                 if (!inRange(cfg.temperature, 0, 2)) return 'Temperature must be between 0 and 2.';
                 if (!inRange(cfg.topP, 0, 1)) return 'Top-P must be between 0 and 1.';
@@ -7240,27 +7173,13 @@
                 if ((cfg.quickReplies || []).length > 4) return 'At most 4 quick replies are allowed.';
                 if (cfg.timeoutMs != null && cfg.timeoutMs < 0) return 'Timeout must be a non-negative number.';
                 break;
-            case 'TOOL': {
-                const argNames = (cfg.argumentMapping || []).map(a => (a.name || '').trim());
-                if (argNames.some(n => !n)) return 'Every argument needs a non-empty name.';
-                if (new Set(argNames).size !== argNames.length) return 'Argument names must be unique.';
-                break;
-            }
             case 'DECOMPOSITION':
                 if (!inRange(cfg.maxSubtasks, 1, 20)) return 'Max subtasks must be between 1 and 20.';
-                if (!jsonOk(cfg.outputSchemaJson)) return 'Output JSON schema is not valid JSON.';
-                break;
-            case 'QUEUE_PROCESSOR':
-                if (!cfg.itemVariable || !cfg.itemVariable.trim()) return 'Item variable is required.';
-                if (!inRange(cfg.parallelism, 1, 8)) return 'Parallelism must be between 1 and 8.';
                 break;
             case 'EVALUATION':
                 if (!inRange(cfg.maxRetries, 0, 5)) return 'Max retries must be between 0 and 5.';
                 break;
-            case 'SUMMARY':
-                if (!inRange(cfg.targetLengthChars, 200, 4000)) return 'Target length must be between 200 and 4000.';
-                if (cfg.format === 'CUSTOM' && (!cfg.customPrompt || !cfg.customPrompt.trim())) return 'A custom prompt is required for the CUSTOM format.';
-                break;
+
             case 'PIPELINE': {
                 const target = (cfg.targetPipelineId || '').trim();
                 if (!target) return 'A target pipeline id is required.';

@@ -189,11 +189,17 @@ sealed interface VoiceInputState {
  * @property interrupted snapshot of the session's interrupted run (`null`
  *   when the latest run finished normally or is still active). Renders the
  *   trailing interrupted-run status card with Resume / Discard actions.
+ * @property ceiling snapshot of a run paused at one of its own limits (`null`
+ *   when no run is waiting on that decision). Renders the trailing pause card
+ *   with Continue / Stop actions. Held apart from [interrupted] even though the
+ *   two cards share their chrome: they ask for different decisions, and one
+ *   slot would let a Discard tap settle a run the user meant to continue.
  */
 data class ChatHomePendingState(
     val tool: HitlPending? = null,
     val clarification: ClarificationRequest? = null,
     val interrupted: InterruptedRunPending? = null,
+    val ceiling: CeilingPausePending? = null,
 )
 
 /**

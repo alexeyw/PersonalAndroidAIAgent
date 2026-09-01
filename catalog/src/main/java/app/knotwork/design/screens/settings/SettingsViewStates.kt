@@ -13,17 +13,26 @@ const val SLIDER_TOP_K: String = "top_k"
 /** Generation · top-P sampling slider id. */
 const val SLIDER_TOP_P: String = "top_p"
 
-/** Generation · repetition-penalty slider id. */
-const val SLIDER_REPETITION_PENALTY: String = "repetition_penalty"
-
 /** Generation · max-context-length slider id. */
 const val SLIDER_MAX_CONTEXT: String = "max_context"
 
 /** Generation · voice-input length slider id. */
 const val SLIDER_AUDIO_MAX_DURATION: String = "audio_max_duration"
 
-/** Memory · auto-summarize threshold slider id. */
-const val SLIDER_MEMORY_AUTO_SUMMARIZE: String = "memory_auto_summarize"
+/** Tools · per-tool-call timeout slider id. */
+const val SLIDER_TOOL_CALL_TIMEOUT: String = "tool_call_timeout"
+
+/** Tools · workspace per-file size ceiling slider id. */
+const val SLIDER_WORKSPACE_MAX_FILE_SIZE: String = "workspace_max_file_size"
+
+/** Tools · workspace total size ceiling slider id. */
+const val SLIDER_WORKSPACE_MAX_TOTAL: String = "workspace_max_total"
+
+/** Tools · single-read token budget slider id. */
+const val SLIDER_WORKSPACE_READ_TOKEN_BUDGET: String = "workspace_read_token_budget"
+
+/** Tools · `http_request` response ceiling slider id. */
+const val SLIDER_HTTP_TOOL_MAX_RESPONSE: String = "http_tool_max_response"
 
 /** Memory · search top-K slider id. */
 const val SLIDER_MEMORY_SEARCH_TOP_K: String = "memory_search_top_k"
@@ -88,7 +97,6 @@ const val SLIDER_PRIVACY_RETENTION_AGE: String = "privacy_retention_age"
  * @property backendLabel Backend description line (e.g. "NPU (QNN) · auto…").
  * @property selectedBackend Short trailing backend value (e.g. "NPU · auto").
  * @property backendOptions Available backend dropdown options.
- * @property longRunningEnabled "Long-running task alerts" toggle value.
  * @property crashReportingEnabled "Crash reporting" toggle value.
  * @property restartRequiredMessage Banner copy; `null` hides the restart banner.
  * @property searchQuery Live settings-search query; blank renders the normal hub
@@ -110,7 +118,6 @@ data class SettingsHubViewState(
     val backendLabel: String,
     val selectedBackend: String,
     val backendOptions: List<String>,
-    val longRunningEnabled: Boolean,
     val crashReportingEnabled: Boolean,
     val restartRequiredMessage: String? = null,
     val searchQuery: String = "",
@@ -123,15 +130,11 @@ data class SettingsHubViewState(
  * Generation category sub-screen state.
  *
  * @property systemInstructions Basic system-instructions textarea slice.
- * @property toolUsageValue Advanced tool-usage instruction textarea content.
- * @property toolUsageHelper Helper copy beneath the tool-usage field.
  * @property advancedSliders Sampling + voice sliders (temperature, top-K, top-P,
- *   repetition penalty, max context, voice length), all Advanced.
+ *   max context, voice length), all Advanced.
  */
 data class GenerationSettingsViewState(
     val systemInstructions: SystemInstructionsCardState,
-    val toolUsageValue: String,
-    val toolUsageHelper: String,
     val advancedSliders: List<SettingSliderRow>,
 )
 
@@ -157,12 +160,11 @@ data class ModelsSettingsViewState(
  *
  * @property stats Stat cells (chunks / size / threads / avg-score).
  * @property autoExtractEnabled "Auto-extract" toggle (Basic).
- * @property autoExtractLabel / [autoExtractSubtitle] Localised toggle copy.
+ * @property autoExtractLabel Localised toggle label.
  * @property compactionEnabled "Background compaction" toggle (Basic).
- * @property compactionLabel / [compactionSubtitle] Localised toggle copy.
+ * @property compactionLabel Localised toggle label.
  * @property chatHistoryCompressionEnabled "Compress chat history" toggle (Basic).
- * @property chatHistoryCompressionLabel / [chatHistoryCompressionSubtitle]
- *   Localised toggle copy.
+ * @property chatHistoryCompressionLabel Localised toggle label.
  * @property advancedSliders Memory-tuning sliders (Advanced).
  * @property verboseLoggingEnabled Verbose memory-logging toggle (Advanced).
  * @property embeddingTitle Embedding-dropdown row title.
@@ -181,13 +183,10 @@ data class MemorySettingsViewState(
     val stats: List<MemoryStatCell>,
     val autoExtractEnabled: Boolean,
     val autoExtractLabel: String,
-    val autoExtractSubtitle: String,
     val compactionEnabled: Boolean,
     val compactionLabel: String,
-    val compactionSubtitle: String,
     val chatHistoryCompressionEnabled: Boolean,
     val chatHistoryCompressionLabel: String,
-    val chatHistoryCompressionSubtitle: String,
     val advancedSliders: List<SettingSliderRow>,
     val verboseLoggingEnabled: Boolean,
     val embeddingTitle: String,
@@ -227,9 +226,10 @@ data class PipelinesSettingsViewState(val runLimitsSummary: String, val advanced
  * @property approveAllLabel / [approveSensitiveLabel] / [approveNeverLabel]
  *   Localised segmented labels.
  * @property blockDestructive "Block destructive tools" toggle (Basic).
- * @property blockDestructiveSubtitle Localised toggle subtitle.
  * @property blockNetwork "Block network from local model" toggle (Basic).
- * @property blockNetworkSubtitle Localised toggle subtitle.
+ * @property advancedSliders The tool / workspace ceilings (Advanced): the
+ *   per-call timeout, the two workspace size limits, the single-read token
+ *   budget and the `http_request` response cap.
  */
 data class ToolsSettingsViewState(
     val approveSelection: ApproveToolCallsOption,
@@ -237,9 +237,8 @@ data class ToolsSettingsViewState(
     val approveSensitiveLabel: String,
     val approveNeverLabel: String,
     val blockDestructive: Boolean,
-    val blockDestructiveSubtitle: String,
     val blockNetwork: Boolean,
-    val blockNetworkSubtitle: String,
+    val advancedSliders: List<SettingSliderRow>,
 )
 
 // ─── Background ──────────────────────────────────────────────────────────────
@@ -247,7 +246,6 @@ data class ToolsSettingsViewState(
 /**
  * Background-&-triggers category sub-screen state.
  *
- * @property longRunningEnabled "Long-running task alerts" toggle (Basic).
  * @property scheduledResultsEnabled "Scheduled task alerts" toggle (Basic).
  * @property shareTargetPipelineLabel Bound-pipeline label for the share target
  *   (the pipeline name, or a localised "Not set" placeholder) (Basic).
@@ -270,7 +268,6 @@ data class ToolsSettingsViewState(
  * @property advancedSliders Resume-window + approval-window sliders (Advanced).
  */
 data class BackgroundSettingsViewState(
-    val longRunningEnabled: Boolean,
     val scheduledResultsEnabled: Boolean,
     val shareTargetPipelineLabel: String,
     val shareReuseSessionEnabled: Boolean,

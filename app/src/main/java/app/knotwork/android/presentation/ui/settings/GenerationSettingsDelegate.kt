@@ -15,10 +15,9 @@ import kotlinx.coroutines.launch
 /**
  * Generation category delegate of [SettingsViewModel].
  *
- * Owns the system-instructions textarea (plus its `$VARIABLE` catalog chips), the
- * tool-usage instruction guidance, the five sampling parameters (temperature /
- * top-K / top-P / repetition penalty / max context length) and the voice-input
- * capture length. Observes the persisted flows into the shared [state]
+ * Owns the system-instructions textarea (plus its `$VARIABLE` catalog chips),
+ * the four sampling parameters (temperature / top-K / top-P / max context
+ * length) and the voice-input capture length. Observes the persisted flows into the shared [state]
  * and routes edits back through [settingsRepository]. Shares the ViewModel's
  * [scope] and single [SettingsUiState] reducer.
  *
@@ -44,9 +43,6 @@ class GenerationSettingsDelegate(
         settingsRepository.systemPromptPrefix.onEach { value ->
             state.update { it.copy(systemInstructions = value) }
         }.launchIn(scope)
-        settingsRepository.toolUsageInstruction.onEach { value ->
-            state.update { it.copy(toolUsageInstruction = value) }
-        }.launchIn(scope)
 
         settingsRepository.temperature.onEach { value ->
             state.update { it.copy(temperature = value) }
@@ -56,9 +52,6 @@ class GenerationSettingsDelegate(
         }.launchIn(scope)
         settingsRepository.topP.onEach { value ->
             state.update { it.copy(topP = value) }
-        }.launchIn(scope)
-        settingsRepository.repetitionPenalty.onEach { value ->
-            state.update { it.copy(repetitionPenalty = value) }
         }.launchIn(scope)
         settingsRepository.maxContextLength.onEach { value ->
             state.update { it.copy(maxContextLength = value) }
@@ -79,11 +72,6 @@ class GenerationSettingsDelegate(
     /** Persists the user's system-instructions prefix. */
     fun updateSystemInstructions(value: String) {
         scope.launch { settingsRepository.setSystemPromptPrefix(value) }
-    }
-
-    /** Persists the tool-usage instruction guidance. */
-    fun updateToolUsageInstruction(value: String) {
-        scope.launch { settingsRepository.setToolUsageInstruction(value) }
     }
 
     /** Appends [placeholder] to the current instructions (space-separated) and persists. */
@@ -110,11 +98,6 @@ class GenerationSettingsDelegate(
     /** Persists the top-P (nucleus) sampling bound. */
     fun setTopP(value: Float) {
         scope.launch { settingsRepository.setTopP(value) }
-    }
-
-    /** Persists the repetition-penalty bias. */
-    fun setRepetitionPenalty(value: Float) {
-        scope.launch { settingsRepository.setRepetitionPenalty(value) }
     }
 
     /** Persists the maximum context length (tokens). */

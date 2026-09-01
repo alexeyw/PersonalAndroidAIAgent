@@ -36,22 +36,12 @@ object NotificationChannels {
     const val AGENT_APPROVAL_DESTRUCTIVE: String = "AgentApprovalDestructiveChannel"
 
     /**
-     * Low-importance channel for informational pings when a backgrounded
-     * pipeline run exceeds the long-running threshold. Backs the Settings →
-     * Notifications → "Long-running tasks" toggle: the channel is created
-     * once at app start and `LongRunningTaskNotifier` posts to it when the
-     * user-controlled flag is on.
-     */
-    const val LONG_RUNNING_TASKS: String = "LongRunningTasksChannel"
-
-    /**
      * Default-importance channel for scheduled-run outcome notifications
      * ("Task completed" / "Task failed"). Kept separate from the HITL
      * approval channels (those are high-importance, action-carrying prompts)
-     * and from [LONG_RUNNING_TASKS] (low-importance progress pings) so the
-     * user can tune result announcements independently. Backs the Settings →
-     * Notifications → "Scheduled task results" toggle; `ScheduledTaskNotifier`
-     * posts to it when the user-controlled flag is on.
+     * so the user can tune result announcements independently. Backs the
+     * Settings → Notifications → "Scheduled task results" toggle;
+     * `ScheduledTaskNotifier` posts to it when the user-controlled flag is on.
      */
     const val TASK_RESULTS: String = "TaskResultsChannel"
 
@@ -64,6 +54,17 @@ object NotificationChannels {
      * independently.
      */
     const val AGENT_CLARIFICATION: String = "AgentClarificationChannel"
+
+    /**
+     * High-importance channel for runs paused at one of their own limits,
+     * waiting to be told whether they may carry on. Separate from the
+     * clarification channel it most resembles because the two interruptions ask
+     * for opposite things: a clarification asks the user to *supply* something
+     * the run needs, while this one asks permission to spend more than they
+     * allowed. A user who wants to be reachable for the first and left alone by
+     * the second — or the reverse — can only have that if the channels differ.
+     */
+    const val AGENT_RUN_CEILING: String = "AgentRunCeilingChannel"
 
     /**
      * Low-importance channel for the ongoing model-download notification. Kept

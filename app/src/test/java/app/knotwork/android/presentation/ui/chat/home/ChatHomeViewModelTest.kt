@@ -8,11 +8,14 @@ import app.knotwork.android.domain.models.AppError
 import app.knotwork.android.domain.models.ChatMessage
 import app.knotwork.android.domain.models.ChatSession
 import app.knotwork.android.domain.models.ClarificationRequest
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.LocalModel
 import app.knotwork.android.domain.models.MessageAttachment
 import app.knotwork.android.domain.models.NodeModel
 import app.knotwork.android.domain.models.NodeType
+import app.knotwork.android.domain.models.PendingInteraction
+import app.knotwork.android.domain.models.PendingInteractionKind
 import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.PipelineRun
 import app.knotwork.android.domain.models.PipelineRunStatus
@@ -48,6 +51,7 @@ import app.knotwork.android.domain.usecases.ResumePipelineRunUseCase
 import app.knotwork.android.domain.usecases.SaveMessageToMemoryUseCase
 import app.knotwork.android.domain.usecases.SaveToMemoryOutcome
 import app.knotwork.android.domain.usecases.SubmitApprovalDecisionUseCase
+import app.knotwork.android.domain.usecases.SubmitCeilingDecisionUseCase
 import app.knotwork.android.domain.usecases.SubmitClarificationAnswerUseCase
 import app.knotwork.android.domain.usecases.TranscribeAudioUseCase
 import app.knotwork.android.domain.usecases.TranscriptionOutcome
@@ -131,6 +135,7 @@ class ChatHomeViewModelTest {
     private lateinit var resumePipelineRunUseCase: ResumePipelineRunUseCase
     private lateinit var pendingInteractionRepository: PendingInteractionRepository
     private lateinit var submitApprovalDecisionUseCase: SubmitApprovalDecisionUseCase
+    private lateinit var submitCeilingDecisionUseCase: SubmitCeilingDecisionUseCase
     private lateinit var submitClarificationAnswerUseCase: SubmitClarificationAnswerUseCase
     private lateinit var attachmentStore: AttachmentStore
     private lateinit var resolveEntryInferenceUseCase: ResolveEntryInferenceUseCase
@@ -179,6 +184,7 @@ class ChatHomeViewModelTest {
         pendingInteractionRepository = mockk(relaxed = true)
         coEvery { pendingInteractionRepository.getForSession(any()) } returns null
         submitApprovalDecisionUseCase = mockk(relaxed = true)
+        submitCeilingDecisionUseCase = mockk(relaxed = true)
         attachmentStore = mockk(relaxed = true)
         resolveEntryInferenceUseCase = mockk()
         audioRecorder = mockk(relaxed = true)
@@ -270,6 +276,7 @@ class ChatHomeViewModelTest {
         pendingInteractionRepository,
         submitApprovalDecisionUseCase,
         submitClarificationAnswerUseCase,
+        submitCeilingDecisionUseCase,
         attachmentStore,
         resolveEntryInferenceUseCase,
         audioRecorder,
@@ -797,6 +804,122 @@ class ChatHomeViewModelTest {
     }
 
     @Test
+    fun `replacing an attachment announces it only once the replacement is in hand`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        coEvery { attachmentStore.ingestUri("content://first") } returns kotlin.Result.success(first)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        val replaced = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.attachments.attachmentReplacedEvents.collect { replaced.add(it) }
+        }
+
+        viewModel.attachments.onImagePicked("content://first")
+        advanceUntilIdle()
+        assertTrue("the first attachment replaces nothing", replaced.isEmpty())
+
+        val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
+        coEvery { attachmentStore.ingestUri("content://second") } coAnswers {
+            // Asserted mid-flight: counting events at the end would pass just as
+            // well if the announcement fired before the ingest, which is the
+            // bug this test is named for.
+            assertTrue("nothing may be announced while the ingest is in flight", replaced.isEmpty())
+            kotlin.Result.success(second)
+        }
+        viewModel.attachments.onImagePicked("content://second")
+        advanceUntilIdle()
+
+        assertEquals("the replacement is announced once", 1, replaced.size)
+    }
+
+    @Test
+    fun `a replacement that fails to ingest is not announced as a replacement`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        coEvery { attachmentStore.ingestUri("content://first") } returns kotlin.Result.success(first)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        val replaced = mutableListOf<Unit>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.attachments.attachmentReplacedEvents.collect { replaced.add(it) }
+        }
+        viewModel.attachments.onImagePicked("content://first")
+        advanceUntilIdle()
+
+        coEvery { attachmentStore.ingestUri("content://bad") } returns kotlin.Result.failure(RuntimeException("bad"))
+        viewModel.attachments.onImagePicked("content://bad")
+        advanceUntilIdle()
+
+        // A failed re-pick replaces nothing, says nothing about replacing, and —
+        // the part that actually mattered — costs the user nothing: the image
+        // that was already attached is still attached.
+        assertTrue("a failed ingest replaced nothing", replaced.isEmpty())
+        val draft = viewModel.state.value.composer.attachment
+        assertTrue("the previous attachment must survive a failed re-pick", draft is ComposerAttachmentDraft.Ready)
+        assertEquals(first, (draft as ComposerAttachmentDraft.Ready).attachment)
+        coVerify(exactly = 0) { attachmentStore.delete("first.jpg") }
+    }
+
+    @Test
+    fun `removing the draft while a pick is in flight is not undone by the pick landing`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        coEvery { attachmentStore.ingestUri("content://first") } returns kotlin.Result.success(first)
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        viewModel.attachments.onImagePicked("content://first")
+        advanceUntilIdle()
+
+        // Pick a second image and drop the whole draft before the ingest lands.
+        // The remove button is live during Processing, so this is reachable.
+        val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
+        coEvery { attachmentStore.ingestUri("content://second") } returns kotlin.Result.success(second)
+        viewModel.attachments.onImagePicked("content://second")
+        viewModel.attachments.removeAttachment()
+        advanceUntilIdle()
+
+        // Neither image comes back: the user said remove, and a pick landing
+        // afterwards must not overrule that.
+        assertNull(viewModel.state.value.composer.attachment)
+        coVerify { attachmentStore.delete("second.jpg") }
+    }
+
+    @Test
+    fun `when two picks race the later one wins`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        every { attachmentStore.absolutePathFor(any()) } returns "/tmp/x.jpg"
+        val first = MessageAttachment(path = "first.jpg", mimeType = "image/jpeg", width = 10, height = 10)
+        val second = MessageAttachment(path = "second.jpg", mimeType = "image/jpeg", width = 20, height = 20)
+        // Both ingests are in flight at once and the EARLIER pick finishes
+        // first — the only ordering in which the bug shows. (With the later pick
+        // finishing first the slot is already `Ready`, and even a bare type
+        // check rejects the straggler, which is why the first version of this
+        // test passed against the broken code.)
+        coEvery { attachmentStore.ingestUri("content://earlier") } coAnswers {
+            delay(EARLIER_INGEST_MS)
+            kotlin.Result.success(first)
+        }
+        coEvery { attachmentStore.ingestUri("content://later") } coAnswers {
+            delay(LATER_INGEST_MS)
+            kotlin.Result.success(second)
+        }
+
+        viewModel.attachments.onImagePicked("content://earlier")
+        viewModel.attachments.onImagePicked("content://later")
+        advanceUntilIdle()
+
+        // Ownership is the pick's identity, not the draft's shape: both picks see
+        // a `Processing` slot, so a type check alone let whichever finished first
+        // win — which for the user means the image they picked second vanishes.
+        val draft = viewModel.state.value.composer.attachment
+        assertTrue(draft is ComposerAttachmentDraft.Ready)
+        assertEquals(second, (draft as ComposerAttachmentDraft.Ready).attachment)
+        coVerify { attachmentStore.delete("first.jpg") }
+    }
+
+    @Test
     fun `onImagePicked failure clears draft and emits a transient error event without clobbering visual`() =
         runTest(testDispatcher) {
             viewModel = createViewModel()
@@ -1165,6 +1288,29 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals(ChatHomeUiState.Empty, viewModel.state.value.visual)
+        // The screen settling is not the point — it always did that. Stop has to
+        // reach the run, or the control goes on meaning something other than
+        // what it says.
+        verify { agentOrchestratorUseCase.cancelRun(sessionId) }
+    }
+
+    @Test
+    fun `selectThread does not stop the run it is leaving`() = runTest(testDispatcher) {
+        // Leaving a chat is not a decision to end its run — the whole reattach
+        // protocol exists because a background run outlives the screen. Stop is
+        // the only control that ends one.
+        val target = "thread-other"
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val leaving = viewModel.state.value.thread.currentSessionId
+        sessionsFlow.value = sessionsFlow.value + ChatSession(id = target, name = "Other", updatedAt = 0)
+        every { chatRepository.getDisplayMessagesForSession(target) } returns
+            MutableStateFlow<List<ChatMessage>>(emptyList())
+
+        viewModel.selectThread(target)
+        advanceUntilIdle()
+
+        verify(exactly = 0) { agentOrchestratorUseCase.cancelRun(leaving) }
     }
 
     @Test
@@ -1379,6 +1525,53 @@ class ChatHomeViewModelTest {
         advanceUntilIdle()
 
         assertEquals("Default", viewModel.state.value.pipelineName)
+    }
+
+    @Test
+    fun `pipelineName names the run's pipeline when the session is unbound`() = runTest(testDispatcher) {
+        // The reported defect. A session created by a trigger, by the scheduler
+        // or by external automation carries no binding — deliberately, so a
+        // follow-up typed into it uses the default — and the title therefore
+        // named the default above a conversation another pipeline produced.
+        val sessionId = "session-triggered"
+        seedSavedSession(sessionId)
+        every { pipelineRunRepository.observeRunsForSession(sessionId) } returns
+            flowOf(listOf(runRecord(sessionId, PipelineRunStatus.COMPLETED, pipelineId = "p2")))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        pipelinesFlow.value = listOf(
+            PipelineGraph(id = "p1", name = "Default"),
+            PipelineGraph(id = "p2", name = "Nightly digest"),
+        )
+        defaultPipelineIdFlow.value = "p1"
+        advanceUntilIdle()
+
+        assertEquals("Nightly digest", viewModel.state.value.pipelineName)
+    }
+
+    @Test
+    fun `pipelineName keeps the binding even when the last run used another pipeline`() = runTest(testDispatcher) {
+        // The binding is the user's own choice — picking a pipeline opens a new
+        // chat carrying it — so a run must never overrule it. Without this the
+        // title of a bound chat would drift to whatever last happened to run.
+        val sessionId = "session-bound"
+        savedSessionIdFlow.value = sessionId
+        sessionsFlow.value = listOf(
+            ChatSession(id = sessionId, name = "Existing", updatedAt = 0, pipelineId = "p1"),
+        )
+        every { pipelineRunRepository.observeRunsForSession(sessionId) } returns
+            flowOf(listOf(runRecord(sessionId, PipelineRunStatus.COMPLETED, pipelineId = "p2")))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        pipelinesFlow.value = listOf(
+            PipelineGraph(id = "p1", name = "Bound"),
+            PipelineGraph(id = "p2", name = "Nightly digest"),
+        )
+        advanceUntilIdle()
+
+        assertEquals("Bound", viewModel.state.value.pipelineName)
     }
 
     @Test
@@ -1827,18 +2020,6 @@ class ChatHomeViewModelTest {
     }
 
     @Test
-    fun `pickModel activates the model and loads it via LoadModelUseCase`() = runTest(testDispatcher) {
-        viewModel = createViewModel()
-        advanceUntilIdle()
-
-        viewModel.pickModel(modelId = 17L)
-        advanceUntilIdle()
-
-        coVerify { localModelRepository.setActiveModel(17L) }
-        coVerify { loadModelUseCase() }
-    }
-
-    @Test
     fun `installedModels mirrors LocalModelRepository getAllModels emissions`() = runTest(testDispatcher) {
         viewModel = createViewModel()
         advanceUntilIdle()
@@ -2111,6 +2292,71 @@ class ChatHomeViewModelTest {
             assertTrue(viewModel.state.value.visual is ChatHomeUiState.HitlConfirm)
             assertEquals("fs.delete_file", viewModel.state.value.pending.tool?.toolName)
         }
+
+    @Test
+    fun `given a run waiting on a ceiling when session opens then the pause is restored from the record`() =
+        runTest(testDispatcher) {
+            // The record IS the authority here, with no live snapshot to prefer:
+            // a ceiling pause has no in-process waiting phase at all, so the
+            // process that raised it is routinely gone by the time it is read.
+            val sessionId = "session-ceiling"
+            seedSavedSession(sessionId)
+            coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+                runRecord(sessionId, PipelineRunStatus.WAITING_CEILING)
+            every { agentOrchestratorUseCase.observe(sessionId) } returns
+                flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+            coEvery { pendingInteractionRepository.getForSession(sessionId) } returns PendingInteraction(
+                runId = "child-run",
+                sessionId = sessionId,
+                kind = PendingInteractionKind.CEILING,
+                ceilingAxis = RunCeilingAxis.TOKENS,
+                ceilingLimit = 100_000,
+                ceilingSpent = 100_400,
+                requestedAt = 1_700_000_000_000L,
+            )
+
+            viewModel = createViewModel()
+            advanceUntilIdle()
+
+            assertEquals(ChatHomeUiState.CeilingPause, viewModel.state.value.visual)
+            val pending = viewModel.state.value.pending.ceiling
+            // The run id comes off the record, not from the session's active
+            // run: a pause raised inside a sub-pipeline is recorded on the
+            // child, while the active run is the parent.
+            assertEquals("child-run", pending?.runId)
+            assertEquals(
+                HardCeilingBreach(RunCeilingAxis.TOKENS, limit = 100_000, spent = 100_400),
+                pending?.breach,
+            )
+        }
+
+    @Test
+    fun `given a ceiling park missing its numbers then no card is restored`() = runTest(testDispatcher) {
+        // A card with no numbers cannot state what continuing costs, and the
+        // decision turns on nothing else. Better to show none and let the
+        // maintenance window settle the run than to ask a question with a hole
+        // in it.
+        val sessionId = "session-ceiling-partial"
+        seedSavedSession(sessionId)
+        coEvery { pipelineRunRepository.getActiveRunForSession(sessionId) } returns
+            runRecord(sessionId, PipelineRunStatus.WAITING_CEILING)
+        every { agentOrchestratorUseCase.observe(sessionId) } returns
+            flowOf(AgentOrchestratorState.ConsoleLog(events = emptyList(), runId = "run-1"))
+        coEvery { pendingInteractionRepository.getForSession(sessionId) } returns PendingInteraction(
+            runId = "run-1",
+            sessionId = sessionId,
+            kind = PendingInteractionKind.CEILING,
+            ceilingAxis = RunCeilingAxis.STEPS,
+            ceilingLimit = null,
+            ceilingSpent = null,
+            requestedAt = 1_700_000_000_000L,
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertNull(viewModel.state.value.pending.ceiling)
+    }
 
     @Test
     fun `given waiting clarification run when session opens then clarification card restored from repository`() =
@@ -2774,8 +3020,95 @@ class ChatHomeViewModelTest {
     // endregion
 
     private companion object {
+        const val EARLIER_INGEST_MS = 30L
+        const val LATER_INGEST_MS = 60L
         const val DEFAULT_TOKENS_MAX: Int = 4096
         const val ALT_TOKENS_MAX: Int = 8192
         const val AUDIO_LIMIT_SEC: Int = 30
+    }
+
+    @Test
+    fun `a ceiling pause surfaces the card with the run's own numbers`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.WaitingForCeilingRaise(RunCeilingAxis.STEPS, limit = 15, spent = 15))
+            delay(10_000)
+        }
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        assertEquals(ChatHomeUiState.CeilingPause, viewModel.state.value.visual)
+        val pending = viewModel.state.value.pending.ceiling
+        assertEquals(HardCeilingBreach(RunCeilingAxis.STEPS, limit = 15, spent = 15), pending?.breach)
+    }
+
+    @Test
+    fun `continuePastCeiling grants a portion and flips to Generating`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.WaitingForCeilingRaise(RunCeilingAxis.STEPS, limit = 15, spent = 15))
+            delay(10_000)
+        }
+        coEvery { submitCeilingDecisionUseCase(any(), any(), any()) } returns PendingSubmissionOutcome.Resumed
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        viewModel.hitl.continuePastCeiling()
+        advanceUntilIdle()
+
+        // No run id from the live path on purpose: a pause raised inside a
+        // sub-pipeline is recorded on the child, while the session's active run
+        // is the parent — so the submission looks the record up by session.
+        coVerify { submitCeilingDecisionUseCase(sessionId, true, null) }
+        // The card is dropped before the submission returns: leaving it up
+        // through a resume invites a second tap on a decision already made.
+        assertNull(viewModel.state.value.pending.ceiling)
+    }
+
+    @Test
+    fun `stopAtCeiling settles the run and explains the stop where the user is looking`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+        val sessionId = viewModel.state.value.thread.currentSessionId
+        coEvery { agentOrchestratorUseCase(sessionId, "hi", null) } returns flow {
+            emit(AgentOrchestratorState.WaitingForCeilingRaise(RunCeilingAxis.TOKENS, limit = 100, spent = 140))
+            delay(10_000)
+        }
+        coEvery { submitCeilingDecisionUseCase(any(), any(), any()) } returns
+            PendingSubmissionOutcome.NothingPending
+        viewModel.onComposerValueChange("hi")
+        viewModel.sendMessage()
+        advanceUntilIdle()
+
+        viewModel.hitl.stopAtCeiling()
+        advanceUntilIdle()
+
+        coVerify { submitCeilingDecisionUseCase(sessionId, false, null) }
+        assertNull(viewModel.state.value.pending.ceiling)
+        // The tile has to be raised here, not awaited: the engine coroutine
+        // ended when the run parked, so no terminal orchestrator state is
+        // coming, and without this the chat would look as if nothing happened.
+        val stopped = viewModel.state.value.visual as ChatHomeUiState.Error
+        assertEquals(RunTerminationReason.TokenCeiling(limit = 100, spent = 140), stopped.reason)
+        // Settling the run writes its own outcome line, so the tile explains
+        // without repeating it.
+        assertTrue(stopped.announcedInThread)
+    }
+
+    @Test
+    fun `continuePastCeiling with no pause showing is a no-op`() = runTest(testDispatcher) {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.hitl.continuePastCeiling()
+        advanceUntilIdle()
+
+        coVerify(exactly = 0) { submitCeilingDecisionUseCase(any(), any(), any()) }
     }
 }

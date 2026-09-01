@@ -432,6 +432,7 @@ class PipelineNodeExecutor @Inject constructor(
             is AgentOrchestratorState.NodeIO,
             is AgentOrchestratorState.WaitingForApproval,
             is AgentOrchestratorState.AwaitingClarification,
+            is AgentOrchestratorState.WaitingForCeilingRaise,
             is AgentOrchestratorState.RunNotice,
             -> emit(NodeOutput.State(state))
             else -> Unit
@@ -491,6 +492,7 @@ class PipelineNodeExecutor @Inject constructor(
             PipelineRunStatus.INTERRUPTED,
             PipelineRunStatus.WAITING_APPROVAL,
             PipelineRunStatus.WAITING_CLARIFICATION,
+            PipelineRunStatus.WAITING_CEILING,
         )
 
         /**

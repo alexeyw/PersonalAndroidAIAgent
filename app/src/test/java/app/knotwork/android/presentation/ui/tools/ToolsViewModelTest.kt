@@ -4,6 +4,7 @@ import app.knotwork.android.domain.models.AgentTool
 import app.knotwork.android.domain.models.McpConnectionStatus
 import app.knotwork.android.domain.models.McpServerConfig
 import app.knotwork.android.domain.models.McpTool
+import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.domain.models.ToolSource
 import app.knotwork.android.domain.repositories.McpServerRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
@@ -41,6 +42,7 @@ class ToolsViewModelTest {
     private val disabledAppFunctionsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val disabledMcpToolsFlow = MutableStateFlow<Set<String>>(emptySet())
     private val allowedHttpDomainsFlow = MutableStateFlow<List<String>>(emptyList())
+    private val toolRiskOverridesFlow = MutableStateFlow<Map<String, ToolRisk>>(emptyMap())
     private val statusFlows = mutableMapOf<String, MutableStateFlow<McpConnectionStatus>>()
 
     private fun statusFlowFor(url: String): MutableStateFlow<McpConnectionStatus> =
@@ -53,6 +55,7 @@ class ToolsViewModelTest {
         every { settingsRepository.disabledAppFunctions } returns disabledAppFunctionsFlow
         every { settingsRepository.disabledMcpTools } returns disabledMcpToolsFlow
         every { settingsRepository.allowedHttpDomains } returns allowedHttpDomainsFlow
+        every { settingsRepository.toolRiskOverrides } returns toolRiskOverridesFlow
         coEvery { toolRepository.getAllLocalTools() } returns listOf(
             AgentTool(name = "get_system_time", description = "desc", parameters = "{}"),
         )
@@ -268,5 +271,31 @@ class ToolsViewModelTest {
 
         assertEquals(tool, viewModel.findMcpTool(toolId = tool.id))
         assertNull(viewModel.findMcpTool(toolId = "mcp:deadbeef:missing"))
+    }
+
+    @Test
+    fun `risk overrides are observed into state`() = runTest {
+        toolRiskOverridesFlow.value = mapOf("mcp:deadbeef:search" to ToolRisk.READ_ONLY)
+        advanceUntilIdle()
+
+        assertEquals(
+            mapOf("mcp:deadbeef:search" to ToolRisk.READ_ONLY),
+            viewModel.uiState.value.toolRiskOverrides,
+        )
+    }
+
+    @Test
+    fun `setToolRisk persists the user's decision under the gate's own lookup key`() = runTest {
+        advanceUntilIdle()
+
+        // The key matters more than the value: `ToolRepositoryImpl.getRisk`
+        // looks MCP tools up by the server-scoped id, so writing the bare name
+        // here would persist an entry the gate never reads.
+        viewModel.setToolRisk(toolKey = "mcp:deadbeef:search", risk = ToolRisk.DESTRUCTIVE)
+        advanceUntilIdle()
+
+        coVerify {
+            settingsRepository.setToolRiskOverride(toolKey = "mcp:deadbeef:search", risk = ToolRisk.DESTRUCTIVE)
+        }
     }
 }

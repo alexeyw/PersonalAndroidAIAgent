@@ -90,15 +90,11 @@
     <!-- Toolbar subtitle - one line under the pipeline name. -->
     <!-- Editing state: shows node and edge counts. %1$d = nodes, %2$d = edges. -->
     <string name="pipeline_editor_subtitle_editing">Editing · nodes %1$d · edges %2$d</string>
-    <!-- Validation state: shows issue count + "can't run" gate. %1$d = issue count. -->
+    <!-- Validation state: shows issue count + the save gate. %1$d = issue count. -->
     <plurals name="pipeline_editor_subtitle_issues">
-        <item quantity="one">%1$d issue · can\'t run</item>
-        <item quantity="other">%1$d issues · can\'t run</item>
+        <item quantity="one">%1$d issue · can\'t save</item>
+        <item quantity="other">%1$d issues · can\'t save</item>
     </plurals>
-    <!-- Running state: shows the active node label. %1$s = active node label, "…" when null. -->
-    <string name="pipeline_editor_subtitle_running">Running · %1$s</string>
-    <!-- Running state with no active node label resolved yet. -->
-    <string name="pipeline_editor_subtitle_running_idle">Running · …</string>
 
     <!-- Overflow menu actions. Mirrors knotwork_editor_action_* but
          lives at app-layer because the menu items are composed in PipelineEditorScreen
@@ -110,16 +106,16 @@
     <string name="pipeline_editor_overflow_save">Save pipeline</string>
     <string name="pipeline_editor_overflow_save_as_preset">Save as preset…</string>
     <string name="pipeline_editor_save_done">Pipeline saved.</string>
-
-    <!-- Snackbar explaining that Run only surfaces the UI preview today;
-         actual orchestrator wiring lands in a follow-up. -->
-    <string name="pipeline_editor_run_preview">Preview only — the execution engine wires up in a follow-up. Banner reflects the planned UI.</string>
     <string name="pipeline_editor_overflow_toggle_grid_show">Show grid</string>
     <string name="pipeline_editor_overflow_toggle_grid_hide">Hide grid</string>
 
     <!-- Edge selection / removal -->
     <string name="pipeline_editor_edge_selected_hint">Connection selected. Press 🗑 to remove.</string>
     <string name="pipeline_editor_connection_dropped_hint">To connect nodes, drag from a node\'s bottom port onto another node.</string>
+    <string name="pipeline_editor_unsaved_title">Leave without saving?</string>
+    <string name="pipeline_editor_unsaved_text">This pipeline has changes that are not stored yet. Leaving now loses them.</string>
+    <string name="pipeline_editor_unsaved_save">Save and leave</string>
+    <string name="pipeline_editor_unsaved_discard">Discard</string>
     <string name="pipeline_editor_remove_connection_title">Remove connection?</string>
     <string name="pipeline_editor_remove_connection_text">This will delete the link between the two nodes. The change is undoable from the editor toolbar.</string>
     <string name="pipeline_editor_remove_connection_confirm">Remove</string>

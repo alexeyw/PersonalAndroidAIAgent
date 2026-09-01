@@ -18,9 +18,12 @@ import app.knotwork.design.screens.settings.SettingsCategoryId as CatalogCategor
  * Localized search copy for one settings row.
  *
  * @property nameRes Human-readable setting name (the primary match field).
- * @property descRes One-line description, or `null` when the row has none.
+ * @property descRes One-line description shown under the name in search results.
+ *   Non-null on purpose: it used to be nullable and unasserted, which is how a
+ *   row could carry a description that contradicted its own help text and keep
+ *   a green build. `SettingsSearchCatalogTest` now checks the text itself.
  */
-data class SettingsSearchStrings(@StringRes val nameRes: Int, @StringRes val descRes: Int?)
+data class SettingsSearchStrings(@StringRes val nameRes: Int, @StringRes val descRes: Int)
 
 /**
  * Presentation-side bridge between the pure-domain [SettingsRegistry] and the
@@ -54,17 +57,9 @@ object SettingsSearchCatalog {
             R.string.settings_search_name_system_prompt_prefix,
             R.string.settings_search_desc_system_prompt_prefix,
         ),
-        "TOOL_USAGE_INSTRUCTION" to strings(
-            R.string.settings_search_name_tool_usage_instruction,
-            R.string.settings_search_desc_tool_usage_instruction,
-        ),
         "TEMPERATURE" to strings(R.string.settings_search_name_temperature, R.string.settings_search_desc_temperature),
         "TOP_K" to strings(R.string.settings_search_name_top_k, R.string.settings_search_desc_top_k),
         "TOP_P" to strings(R.string.settings_search_name_top_p, R.string.settings_search_desc_top_p),
-        "REPETITION_PENALTY" to strings(
-            R.string.settings_search_name_repetition_penalty,
-            R.string.settings_search_desc_repetition_penalty,
-        ),
         "MAX_CONTEXT_LENGTH" to strings(
             R.string.settings_search_name_max_context_length,
             R.string.settings_search_desc_max_context_length,
@@ -98,10 +93,6 @@ object SettingsSearchCatalog {
         "CHAT_HISTORY_COMPRESSION_ENABLED" to strings(
             R.string.settings_search_name_chat_history_compression_enabled,
             R.string.settings_search_desc_chat_history_compression_enabled,
-        ),
-        "AUTO_SUMMARIZE_THRESHOLD" to strings(
-            R.string.settings_search_name_auto_summarize_threshold,
-            R.string.settings_search_desc_auto_summarize_threshold,
         ),
         "MEMORY_SEARCH_TOP_K" to strings(
             R.string.settings_search_name_memory_search_top_k,
@@ -147,7 +138,7 @@ object SettingsSearchCatalog {
             R.string.settings_search_name_memory_actions,
             R.string.settings_search_desc_memory_actions,
         ),
-        // ─── Pipelines & structured output ───────────────────────────────────
+        // ─── Run limits & structured output ──────────────────────────────────
         "LINK_RUN_LIMITS" to strings(
             R.string.run_limits_entry_label,
             R.string.run_limits_entry_search,
@@ -206,10 +197,6 @@ object SettingsSearchCatalog {
             R.string.settings_search_desc_link_files_domains,
         ),
         // ─── Background & triggers ───────────────────────────────────────────
-        "LONG_RUNNING_TASKS_NOTIFICATIONS" to strings(
-            R.string.settings_search_name_long_running_tasks_notifications,
-            R.string.settings_search_desc_long_running_tasks_notifications,
-        ),
         "SCHEDULED_TASK_NOTIFICATIONS" to strings(
             R.string.settings_search_name_scheduled_task_notifications,
             R.string.settings_search_desc_scheduled_task_notifications,
@@ -288,13 +275,13 @@ object SettingsSearchCatalog {
                 categoryId = entry.categoryId,
                 tier = entry.tier,
                 name = context.getString(copy.nameRes),
-                description = copy.descRes?.let(context::getString).orEmpty(),
+                description = context.getString(copy.descRes),
                 categoryTitle = context.getString(categoryTitleRes(entry.categoryId)),
                 synonyms = entry.synonyms,
             )
         }
 
-    private fun strings(@StringRes nameRes: Int, @StringRes descRes: Int?) = SettingsSearchStrings(nameRes, descRes)
+    private fun strings(@StringRes nameRes: Int, @StringRes descRes: Int) = SettingsSearchStrings(nameRes, descRes)
 
     /** Localized category-title resource (reuses the hub's category titles). */
     @StringRes

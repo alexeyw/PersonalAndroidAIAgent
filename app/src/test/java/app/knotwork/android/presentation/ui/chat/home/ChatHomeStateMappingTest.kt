@@ -1,5 +1,6 @@
 package app.knotwork.android.presentation.ui.chat.home
 
+import app.knotwork.android.domain.models.HardCeilingBreach
 import app.knotwork.android.domain.models.PipelineSamplePrompt
 import app.knotwork.android.domain.models.RunCeilingAxis
 import app.knotwork.android.domain.models.RunNoticeCause
@@ -51,6 +52,7 @@ class ChatHomeStateMappingTest {
         console: ChatHomeConsoleState = ChatHomeConsoleState(),
         activeSamplePrompts: List<PipelineSamplePrompt> = emptyList(),
         runNotice: RunNoticeCause? = null,
+        pending: ChatHomePendingState = ChatHomePendingState(),
     ): ChatHomeScreenState = ChatHomeScreenState(
         visual = visual,
         composer = ChatHomeComposerState(value = composerValue, typedConfirm = pendingTypedConfirm),
@@ -60,6 +62,7 @@ class ChatHomeStateMappingTest {
         messages = messages,
         activeSamplePrompts = activeSamplePrompts,
         runNotice = runNotice,
+        pending = pending,
     )
 
     // ─── Stopped runs: chosen vs unchosen ─────────────────────────────────────
@@ -107,13 +110,47 @@ class ChatHomeStateMappingTest {
         val termination = requireNotNull(view.termination)
         // The strip is clamped to two lines; sharing one sentence with the tile
         // is what cut the copy in half at large font scales.
-        assertNotEquals(termination.body, termination.banner)
+        assertNotEquals(termination.title, termination.banner)
     }
 
     @Test
-    fun `an untyped failure still drives the composer error banner`() {
+    fun `a typed stop's tile carries no explanatory sentence`() {
+        // The run wrote its outcome into the conversation as it settled, so the
+        // sentence is a few rows above this tile in the same list. What is left
+        // is the numbers and the action — the parts a thread line cannot carry.
+        val view = screenState(
+            ChatHomeUiState.Error(
+                message = "step-ceiling: 15/15 steps",
+                reason = RunTerminationReason.StepCeiling(limit = 15, spent = 15),
+                announcedInThread = true,
+            ),
+        ).toViewState()
+
+        val termination = requireNotNull(view.termination)
+        assertNull(view.errorMessage)
+        assertNotNull(termination.meter)
+        assertNotNull(termination.actionLabel)
+    }
+
+    @Test
+    fun `an untyped failure the thread already announced shows no tile but keeps Retry`() {
+        val view = screenState(
+            ChatHomeUiState.Error("Tool 'http.get' failed", announcedInThread = true),
+        ).toViewState()
+
+        assertNull("The conversation already says this.", view.errorMessage)
+        assertEquals(ComposerState.Error("Tool 'http.get' failed"), view.composerState)
+    }
+
+    @Test
+    fun `an untyped failure with no run behind it still drives the composer error banner`() {
+        // A blocked attachment or a model that would not load never reached a
+        // run, so nothing wrote a line for it — this text is the only account
+        // the user gets, and suppressing it would trade one silent failure for
+        // another.
         val view = screenState(ChatHomeUiState.Error("Tool 'http.get' failed")).toViewState()
 
+        assertEquals("Tool 'http.get' failed", view.errorMessage)
         assertEquals(ComposerState.Error("Tool 'http.get' failed"), view.composerState)
     }
 
@@ -367,5 +404,44 @@ class ChatHomeStateMappingTest {
         assertEquals(ConsoleSnap.Partial, debugConsoleSnapForId(DebugStateIds.CONSOLE_PARTIAL))
         assertEquals(ConsoleSnap.Full, debugConsoleSnapForId(DebugStateIds.CONSOLE_FULL))
         assertNull(debugConsoleSnapForId(DebugStateIds.EMPTY))
+    }
+
+    // ─── The ceiling pause ────────────────────────────────────────────────────
+
+    @Test
+    fun `a ceiling pause renders the pause card with the run's own numbers`() {
+        val view = screenState(
+            ChatHomeUiState.CeilingPause,
+            pending = ChatHomePendingState(
+                ceiling = CeilingPausePending(
+                    runId = "run-1",
+                    breach = HardCeilingBreach(RunCeilingAxis.STEPS, limit = 15, spent = 15),
+                    timestamp = "09:16",
+                ),
+            ),
+        ).toViewState()
+
+        assertEquals(ChatHomeVisualState.CeilingPause, view.visualState)
+        val card = view.messages.last().content as ChatContent.RunCeilingPause
+        // The stub resolver renders "res:<id>(args)", so the numbers being
+        // present at all is what this pins: the card states the limit that
+        // bound, which for an extended run is not the configured setting.
+        assertTrue("Expected the numbers in: ${card.model.meter}", card.model.meter.contains("15"))
+        assertTrue(card.model.continueLabel.contains("15"))
+        assertNotEquals(card.model.continueLabel, card.model.stopLabel)
+        // The pause is not a termination tile: nothing about it may read as a
+        // stop, or the composer banner and the tile would contradict the card.
+        assertNull(view.termination)
+    }
+
+    @Test
+    fun `a ceiling pause with no pending snapshot renders no card at all`() {
+        // Unlike the interrupted state, there is no debug-picker fallback row.
+        // A pause card without a snapshot behind it would offer Continue and
+        // Stop buttons wired to a run that does not exist.
+        val view = screenState(ChatHomeUiState.CeilingPause).toViewState()
+
+        assertEquals(ChatHomeVisualState.CeilingPause, view.visualState)
+        assertTrue(view.messages.none { it.content is ChatContent.RunCeilingPause })
     }
 }

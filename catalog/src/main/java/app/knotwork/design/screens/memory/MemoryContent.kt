@@ -120,7 +120,11 @@ fun MemoryContent(
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
                 app.knotwork.design.components.topbar.KnotworkTopAppBarShell {
-                    MemoryTopBar(searching = state.searchActive, callbacks = callbacks)
+                    MemoryTopBar(
+                        searching = state.searchActive,
+                        searchable = state.visualState.isSearchable(),
+                        callbacks = callbacks,
+                    )
                 }
             },
             floatingActionButton = {
@@ -157,9 +161,18 @@ fun MemoryContent(
     }
 }
 
+/**
+ * Memory top bar.
+ *
+ * @param searching `true` while the search field is open — tints the magnifier.
+ * @param searchable `false` wherever the body cannot render the search field
+ * (see [MemoryVisualState.isSearchable]); the magnifier is then not rendered at
+ * all rather than shown and ignored.
+ * @param callbacks screen callbacks bundle.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun MemoryTopBar(searching: Boolean, callbacks: MemoryCallbacks) {
+private fun MemoryTopBar(searching: Boolean, searchable: Boolean, callbacks: MemoryCallbacks) {
     var menuOpen by remember { mutableStateOf(false) }
     TopAppBar(
         title = {
@@ -186,12 +199,18 @@ private fun MemoryTopBar(searching: Boolean, callbacks: MemoryCallbacks) {
             }
         },
         actions = {
-            IconButton(onClick = callbacks.onSearchOpen) {
-                Icon(
-                    imageVector = AppIcons.Search,
-                    contentDescription = stringResource(R.string.knotwork_memory_search_cd),
-                    tint = if (searching) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                )
+            if (searchable) {
+                IconButton(onClick = callbacks.onSearchOpen) {
+                    Icon(
+                        imageVector = AppIcons.Search,
+                        contentDescription = stringResource(R.string.knotwork_memory_search_cd),
+                        tint = if (searching) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurface
+                        },
+                    )
+                }
             }
             Box {
                 IconButton(onClick = { menuOpen = true }) {
@@ -219,11 +238,23 @@ private fun MemoryTopBar(searching: Boolean, callbacks: MemoryCallbacks) {
     )
 }
 
+/**
+ * Whether the search affordance can act in this state.
+ *
+ * [MemoryBody] routes `Empty` and `Error` to bodies that render no search
+ * field, and both outrank `Searching` in the screen's own state projection —
+ * so a magnifier offered there would set `searchActive` and change nothing on
+ * screen. Every other state lands on [MemoryPopulated], which does render the
+ * field.
+ */
+private fun MemoryVisualState.isSearchable(): Boolean =
+    this != MemoryVisualState.Empty && this != MemoryVisualState.Error
+
 @Composable
 private fun MemoryBody(state: MemoryViewState, callbacks: MemoryCallbacks, padding: PaddingValues) {
     when (state.visualState) {
         MemoryVisualState.Error -> MemoryError(state = state, callbacks = callbacks, padding = padding)
-        MemoryVisualState.Empty -> MemoryEmpty(callbacks = callbacks, padding = padding)
+        MemoryVisualState.Empty -> MemoryEmpty(padding = padding)
         else -> MemoryPopulated(state = state, callbacks = callbacks, padding = padding)
     }
 }
@@ -628,13 +659,11 @@ private fun MemorySourceBadge(kind: MemorySourceKind) {
 }
 
 @Composable
-private fun MemoryEmpty(callbacks: MemoryCallbacks, padding: PaddingValues) {
+private fun MemoryEmpty(padding: PaddingValues) {
     Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
         EmptyState(
             title = stringResource(R.string.knotwork_memory_empty_title),
             subtitle = stringResource(R.string.knotwork_memory_empty_subtitle),
-            ctaLabel = stringResource(R.string.knotwork_memory_empty_cta),
-            onCtaClick = callbacks.onEmptyCta,
         )
     }
 }

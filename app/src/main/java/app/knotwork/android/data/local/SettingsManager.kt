@@ -70,7 +70,6 @@ class SettingsManager @Inject constructor(
         val TOP_P = androidx.datastore.preferences.core.floatPreferencesKey("top_p")
         val REQUIRES_USER_CONFIRMATION = booleanPreferencesKey("requires_user_confirmation")
         val SYSTEM_PROMPT_PREFIX = stringPreferencesKey("system_prompt_prefix")
-        val TOOL_USAGE_INSTRUCTION = stringPreferencesKey("tool_usage_instruction")
         val MCP_SERVER_URLS = stringSetPreferencesKey("mcp_server_urls")
         val MCP_SERVERS_JSON = stringPreferencesKey("mcp_servers_json")
         val DISABLED_APP_FUNCTIONS = stringSetPreferencesKey("disabled_app_functions")
@@ -160,11 +159,6 @@ class SettingsManager @Inject constructor(
         val TOOL_APPROVAL_POLICY = stringPreferencesKey("tool_approval_policy")
         val BLOCK_DESTRUCTIVE_TOOLS = booleanPreferencesKey("block_destructive_tools")
         val BLOCK_NETWORK_FROM_LOCAL_MODEL = booleanPreferencesKey("block_network_from_local_model")
-        val REPETITION_PENALTY = androidx.datastore.preferences.core.floatPreferencesKey("repetition_penalty")
-        val AUTO_SUMMARIZE_THRESHOLD = androidx.datastore.preferences.core.floatPreferencesKey(
-            "auto_summarize_threshold",
-        )
-        val LONG_RUNNING_TASKS_NOTIFICATIONS = booleanPreferencesKey("long_running_tasks_notifications")
         val SCHEDULED_TASK_NOTIFICATIONS = booleanPreferencesKey("scheduled_task_notifications")
         val LAST_TEST_PROBE_RESULT = stringPreferencesKey("last_test_probe_result")
 
@@ -434,25 +428,6 @@ class SettingsManager @Inject constructor(
     override suspend fun setSystemPromptPrefix(prompt: String) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.SYSTEM_PROMPT_PREFIX] = prompt
-        }
-    }
-
-    override val toolUsageInstruction: Flow<String> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Timber.e(exception, "Error reading preferences")
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[PreferencesKeys.TOOL_USAGE_INSTRUCTION] ?: DefaultPrompts.TOOL_USAGE_INSTRUCTION
-        }
-
-    override suspend fun setToolUsageInstruction(instruction: String) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.TOOL_USAGE_INSTRUCTION] = instruction
         }
     }
 
@@ -1446,7 +1421,10 @@ class SettingsManager @Inject constructor(
 
     override suspend fun setToolCallTimeoutMs(timeoutMs: Long) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] = timeoutMs
+            preferences[PreferencesKeys.TOOL_CALL_TIMEOUT_MS] = timeoutMs.coerceIn(
+                SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MIN,
+                SettingsDefaults.TOOL_CALL_TIMEOUT_MS_MAX,
+            )
         }
     }
 
@@ -1466,7 +1444,10 @@ class SettingsManager @Inject constructor(
 
     override suspend fun setWorkspaceMaxFileSizeBytes(bytes: Long) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.WORKSPACE_MAX_FILE_SIZE_BYTES] = bytes
+            preferences[PreferencesKeys.WORKSPACE_MAX_FILE_SIZE_BYTES] = bytes.coerceIn(
+                SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_MIN,
+                SettingsDefaults.WORKSPACE_MAX_FILE_SIZE_BYTES_MAX,
+            )
         }
     }
 
@@ -1486,7 +1467,10 @@ class SettingsManager @Inject constructor(
 
     override suspend fun setWorkspaceMaxTotalBytes(bytes: Long) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.WORKSPACE_MAX_TOTAL_BYTES] = bytes
+            preferences[PreferencesKeys.WORKSPACE_MAX_TOTAL_BYTES] = bytes.coerceIn(
+                SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_MIN,
+                SettingsDefaults.WORKSPACE_MAX_TOTAL_BYTES_MAX,
+            )
         }
     }
 
@@ -1506,7 +1490,10 @@ class SettingsManager @Inject constructor(
 
     override suspend fun setWorkspaceReadTokenBudget(tokens: Int) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.WORKSPACE_READ_TOKEN_BUDGET] = tokens
+            preferences[PreferencesKeys.WORKSPACE_READ_TOKEN_BUDGET] = tokens.coerceIn(
+                SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_MIN,
+                SettingsDefaults.WORKSPACE_READ_TOKEN_BUDGET_MAX,
+            )
         }
     }
 
@@ -1550,7 +1537,10 @@ class SettingsManager @Inject constructor(
 
     override suspend fun setHttpToolMaxResponseBytes(bytes: Long) {
         dataStore.edit { preferences ->
-            preferences[PreferencesKeys.HTTP_TOOL_MAX_RESPONSE_BYTES] = bytes
+            preferences[PreferencesKeys.HTTP_TOOL_MAX_RESPONSE_BYTES] = bytes.coerceIn(
+                SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_MIN,
+                SettingsDefaults.HTTP_TOOL_MAX_RESPONSE_BYTES_MAX,
+            )
         }
     }
 
@@ -1988,71 +1978,6 @@ class SettingsManager @Inject constructor(
         }
     }
 
-    override val repetitionPenalty: Flow<Float> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Timber.e(exception, "Error reading preferences")
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[PreferencesKeys.REPETITION_PENALTY] ?: SettingsDefaults.REPETITION_PENALTY_DEFAULT
-        }
-
-    override suspend fun setRepetitionPenalty(value: Float) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.REPETITION_PENALTY] = value.coerceIn(
-                SettingsDefaults.REPETITION_PENALTY_MIN,
-                SettingsDefaults.REPETITION_PENALTY_MAX,
-            )
-        }
-    }
-
-    override val autoSummarizeThreshold: Flow<Float> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Timber.e(exception, "Error reading preferences")
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD]
-                ?: SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT
-        }
-
-    override suspend fun setAutoSummarizeThreshold(threshold: Float) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] = threshold.coerceIn(
-                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MIN,
-                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_MAX,
-            )
-        }
-    }
-
-    override val longRunningTaskNotificationsEnabled: Flow<Boolean> = dataStore.data
-        .catch { exception ->
-            if (exception is IOException) {
-                Timber.e(exception, "Error reading preferences")
-                emit(emptyPreferences())
-            } else {
-                throw exception
-            }
-        }
-        .map { preferences ->
-            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS]
-                ?: SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT
-        }
-
-    override suspend fun setLongRunningTaskNotificationsEnabled(enabled: Boolean) {
-        dataStore.edit { preferences ->
-            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] = enabled
-        }
-    }
-
     override val scheduledTaskNotificationsEnabled: Flow<Boolean> = dataStore.data
         .catch { exception ->
             if (exception is IOException) {
@@ -2100,13 +2025,12 @@ class SettingsManager @Inject constructor(
      * Writes the local-generation sampling + pipeline/run-ceiling/structured-output/
      * cloud-retry defaults into [preferences]. Shared by [resetSamplingDefaults] (the
      * per-card "Reset to defaults") and [resetToRecommendedDefaults] (the global
-     * reset) so the two paths cannot drift on these thirteen keys.
+     * reset) so the two paths cannot drift on these twelve keys.
      */
     private fun MutablePreferences.applySamplingDefaults() {
         this[PreferencesKeys.TEMPERATURE] = SettingsDefaults.TEMPERATURE_DEFAULT
         this[PreferencesKeys.TOP_K] = SettingsDefaults.TOP_K_DEFAULT
         this[PreferencesKeys.TOP_P] = SettingsDefaults.TOP_P_DEFAULT
-        this[PreferencesKeys.REPETITION_PENALTY] = SettingsDefaults.REPETITION_PENALTY_DEFAULT
         this[PreferencesKeys.MAX_CONTEXT_LENGTH] = SettingsDefaults.MAX_CONTEXT_LENGTH_DEFAULT
         this[PreferencesKeys.PIPELINE_MAX_STEPS] = SettingsDefaults.PIPELINE_MAX_STEPS_DEFAULT
         // REMOVED, not written back to its default. Writing the key is exactly
@@ -2166,8 +2090,6 @@ class SettingsManager @Inject constructor(
                 SettingsDefaults.MEMORY_COMPACTION_AGE_DAYS_DEFAULT
             preferences[PreferencesKeys.MAX_MEMORY_CHUNKS] = SettingsDefaults.MAX_MEMORY_CHUNKS_DEFAULT
             preferences[PreferencesKeys.AUTO_EXTRACT_ENABLED] = SettingsDefaults.AUTO_EXTRACT_ENABLED_DEFAULT
-            preferences[PreferencesKeys.AUTO_SUMMARIZE_THRESHOLD] =
-                SettingsDefaults.AUTO_SUMMARIZE_THRESHOLD_DEFAULT
             preferences[PreferencesKeys.VERBOSE_MEMORY_LOGGING_ENABLED] =
                 SettingsDefaults.VERBOSE_MEMORY_LOGGING_ENABLED_DEFAULT
             // Chat-history compression.
@@ -2188,8 +2110,6 @@ class SettingsManager @Inject constructor(
             preferences[PreferencesKeys.BLOCK_NETWORK_FROM_LOCAL_MODEL] =
                 SettingsDefaults.BLOCK_NETWORK_FROM_LOCAL_MODEL_DEFAULT
             // Notifications + privacy.
-            preferences[PreferencesKeys.LONG_RUNNING_TASKS_NOTIFICATIONS] =
-                SettingsDefaults.LONG_RUNNING_TASK_NOTIFICATIONS_ENABLED_DEFAULT
             preferences[PreferencesKeys.SCHEDULED_TASK_NOTIFICATIONS] =
                 SettingsDefaults.SCHEDULED_TASK_NOTIFICATIONS_ENABLED_DEFAULT
             preferences[PreferencesKeys.SHARE_REUSE_SESSION] =

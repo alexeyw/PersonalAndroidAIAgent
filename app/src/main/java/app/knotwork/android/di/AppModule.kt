@@ -37,13 +37,17 @@ import app.knotwork.android.data.services.WorkManagerTaskScheduler
 import app.knotwork.android.data.tools.local.AppFunctionDataCodec
 import app.knotwork.android.data.tools.local.LocalAppFunctionManager
 import app.knotwork.android.domain.services.ApprovalNotifier
+import app.knotwork.android.domain.services.CeilingNotifier
 import app.knotwork.android.domain.services.ClarificationNotifier
 import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
+import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import app.knotwork.android.domain.services.ScheduledTaskNotifier
 import app.knotwork.android.domain.services.TaskScheduler
 import app.knotwork.android.presentation.notifications.ApprovalNotificationManager
+import app.knotwork.android.presentation.notifications.CeilingNotificationManager
 import app.knotwork.android.presentation.notifications.ClarificationNotificationManager
 import app.knotwork.android.presentation.notifications.ScheduledTaskNotifierImpl
+import app.knotwork.android.presentation.run.RunOutcomeAnnouncerImpl
 import app.knotwork.android.presentation.state.ActiveSessionTracker
 import dagger.Module
 import dagger.Provides
@@ -95,6 +99,25 @@ object AppModule {
         )
 
     /**
+     * Provides the deferred SQLCipher open-helper factory as its own singleton so the
+     * user-confirmed data wipe ([app.knotwork.android.data.local.DatabaseResetServiceImpl])
+     * can run inside [DeferredPassphraseOpenHelperFactory.runExclusive], serialized against
+     * every concurrent database open.
+     *
+     * sqlcipher-android retains the passphrase array for the helper's lifetime (it re-keys
+     * every pooled connection from it — unlike the legacy android-database-sqlcipher, it never
+     * zeroes the array); the provider hands over a fresh copy, so the retained array never
+     * aliases the stored value.
+     */
+    @Provides
+    @Singleton
+    fun provideDeferredPassphraseOpenHelperFactory(
+        passphraseProvider: EncryptedDbPassphraseProvider,
+    ): DeferredPassphraseOpenHelperFactory = DeferredPassphraseOpenHelperFactory(passphraseProvider) { passphrase ->
+        SupportOpenHelperFactory(passphrase)
+    }
+
+    /**
      * Provides the singleton instance of the Room Database.
      *
      * The database is encrypted at rest via SQLCipher. A random 32-byte passphrase is stored
@@ -124,25 +147,6 @@ object AppModule {
      * real database open, where `AppInitializationUseCase` catches the failure and routes it to
      * the splash recovery screen.
      */
-    /**
-     * Provides the deferred SQLCipher open-helper factory as its own singleton so the
-     * user-confirmed data wipe ([app.knotwork.android.data.local.DatabaseResetServiceImpl])
-     * can run inside [DeferredPassphraseOpenHelperFactory.runExclusive], serialized against
-     * every concurrent database open.
-     *
-     * sqlcipher-android retains the passphrase array for the helper's lifetime (it re-keys
-     * every pooled connection from it — unlike the legacy android-database-sqlcipher, it never
-     * zeroes the array); the provider hands over a fresh copy, so the retained array never
-     * aliases the stored value.
-     */
-    @Provides
-    @Singleton
-    fun provideDeferredPassphraseOpenHelperFactory(
-        passphraseProvider: EncryptedDbPassphraseProvider,
-    ): DeferredPassphraseOpenHelperFactory = DeferredPassphraseOpenHelperFactory(passphraseProvider) { passphrase ->
-        SupportOpenHelperFactory(passphrase)
-    }
-
     @Provides
     @Singleton
     fun provideAppDatabase(
@@ -212,6 +216,8 @@ object AppModule {
                 AppDatabase.MIGRATION_56_57,
                 AppDatabase.MIGRATION_57_58,
                 AppDatabase.MIGRATION_58_59,
+                AppDatabase.MIGRATION_59_60,
+                AppDatabase.MIGRATION_60_61,
             )
             // No destructive fallback on upgrade: every version bump must supply an explicit
             // migration above so user data survives. Destructive recreation is kept only for the
@@ -432,6 +438,18 @@ object AppModule {
     fun provideScheduledTaskNotifier(impl: ScheduledTaskNotifierImpl): ScheduledTaskNotifier = impl
 
     /**
+     * Binds the presentation-layer [RunOutcomeAnnouncerImpl] to the domain-level
+     * [RunOutcomeAnnouncer] the task queue calls when a run settles.
+     *
+     * The implementation is in `presentation` because the sentence it writes
+     * comes from `RunTerminationCopyMapper`, which owns the vocabulary every
+     * other surface already uses for the same event.
+     */
+    @Provides
+    @Singleton
+    fun provideRunOutcomeAnnouncer(impl: RunOutcomeAnnouncerImpl): RunOutcomeAnnouncer = impl
+
+    /**
      * Binds the presentation-layer [ClarificationNotificationManager]
      * (deep-links into `MainActivity`) to the domain-level
      * [ClarificationNotifier] consumed by the clarification node executor and
@@ -440,6 +458,15 @@ object AppModule {
     @Provides
     @Singleton
     fun provideClarificationNotifier(impl: ClarificationNotificationManager): ClarificationNotifier = impl
+
+    /**
+     * Binds the presentation-layer [CeilingNotificationManager] implementation
+     * to the domain-facing [CeilingNotifier] consumed by the execution engine
+     * (which raises the pause) and by [ParkedRunResumer] (which tears it down).
+     */
+    @Provides
+    @Singleton
+    fun provideCeilingNotifier(impl: CeilingNotificationManager): CeilingNotifier = impl
 
     /**
      * Binds the data-layer [ExternalAutomationCallbackSender] (a package-directed

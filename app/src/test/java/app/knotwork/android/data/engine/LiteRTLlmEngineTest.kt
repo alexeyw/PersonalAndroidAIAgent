@@ -5,16 +5,20 @@ import android.content.Context
 import app.knotwork.android.domain.models.LocalBackend
 import app.knotwork.android.domain.models.Result
 import app.knotwork.android.domain.repositories.SettingsRepository
+import com.google.ai.edge.litertlm.Conversation
+import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.mockkConstructor
+import io.mockk.slot
 import io.mockk.unmockkAll
 import io.mockk.verify
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -131,6 +135,83 @@ class LiteRTLlmEngineTest {
 
         assertTrue(result is Result.Success)
         assertTrue(engine.isAudioEnabled)
+    }
+
+    @Test
+    fun `an ordinary generation carries the user's sampling settings`() = runTest {
+        val tempFile = File.createTempFile("model", ".tflite")
+        tempFile.deleteOnExit()
+        every { settingsRepository.temperature } returns flowOf(0.25f)
+        every { settingsRepository.topK } returns flowOf(7)
+        every { settingsRepository.topP } returns flowOf(0.55f)
+        val captured = slot<ConversationConfig>()
+        val conversation = mockk<Conversation>(relaxed = true)
+        every { conversation.sendMessageAsync(any<String>()) } returns emptyFlow()
+        every { anyConstructed<Engine>().createConversation(capture(captured)) } returns conversation
+        engine.initialize(tempFile.absolutePath)
+
+        engine.generateResponseStream("Hello").toList()
+
+        // The whole point of the change: these three used to be read by the
+        // settings screen and by nothing else, because the conversation was
+        // opened with no SamplerConfig at all.
+        val sampler = captured.captured.samplerConfig
+        assertEquals(7, sampler?.topK)
+        assertEquals(0.55, sampler?.topP ?: 0.0, TOLERANCE)
+        assertEquals(0.25, sampler?.temperature ?: 0.0, TOLERANCE)
+    }
+
+    @Test
+    fun `two generations of the same prompt do not reuse one seed`() = runTest {
+        val tempFile = File.createTempFile("model", ".tflite")
+        tempFile.deleteOnExit()
+        every { settingsRepository.temperature } returns flowOf(0.7f)
+        every { settingsRepository.topK } returns flowOf(40)
+        every { settingsRepository.topP } returns flowOf(0.9f)
+        val captured = mutableListOf<ConversationConfig>()
+        val conversation = mockk<Conversation>(relaxed = true)
+        every { conversation.sendMessageAsync(any<String>()) } returns emptyFlow()
+        every { anyConstructed<Engine>().createConversation(capture(captured)) } returns conversation
+        engine.initialize(tempFile.absolutePath)
+
+        repeat(SEED_SAMPLE_SIZE) { engine.generateResponseStream("Hello").toList() }
+
+        // Supplying a SamplerConfig means supplying a seed, and the library
+        // defaults it to 0. If that were left in place, a repeated prompt could
+        // come back byte-identical every time and Regenerate would be useless —
+        // so the seed is drawn fresh. Asserted over a sample rather than on one
+        // pair: a single collision is possible, ten identical values are not.
+        assertEquals(SEED_SAMPLE_SIZE, captured.size)
+        assertTrue(
+            "every generation reused the same seed",
+            captured.mapNotNull { it.samplerConfig?.seed }.distinct().size > 1,
+        )
+    }
+
+    @Test
+    fun `the structured-output repair loop overrides the user's sampler`() = runTest {
+        val tempFile = File.createTempFile("model", ".tflite")
+        tempFile.deleteOnExit()
+        every { settingsRepository.temperature } returns flowOf(1.9f)
+        every { settingsRepository.topK } returns flowOf(7)
+        every { settingsRepository.topP } returns flowOf(0.55f)
+        val captured = slot<ConversationConfig>()
+        val conversation = mockk<Conversation>(relaxed = true)
+        every { conversation.sendMessageAsync(any<String>()) } returns emptyFlow()
+        every { anyConstructed<Engine>().createConversation(capture(captured)) } returns conversation
+        engine.initialize(tempFile.absolutePath)
+
+        engine.generateResponseStream("Repair this", temperature = 0.1f).toList()
+
+        // A creative Temperature setting must not leak into the repair pass —
+        // that pass exists to get schema-obedient output back.
+        // Asserted as "not the user's values" rather than against the repair
+        // constants: the property under test is that the override wins, and
+        // pinning the constants here would only restate their declaration.
+        val sampler = captured.captured.samplerConfig
+        assertEquals(0.1, sampler?.temperature ?: 0.0, TOLERANCE)
+        assertTrue("repair pass used the user's top-K", sampler?.topK != 7)
+        assertTrue("repair pass used the user's top-P", sampler?.topP != 0.55)
     }
 
     @Test
@@ -267,4 +348,12 @@ class LiteRTLlmEngineTest {
     /** Reflective handle on the engine's private in-flight generation job. */
     private fun activeGenerationJob() = LiteRTLlmEngine::class.java.getDeclaredField("activeGenerationJob")
         .apply { isAccessible = true }
+
+    private companion object {
+        /** Float-to-double widening slack for the sampler assertions. */
+        const val TOLERANCE = 1e-6
+
+        /** Generations sampled when asserting the seed varies. */
+        const val SEED_SAMPLE_SIZE = 10
+    }
 }

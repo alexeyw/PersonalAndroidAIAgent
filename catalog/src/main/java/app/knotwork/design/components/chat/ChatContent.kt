@@ -73,6 +73,22 @@ sealed interface ChatContent {
     data class RunInterrupted(val model: InterruptedRunCardModel) : ChatContent
 
     /**
+     * Run-ceiling pause card — `RunCeilingPauseCard` rendered inside the
+     * assistant bubble when a run has spent one of the limits the user set for
+     * it and is waiting to be told whether it may carry on. Continue / Stop
+     * actions are hoisted to the screen via [ChatMessage]'s `onRunContinue` /
+     * `onRunStop` callbacks.
+     *
+     * Its own variant rather than a state of [RunInterrupted], even though the
+     * two share their chrome: an interrupted run is a fact being reported, and
+     * this is a question being asked. Collapsing them would make the host
+     * dispatch two different decisions through one pair of callbacks.
+     *
+     * @property model immutable payload (resolved copy, numbers and CTA labels).
+     */
+    data class RunCeilingPause(val model: RunCeilingPauseCardModel) : ChatContent
+
+    /**
      * Error tile — the message failed at the runtime layer (LLM error,
      * network error, validation failure). Renders with a `signalError`
      * border and an optional retry CTA.

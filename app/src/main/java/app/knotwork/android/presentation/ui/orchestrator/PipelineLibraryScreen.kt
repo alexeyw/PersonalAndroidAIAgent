@@ -45,13 +45,13 @@ import app.knotwork.android.presentation.ui.orchestrator.presets.PipelinePresets
 import app.knotwork.android.presentation.ui.orchestrator.presets.PresetPickerSheet
 import app.knotwork.android.presentation.ui.orchestrator.presets.SaveAsPresetDialog
 import app.knotwork.design.components.chips.Status
-import app.knotwork.design.components.controls.KnotworkField
-import app.knotwork.design.components.controls.KnotworkTextField
 import app.knotwork.design.components.dialogs.MAX_NAMED_LIST_ITEMS
 import app.knotwork.design.components.dialogs.OutcomeAction
 import app.knotwork.design.components.dialogs.OutcomeDialog
 import app.knotwork.design.components.dialogs.OutcomeNamedList
 import app.knotwork.design.components.dialogs.OutcomeTone
+import app.knotwork.design.components.dialogs.SingleFieldDialog
+import app.knotwork.design.components.dialogs.SingleFieldDialogUi
 import app.knotwork.design.icons.AppIcons
 import app.knotwork.design.screens.pipelines.PipelineLibraryCallbacks
 import app.knotwork.design.screens.pipelines.PipelineLibraryContent
@@ -288,15 +288,9 @@ fun PipelineLibraryScreen(
             viewModel.exportBundle(pipelineId = id, fileName = "knotwork-bundle-${LocalDate.now()}.json")
         },
         onImportJson = { importLauncher.launch(arrayOf("application/json", "text/*")) },
-        // Archive: phase-21 has no archival table yet — treat as delete so
-        // the affordance is exercised.
-        onArchive = { id ->
-            uiState.savedPipelines.firstOrNull { it.id == id }?.let { deleteTarget = it }
-        },
         onDelete = { id ->
             uiState.savedPipelines.firstOrNull { it.id == id }?.let { deleteTarget = it }
         },
-        onOpenDrawer = { /* drawer ships post-v0.1. */ },
         onNewPipeline = { showCreateDialog = true },
         onBrowseTemplates = { showPresetPicker = true },
         onSaveAsPreset = { id ->
@@ -588,9 +582,19 @@ fun PipelineLibraryScreen(
 }
 
 /**
- * Reusable name-input dialog for both "New pipeline" and "Rename pipeline"
- * flows. The Save / Create button is disabled when the trimmed text is
- * empty so the user cannot submit blank names.
+ * `:app` binding of the catalog's single-field dialog, used for both creating
+ * and renaming a pipeline.
+ *
+ * The dialog used to be written out here, one of two hand-rolled copies of the
+ * same shape — the other being the preset rename. Only one of the two had a
+ * baseline, so the same interaction was verified in one place and unverified in
+ * the other.
+ *
+ * @param title Dialog title, which differs between create and rename.
+ * @param confirmLabel Confirm CTA, likewise.
+ * @param initialName Value the field opens with.
+ * @param onDismiss Cancel or scrim tap.
+ * @param onConfirm Confirmed, with the value as typed.
  */
 @Composable
 private fun PipelineNameDialog(
@@ -600,28 +604,16 @@ private fun PipelineNameDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    var name by remember { mutableStateOf(initialName) }
-    val canConfirm = name.trim().isNotEmpty()
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            KnotworkField(
-                label = stringResource(R.string.orchestrator_library_name_field_label),
-                modifier = Modifier.testTag(tag = "pipeline_name_field"),
-            ) {
-                KnotworkTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                )
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(name) }, enabled = canConfirm) { Text(confirmLabel) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_cancel)) }
-        },
+    SingleFieldDialog(
+        ui = SingleFieldDialogUi(
+            title = title,
+            label = stringResource(R.string.orchestrator_library_name_field_label),
+            initialValue = initialName,
+            confirmLabel = confirmLabel,
+            cancelLabel = stringResource(R.string.common_cancel),
+        ),
+        onDismiss = onDismiss,
+        onConfirm = onConfirm,
     )
 }
 

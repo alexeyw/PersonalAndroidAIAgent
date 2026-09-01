@@ -14,7 +14,7 @@ import javax.inject.Inject
  * mockable in `SettingsViewModelTest`).
  */
 class ResetSamplingDefaultsUseCase @Inject constructor(private val settingsRepository: SettingsRepository) {
-    /** Resets temperature / top-K / top-P / repetition-penalty / max-context / max-steps. */
+    /** Resets temperature / top-K / top-P / max-context / max-steps. */
     suspend operator fun invoke() {
         settingsRepository.resetSamplingDefaults()
     }

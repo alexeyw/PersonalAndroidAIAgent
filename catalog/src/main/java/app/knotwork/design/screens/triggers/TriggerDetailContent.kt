@@ -209,11 +209,15 @@ private fun IdentityHeader(
                     mono = true,
                 )
             } else {
+                // Not dimmed, and the verb is in the words. On the list screen
+                // the verb lives on its own button; here the row itself is the
+                // control, so the row has to say what tapping it does. Dim ink
+                // was carrying that meaning alone, and dim is exactly what the
+                // first external tester read as "unavailable".
                 HeaderMetaRow(
                     icon = AppIcons.Link,
                     label = strings.runsLabel,
-                    value = strings.unboundHint,
-                    dim = true,
+                    value = strings.unboundAction,
                     onClick = callbacks.onBindPipeline,
                 )
             }

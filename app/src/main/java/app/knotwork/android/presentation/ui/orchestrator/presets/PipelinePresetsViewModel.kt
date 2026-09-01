@@ -9,6 +9,7 @@ import app.knotwork.android.domain.pipelineio.PipelinePresetJsonSerializer
 import app.knotwork.android.domain.repositories.PipelinePresetRepository
 import app.knotwork.android.domain.usecases.LoadPipelineFromPresetUseCase
 import app.knotwork.android.domain.usecases.SavePipelineAsPresetUseCase
+import app.knotwork.android.presentation.state.TransientMessageRelay
 import app.knotwork.android.presentation.ui.common.UiText
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -47,6 +48,7 @@ class PipelinePresetsViewModel @Inject constructor(
     private val pipelinePresetRepository: PipelinePresetRepository,
     private val loadPipelineFromPresetUseCase: LoadPipelineFromPresetUseCase,
     @Suppress("unused") private val savePipelineAsPresetUseCase: SavePipelineAsPresetUseCase,
+    private val transientMessageRelay: TransientMessageRelay,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PipelinePresetsUiState())
@@ -211,6 +213,20 @@ class PipelinePresetsViewModel @Inject constructor(
      */
     fun consumePendingPipelineNavigation() {
         _uiState.update { it.copy(pendingPipelineIdFromPreset = null) }
+    }
+
+    /**
+     * Surfaces a one-shot message through the activity-level snackbar host.
+     *
+     * The host lives above the NavGraph, so a message survives the screen being
+     * navigated away from — the same route the Files screen takes. Exposed on
+     * the ViewModel rather than threaded through navigation as a parameter,
+     * following `OnboardingViewModel`.
+     *
+     * @param message The sentence to show.
+     */
+    fun announce(message: String) {
+        transientMessageRelay.post(message)
     }
 
     /** Clears the error channel after the host's Snackbar has shown it. */

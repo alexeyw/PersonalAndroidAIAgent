@@ -13,7 +13,471 @@ details.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-01
+
+### Added
+
+- **Nine node settings that did nothing now do what their names say.** The
+  reference listed twenty-five configuration fields the run never read; there
+  are none left. Four prompt fields were repaired earlier in this cycle; the
+  five here are the ones that needed a place to be stored:
+
+  - **Intent Router → Fallback class.** An answer the router could not place
+    used to take whichever branch you happened to connect first. Name a class
+    and it takes that one — and stops rather than guessing when that branch is
+    not wired, the same call the If node already makes. Leave it empty and
+    nothing changes for pipelines written before this, which is deliberate: a
+    graph whose author never made this decision must not be silently re-routed.
+  - **Clarify → Quick replies.** Yours now replace the answers the model would
+    have invented. The model still writes the question; only the choices are
+    pinned, which is what a pipeline branching on the answer needs.
+  - **Tool → Always ask before this call.** Adds a confirmation to every call
+    this node makes, on top of whatever the tool's risk and your settings
+    already require. It can only add one. A node cannot waive a confirmation —
+    a pipeline file is a document that can be shared, and one able to say "do
+    not ask about this deletion" would walk somebody else's document straight
+    past the gate.
+  - **Decompose → Max subtasks.** Now a cap rather than a suggestion. The list
+    is trimmed after the model answers, because the prompt is the thing least
+    able to hold a number.
+  - **Each subtask → Stop on first error.** Turn it off and a failing subtask
+    becomes that subtask's result instead of the end of the run; the next one
+    starts. On (and unset) keeps today's behaviour exactly.
+
+  Twelve more fields named things the engine has no concept of and were removed
+  instead — including the If node's branch labels, which read like a missing
+  feature and are not: the engine identifies a branch by the literal words
+  `True` and `False` on the edge, so renaming one would change what routes
+  where in every graph already saved.
+
+- **The three sampling sliders now reach the on-device model.**
+  **Temperature**, **Top-K** and **Top-P** were read by the settings screen and
+  by nothing else: the engine opened every conversation with no sampler
+  configuration at all, leaving the model's own defaults in place. They take
+  effect together, because the engine's sampler is set as a whole or not at
+  all — which is why all three had gone unread rather than one of them. Cloud
+  providers are unaffected; they use their own defaults. The structured-output
+  repair pass still overrides all three, deliberately: that pass exists to get
+  well-formed output back, not interesting output.
+
+- **The tool and workspace ceilings have controls.** **Tool call timeout**,
+  **Largest file**, **Workspace size limit**, **Single read budget** and
+  **Largest web response** are five sliders under **Settings → Tools &
+  workspace → Advanced**. All five were already enforced by the app — they
+  bounded MCP round-trips, workspace writes, file reads and web responses the
+  whole time — and all five were findable by search, which took you to a screen
+  that did not have them. Each is now also clamped to its own range on the way
+  in, so a ceiling cannot be stored at a value that would refuse every call.
+
+- **A tool's risk level can be changed where that decision is yours.** Open a
+  tool from the **Tools** screen and its detail page shows **Risk level**. For a
+  tool from an MCP server, or one discovered on the device, it is a choice: they
+  start at *Sensitive* because the app cannot tell what they do, and only you
+  can say that a particular one is read-only. For a tool built into the app the
+  level is stated and not offered, because the approval gate resolves that from
+  the code before it reads anything you could set. The choice is remembered per
+  tool and, for MCP tools, per server — the same tool name on two servers stays
+  two decisions. A server's own hints about its tools are still not consulted.
+
+- **Both journals can now leave the phone — on a release build.** The Triggers
+  list and the External automation request journal each carry two actions:
+  share the journal as a JSON file, or save it to a folder you pick. Until now
+  the trigger journal could only be extracted by a diagnostic that exists in
+  debug builds alone, so on an installed release there was no way to read back
+  what the app had done in the background — which is precisely the build the
+  question comes up on.
+
+  The trigger export is the whole journal, every trigger at once, because the
+  question it answers is usually about a gap rather than a row. Both files
+  carry the journal and nothing else: no message a run was given, no answer it
+  produced. Neither path touches the network, and a build check now enforces
+  that rather than a comment claiming it. The file is byte-identical to what
+  the debug diagnostic writes, so one parser reads both.
+
+- **A pipeline cookbook — [`docs/cookbook.md`](docs/cookbook.md).** Every node
+  type in one place: what it does, its ports, which blocks of the run's context
+  it is given, and — first, because it is what you came for — what decides how
+  it behaves and where you change that. The reference is generated from the
+  sources that define a node and a build check fails when it drifts, so it
+  cannot quietly describe a version of the app that no longer exists.
+
+  It is also frank about a thing the app hides. A node's configuration sheet
+  shows more than the engine reads: some fields accept input, save and export
+  while nothing consults them during a run, and there is no sign on screen which
+  is which. Every one of them is marked. A unit test holds every such claim
+  against what the editor's code actually does — which is how the four sheets
+  listed under *Fixed* below were caught, and how the page corrected itself the
+  moment they were repaired.
+
+- **Five importable pipeline recipes — [`docs/recipes/`](docs/recipes/).**
+  Routing on intent, decomposition with a queue, a tool call behind the
+  approval gate, a run that uses long-term memory, and one pipeline calling
+  another as a bundle. Each is a working file checked on every build with the
+  same parser the app's import uses, so a recipe that stopped importing fails
+  the build rather than the reader.
+
+- **A questions-and-answers page — [`docs/faq.md`](docs/faq.md).** Short
+  answers to what is supported, what is not, and where a thing lives, each one
+  pointing at the page that covers it properly rather than restating it. Its
+  *Known limitations* section is the standing list of what the app deliberately
+  does not do, written without softening and with the condition that would
+  change each entry — including the ones asked for most: an arbitrary
+  OpenAI-compatible endpoint, OAuth, a connection test for MCP servers, more
+  than one image per message, and a per-run cancel.
+
+- **Four build checks over things nobody was checking.** `./gradlew check` now
+  fails on a **dead internal documentation link** — a relative path or an
+  `#anchor` that leads nowhere, across every Markdown file in the repository —
+  and on a **structurally broken Mermaid diagram**, which until now degraded
+  into a red error box on GitHub with nothing to catch it. It also holds the
+  **version number to one value**: the badge in `README.md` and the
+  pre-release sentence beneath it, the topmost released heading here, both
+  compare links at the foot of this file, every version in `SECURITY.md`
+  (including both cells of its supported-versions table), and the `versionName`
+  the build declares. The release checklist had never mentioned the badge, which
+  is the number a bug reporter quotes — and a stale supported-versions table is
+  worse still, since it tells someone reporting a bug that their release is not
+  supported. Finally, a structural
+  guard now enforces what was written down and nothing enforced — **a prompt
+  pack is imported from a file you picked, never fetched over a link**; an
+  instruction file that reaches the system prompt of an agent holding tools has
+  a human action standing between it and the network, and now the build says so
+  too. Each rule was watched failing before it was trusted, and the Mermaid
+  rules were checked against the real Mermaid parser so the gate cannot start
+  disagreeing with the renderer. External `http` links are the one thing
+  deliberately left out of the gate: their verdict belongs to somebody else's
+  server, so they are reported weekly instead.
+
+### Changed
+
+- **Confirmation dialogs come from one place now.** They had been written out
+  separately across the app, and had drifted: **Reset usage statistics** — which
+  throws away every recorded run and cannot be undone — asked for confirmation in
+  the same neutral styling as clearing a log. It is now marked as destructive,
+  like deleting a conversation always was.
+
+  Everything else keeps the styling it had; what changed is that the distinction
+  is now made in one component rather than re-decided at each dialog. The same
+  goes for the rename prompts and the single-choice pickers.
+
+  One more visible fix: when saving a pipeline as a preset, the selected category
+  chip is now clearly marked. It previously lost its outline when chosen, so the
+  category you picked looked like the one you had not.
+
+
+- **A run that reaches a safety limit now pauses and asks instead of dying.**
+  Reaching the step or token limit used to end the run outright, turning
+  everything it had done into a "Stopped by a safety limit" message. It now
+  stops, states which allowance ran out and how much was used, and offers
+  **Continue (+N)** or **Stop the run**.
+
+  Continuing buys **one more portion of the same allowance** — the number on the
+  button — and picks up from the checkpoint, so nothing is re-run. It does not
+  lift the limit: the run asks again when that portion is gone, and a run waved
+  through five times is one you said yes to five times. Each axis is bought
+  separately; being let past a step limit does not authorise more tokens.
+
+  The pause is durable from the moment it is raised, so a run that reaches its
+  limit overnight is still waiting in the morning, with the numbers it actually
+  stopped at rather than whatever the setting says by then. Away from the chat,
+  a notification brings you back to it; it deliberately carries no buttons,
+  because the decision turns on how much the run has already spent and the shade
+  has nowhere to show that. An unanswered pause expires with the same background
+  response window that governs tool approvals, and the run then ends at its
+  limit as before.
+
+
+- **One toggle was described in search as doing the opposite of what it does.**
+  Searching for **Block destructive tools** offered "always require a typed
+  confirm for destructive calls"; the toggle refuses those calls outright,
+  without asking, which is what its own explanation said. Two opposite
+  descriptions of one control lived side by side because the search description
+  was the single piece of settings copy under no check at all — it could be
+  absent, stale or wrong and the build stayed green. It is now required and its
+  text is verified, the same way the explanations already were.
+
+- **The file maps are generated, and now cover the whole tree.** `FILE_MAP.md`
+  used to be kept current by hand, by a checklist item that names one map while
+  the repository holds several. Measured before the change: the `:catalog` map
+  was missing 128 of its own sources, the unit-test map named 44 files of 375,
+  the instrumented map 16 of 60, and the main one carried an entry for a file
+  that had moved. `./gradlew :app:generateFileMap` now derives all four from the
+  Kotlin sources and `:app:verifyFileMap` fails the build when a committed map
+  no longer matches — the same shape as the other generated documents in the
+  build.
+
+  Descriptions stay hand-written, since they carry reasoning no KDoc holds:
+  the task carries each across by path and only seeds a new one from the KDoc
+  of the declaration a file is named for. Renaming a file therefore stops the
+  task and prints the description it would otherwise have deleted. Every file
+  and package in the four maps now has one, and the count of those that do not
+  is ratcheted at zero, so the next undocumented file fails the build instead of
+  the map quietly shrinking.
+
+- **Troubleshooting moved out of the user guide into
+  [`docs/troubleshooting.md`](docs/troubleshooting.md).** Same eleven entries,
+  unchanged; the guide had grown past the point where a failure was findable
+  inside it. The three pages now split by question: the guide describes how
+  things work, the FAQ says whether a thing exists, and troubleshooting handles
+  something being broken.
+
+- **The chat composer's stop button is described accurately.** It detaches the
+  screen from the run rather than ending it — the run carries on in the
+  background and its answer still arrives in the conversation. The behaviour is
+  unchanged and deliberate; the documentation implied otherwise.
+
+- **The guide's steps for adding an MCP server match the screen again.** They
+  still described scrolling to a section; the add action is a permanent **+** in
+  the top bar, and the steps mentioned neither the address form nor the
+  transport selector.
+
+- **Settings options now explain themselves, in one sentence, where they
+  live.** Tap the **ⓘ** beside a row's label and a short explanation opens in
+  place, under the row; opening one closes the other, so a category screen is
+  never more than one panel taller than at rest. Sliders had *no* explanation
+  slot at all before this — the controls whose meaning is least guessable
+  (Top-K, thresholds, the run ceilings) were the ones with nothing on screen to
+  say what they do. Rows whose meaning follows from their name — links, the
+  identity and version rows, plain actions like *Export memories* — carry no
+  glyph, and the reason each one carries none is recorded rather than left
+  implicit.
+
+- **Writing an explanation for each row turned out to be a way of auditing
+  it**, and seven rows failed the audit: the four sampling sliders
+  (**Temperature**, **Top-K**, **Top-P**, **Repetition penalty**) never reached
+  the on-device engine, **Tool-usage instruction** and **Auto-summarize
+  threshold** were read by nothing, and **Long-running task alerts** gated a
+  notification that was never posted. Rather than give each a fluent sentence
+  about behaviour the build did not have, they were recorded as *behaviour not
+  shipped* — and then closed, before this release, by wiring them up or removing
+  them. See *The three sampling sliders now reach the on-device model* under
+  **Added**, and *Four settings that could not be made true are gone* under
+  **Removed**.
+
+- **The explanations that used to sit under a row are gone from that slot.**
+  Small muted text under a label is where the app shows what a row is *set to*
+  (`NPU · auto`, `412 memories`), and closed testing found that readers learn
+  the slot and stop reading anything in it — meaning included. That slot now
+  carries values only. One consequence worth stating: a setting's meaning used
+  to be written in four separate places, and they had already drifted apart —
+  one of them quoting an "8 s" threshold that no constant in the code holds.
+  There is now one copy, and `docs/user-guide.md` is generated from it.
+
+- **The settings hub's category summaries are no longer muted micro-type.** They
+  explain what a category is for, and that slot is reserved for machine state.
+
+- **A switch you cannot use is no longer greyed out.** An unbound trigger row
+  used to show a dimmed switch, which reads as broken rather than as waiting on
+  you. The switch is replaced by the verb that fixes it — **Bind** — and the
+  reason stays on the row in words.
+
+- **Adding an MCP server shows a real address as the placeholder**, with the
+  endpoint explained next to the field, instead of `https://… or mcp://host:port`
+  — which sent the first external tester looking for a port number.
+
+- **Attaching a second image says so.** The composer holds one attachment, and
+  replacing the first used to happen silently.
+
+- **The onboarding text about cloud providers is no longer muted**, having been
+  skipped on sight for looking like a build number.
+
+- **The bottom-nav highlight now follows the screens you opened, not a lookup
+  table.** It was decided by a hand-maintained `route → tab` map, and **ten**
+  registered screens were missing from it — Allowed domains, Files, Skills,
+  Triggers, Library, Chat archive, Discover and its detail, and both provider
+  screens showed *no* tab highlighted at all. The tab is now derived from the
+  back stack, so a screen belongs to the tab it was opened from and the class of
+  omission is gone. One deliberate consequence: Settings opened from the chat
+  drawer highlights **Chat**, not **More**, because Back from there returns to
+  the chat — the highlight and the Back button now agree.
+
+- **`Settings → Tools & workspace → Manage tools` no longer throws you onto
+  the Tools tab.** It opened the Tools *tab root* from inside Settings, so the
+  highlight jumped to a tab the user never chose and the whole settings subtree
+  was left buried underneath it — reported in closed testing as being thrown out
+  of Settings onto the main screen's Tools tab. The same screen now opens as a
+  settings-owned destination: Back returns to the category, and the tab you came
+  from stays lit. Opening an archived chat had the same shape and is fixed with
+  it.
+
+- **A bottom-nav tab is now only ever entered as a tab switch.** Every entry
+  point — the nav bar, launcher shortcuts, notification deep links, the task
+  monitor, the chat archive — goes through one code path, and a build-time check
+  fails if a new one does not. Notification and shortcut launches additionally
+  keep the tab subtree you were in instead of discarding it.
+
+- **The console has a name now.** The dark strip above the composer was already
+  a button — it announced itself to TalkBack and had done since it shipped — but
+  nothing about it said so to the eye, and the first outsider to use the app
+  could not find the console at all. It now reads `console │ [NODE] idle · ready`
+  with a chevron, and when the console is open the *same* strip becomes the
+  pane's header rather than vanishing. Its spoken description now includes the
+  live agent status instead of just "Open console".
+
+- **Adding an MCP server moved to the top of the Tools screen.** The `+ Add MCP`
+  link sat in the MCP section header — that is, below the entire built-in tool
+  list, which is exactly where it could not be found. There is now a permanent
+  `+` in the top bar, plus a labelled **Add server** button inside the empty
+  server group that disappears once you have one.
+
+- **Tools are two collapsible groups with counts.** *Built-in tools · 3 tools*
+  and *MCP servers · 3 servers* — each header counts the rows it contains, and
+  each server row still carries its own tool count. Folding a group away cannot
+  hide a problem inside it: a collapsed **MCP servers** header reports
+  `⚠ 1 disconnected`. A disconnected server now says **Disconnected** in words
+  next to a warning glyph, instead of relying on dimming and a coloured dot, and
+  offers reconnect on the row.
+
+- **The More tab is four named sections instead of twelve flat rows** —
+  Automation · Your content · Building blocks · App. **Triggers moves from
+  seventh row to first**: in closed testing it took two hours to find. Nothing
+  is re-pointed and no screen is added; the sections are labels. `Active tasks`
+  is now `Tasks`, since the section already says what kind.
+
+- **Settings → "Pipelines & structured output" is now "Run limits & structured
+  output".** The heading promised the pipelines themselves and the screen holds
+  the limits an autonomous run obeys — reported in closed testing as a heading
+  announcing something the screen does not contain. Pipelines live on the
+  Pipelines tab and under More → Library; searching Settings for `pipelines`
+  still finds the category.
+
+### Removed
+
+- **Four settings that could not be made true are gone.** **Repetition
+  penalty** has no equivalent in the on-device engine — its sampler is exactly
+  top-K, top-P, temperature and a seed, checked against the shipped library
+  rather than assumed — so there was nothing to connect it to. **Tool-usage
+  instruction** and **Auto-summarize threshold** had no reader anywhere.
+  **Long-running task alerts** gated a notification nothing ever posted; the
+  toggle, its notification channel and the code behind it are all removed. A
+  control that does nothing is worse than a missing one, because it invites you
+  to tune it.
+
+- **Controls that could not act have been removed rather than disabled or
+  explained.** A control that does nothing reads from outside as a broken app,
+  and the first person to use this build who was not its author said so twice
+  without being asked. Each of these was verified inert by reading the code,
+  not by recollection:
+
+  - **Chat → long-press a message → Rate.** Its entire behaviour was a message
+    saying rating was not available.
+  - **Chat → overflow → Clear console.** A second door onto the console's own
+    Clear, offered even when the console had never been opened. Clearing lives
+    on the console header, where the thing being cleared is visible.
+  - **Console → Search on the Vars and Traces tabs.** The field it opens
+    filters log lines and exists only on Logs, so on the other two tabs the
+    magnifier did nothing. It is now shown on Logs alone.
+  - **Memory (empty) → "Open chat" and the search magnifier.** The button was
+    wired to a handler the navigation graph never supplied, and the magnifier
+    opened a search field that the empty state never rendered. Both were dead
+    on every build that shipped them. The screen keeps its explanation and its
+    working "Add memory" button. The magnifier is likewise gone from the error
+    state, which suppressed the search field for the same reason.
+  - **Chat → the model-picker sheet.** Fully built, unit-tested, and reachable
+    by nothing: no control anywhere invoked it. Models are chosen under
+    **More → Models**, which is where the user guide now points.
+  - **Pipeline editor → Run**, and the run banner behind it (Pause, Resume,
+    Stop, Trace), the running-node pulse and the traveling-dot edge animation.
+    Run did not run anything: it saved the graph, animated a banner, and raised
+    a message admitting the execution engine was not connected. Pipelines are
+    executed from chat, from a trigger, or from a scheduled task, and those
+    report progress in the chat console. **Save pipeline** is in the editor's
+    overflow menu and is unaffected.
+
+  Removed with each control: its strings (25 resource entries), its handlers,
+  and the state that fed it. Nine callback parameters that no surface rendered
+  went with them.
+
 ### Fixed
+
+- **The store listing cannot go over Google's limits unnoticed.** A build check
+  now measures every Play field against the ceiling the Console enforces. It
+  was worth adding at that moment rather than later: the English description sat
+  **5 characters** under its limit, the English title **4**, and one release
+  note **2**. One added word breaks any of them, and the rejection lands in the
+  Play Console — after the merge, after a signed artefact exists.
+
+- **The pipeline editor no longer loses work silently.** Save lives in the
+  overflow menu, nothing on screen said a pipeline had drifted from storage,
+  and leaving simply discarded it. Now the toolbar carries an **Unsaved**
+  marker beside the node count as soon as the editor holds anything not in
+  storage, and leaving — by the back gesture or the back icon — asks first,
+  offering **Save and leave** or **Discard**.
+
+  Two details that decide whether the guard is worth having: a save that fails
+  validation leaves the work marked unsaved, and an edit made while a save is in
+  flight stays unsaved rather than being counted as stored. Both are what make
+  the marker something you can trust rather than one more thing on screen.
+
+
+- **Stop now stops the run.** The button had only detached the screen from it:
+  the work carried on in the background, spending steps, tokens and battery, and
+  its answer still arrived in the conversation — so a control labelled *stop*
+  told you the opposite of what was happening. It now ends the run, and the
+  conversation gets a line saying the run was stopped before it could answer.
+  Anything of that chat's still queued behind it is dropped too.
+
+  Only that button ends a run. Switching to another chat leaves its run going,
+  which is what makes it safe to come back to.
+
+- **A run that ends without an answer now says so, in the conversation.** A
+  failure, a stop, an approval window that elapsed, or the app being killed
+  mid-run reached you only as a banner on the chat screen — state held in
+  memory. It died with the screen, so returning to a chat whose run ended while
+  the app was in the background found your message sitting there with nothing
+  after it and no way to tell what had happened. The outcome is now written into
+  the conversation by whatever settled the run, so it is there whether or not
+  anything was watching. A run that finishes normally still says nothing — its
+  answer is the message.
+
+  The sentence is the one every other surface already uses for the same event,
+  so a run stopped by its step ceiling reads the same in the chat, in the
+  notification and on the banner. The tile that used to explain a stopped run
+  gave the explanation up to that line and kept what only it can carry — how far
+  the run got, and the one action that changes the outcome.
+
+- **The chat title named the wrong pipeline.** A conversation opened by a
+  trigger, by a scheduled task or by external automation showed the name of the
+  *default* pipeline above messages a different one had produced. Those chats
+  carry no pipeline binding on purpose — they are result logs, and a follow-up
+  you type into one should use your default rather than a stale copy of whatever
+  ran. The title now names the pipeline that produced what you are reading, and
+  a chat you bound to a pipeline yourself still shows that binding.
+
+- **The prompt you type into an Intent Router, Decomposition, Evaluation or
+  Summary node now reaches the run.** All four sheets require a prompt, saved
+  it, showed it again when the sheet was reopened — and the node went on using
+  the prompt it was created with. Nothing on screen said so, because the value
+  really was stored; it just never reached the property the engine reads. The
+  browser editor had always written it correctly, so the two editors of the
+  same file disagreed. Reopening an affected node and saving it once applies
+  the prompt that was already on screen.
+
+- **Failures on the Files screen are no longer silent.** An import refused for
+  size or quota, an export that could not be written, a preview that could not
+  be opened, a bulk delete that removed only some of the files — eight
+  outcomes in total — each raised a message that the screen dropped on the
+  floor. The operation appeared to do nothing at all. They now surface as
+  snackbars.
+
+  Sharing was worse than silent. A file that could not be prepared was dropped
+  from the selection without a word, so the share sheet opened carrying fewer
+  files than were picked; and when none could be prepared, no sheet opened
+  either — the tap did nothing at all. Both cases now say so, and the partial
+  one names how many of how many went.
+
+- **An imported pipeline can no longer be impossible to save.** The node
+  configuration sheet still validated the temperature, top-P, token and timeout
+  values of the on-device and cloud nodes, whose controls were removed in
+  0.8.0. A pipeline carrying a value outside the old ranges was refused with an
+  error against a field that is not on the sheet, leaving nothing to correct.
+  Nothing reads those values during a run, and they still round-trip untouched.
+
+- **Regenerating a documentation table and running `check` in one command no
+  longer fails.** The four `generate…` / `verify…` task pairs each read and
+  write the same file, and Gradle rejected the pair whenever both were asked
+  for at once — which is the natural way to use them. Contributors only; no
+  effect on the app.
 
 - **The `adb` examples for the external-automation contract could not work as
   written.** `adb shell` does not pass your arguments through — it joins them
@@ -5059,7 +5523,8 @@ that produced the initial 0.1.0 snapshot.
 - **Master key**: `EncryptedSharedPreferences` is rooted in the Android
   Keystore, so the master key is hardware-backed where available.
 
-[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/alexeyw/knotwork/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/alexeyw/knotwork/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/alexeyw/knotwork/compare/v0.7.3...v0.8.0
 [0.7.3]: https://github.com/alexeyw/knotwork/compare/v0.7.2...v0.7.3
 [0.7.2]: https://github.com/alexeyw/knotwork/compare/v0.7.1...v0.7.2

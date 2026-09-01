@@ -212,7 +212,6 @@ class ToolsCallbacks(
     val onAddServerOpen: () -> Unit = {},
     val onOpenAllowedDomains: () -> Unit = {},
     val onErrorRetry: () -> Unit = {},
-    val onOpenDrawer: () -> Unit = {},
 )
 
 /** Convenience factory returning a callbacks bundle that ignores every event. */
@@ -230,6 +229,23 @@ enum class ToolDetailVisualState {
     SchemaError,
 }
 
+/**
+ * How the tool's risk level is presented on the detail screen.
+ *
+ * The distinction is not cosmetic. The approval gate consults the user's
+ * per-tool override for discovered AppFunctions and for MCP tools only — a
+ * built-in tool's risk is resolved from the code before any override is read,
+ * so offering a control there would be a control that cannot act.
+ */
+sealed interface ToolRiskUi {
+
+    /** The tool's risk, stated but not editable (built-in tools). */
+    data class Fixed(val risk: BuiltInToolRisk) : ToolRiskUi
+
+    /** The tool's risk, and the user's to decide (AppFunctions, MCP tools). */
+    data class Editable(val risk: BuiltInToolRisk) : ToolRiskUi
+}
+
 /** Top-level input to `ToolDetailContent`. */
 data class ToolDetailViewState(
     val visualState: ToolDetailVisualState,
@@ -239,9 +255,14 @@ data class ToolDetailViewState(
     val schemaJson: String? = null,
     val lastUsed: String? = null,
     val enabled: Boolean,
+    val risk: ToolRiskUi,
 )
 
-class ToolDetailCallbacks(val onBack: () -> Unit = {}, val onToggle: (Boolean) -> Unit = {})
+class ToolDetailCallbacks(
+    val onBack: () -> Unit = {},
+    val onToggle: (Boolean) -> Unit = {},
+    val onRiskChange: (BuiltInToolRisk) -> Unit = {},
+)
 
 fun noopToolDetailCallbacks(): ToolDetailCallbacks = ToolDetailCallbacks()
 

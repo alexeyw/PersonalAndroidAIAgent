@@ -246,7 +246,24 @@ class SystemNodeExecutor @Inject constructor(
         emitRepairs(collected)
         when (result) {
             is GateResult.Success -> {
-                val canonical = json.encodeToString(ListSerializer(String.serializer()), result.value)
+                // The node's cap, when it has one. Applied here rather than asked
+                // for in the prompt because a model that overshoots would
+                // otherwise hand the queue more work than the author allowed —
+                // and the prompt is the thing least able to enforce a number.
+                val capped = node.maxSubtasks
+                    ?.takeIf { it > 0 }
+                    ?.let { limit -> result.value.take(limit) }
+                    ?: result.value
+                if (capped.size < result.value.size) {
+                    emit(
+                        NodeOutput.Console(
+                            ConsoleEventType.SystemMessage,
+                            "DECOMPOSITION '${node.label}' produced ${result.value.size} sub-tasks; " +
+                                "kept the first ${capped.size} (node limit)",
+                        ),
+                    )
+                }
+                val canonical = json.encodeToString(ListSerializer(String.serializer()), capped)
                 emitResultAfterDelay(NodeExecutionResult(outputText = canonical))
             }
             is GateResult.Failed -> {

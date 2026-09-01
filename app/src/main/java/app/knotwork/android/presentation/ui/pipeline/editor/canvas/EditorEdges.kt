@@ -3,10 +3,7 @@ package app.knotwork.android.presentation.ui.pipeline.editor.canvas
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -18,7 +15,6 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import app.knotwork.android.domain.models.ConnectionModel
 import app.knotwork.android.domain.models.NodeModel
-import app.knotwork.android.domain.models.NodeType
 import app.knotwork.android.presentation.ui.pipeline.editor.config.NodeConfigCodec
 import app.knotwork.android.presentation.ui.pipeline.editor.config.NodeTypeMapper
 import app.knotwork.android.presentation.ui.pipeline.editor.core.BezierEdge
@@ -27,7 +23,6 @@ import app.knotwork.design.components.pipelineeditor.EvaluationConfig
 import app.knotwork.design.components.pipelineeditor.IntentRouterConfig
 import app.knotwork.design.components.pipelineeditor.NodePorts
 import app.knotwork.design.components.pipelineeditor.OutboundPort
-import app.knotwork.design.components.pipelineeditor.headerTint
 import app.knotwork.design.theme.KnotworkTheme
 
 /**
@@ -44,7 +39,6 @@ private const val NODE_BASE_HEIGHT_DP = 64f
 
 /** Max card height (`NodeCardMaxHeight = 96.dp`): used for whole-card release hit-testing. */
 private const val NODE_MAX_HEIGHT_DP = 96f
-private const val DOT_TRAVEL_SPEED_DP_PER_SEC = 40f
 
 /**
  * Per-port horizontal spacing in dp. Picked to match the catalog NodeCard's outbound
@@ -143,7 +137,6 @@ private fun matchesPort(port: OutboundPort, label: String?): Boolean = when {
     else -> port.label == label
 }
 
-/** Convenience: builds the catalog `NodePorts` for a domain node (no per-type overrides). */
 /**
  * Builds the catalog `NodePorts` for a domain node, threading through the per-type
  * overrides that depend on the decoded `NodeConfig`:
@@ -182,57 +175,20 @@ internal fun portsFor(node: NodeModel): NodePorts {
  * @param connectionDraft optional in-flight connection (drag from a port to the pointer).
  * If present, an extra preview edge is drawn between the source port and the live pointer
  * in dashed style.
- * @param runningEdgeIds set of edge ids that should render the traveling-dot animation
- * (run-trace mode). Pass empty when the pipeline is not running.
- * @param reducedMotion when `true`, the traveling dot is rendered as a static cursor at
- * the midpoint instead of an animated transit.
  */
 @Composable
-@Suppress("LongParameterList") // The canvas layer needs every input as one frame.
 internal fun EditorEdges(
     connections: List<ConnectionModel>,
     nodesById: Map<String, NodeModel>,
     transform: CanvasTransform,
     connectionDraft: ConnectionDraftDrawData?,
-    runningEdgeIds: Set<String>,
     selectedEdgeId: String?,
-    reducedMotion: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val density = LocalDensity.current
     val edgeColor = KnotworkTheme.extended.divider
     val accentColor = KnotworkTheme.extended.outlineStrong
-    val dotColor = KnotworkTheme.extended.outlineStrong
     val strokeWidth = with(density) { 2.dp.toPx() }
-    val dotRadius = with(density) { 4.dp.toPx() }
-    val dotTravelSpeedPx = with(density) { DOT_TRAVEL_SPEED_DP_PER_SEC.dp.toPx() }
-    // Per-source-node hue lookup — used to tint running edges with their source
-    // node's header colour (the active "complex" branch is rendered in
-    // the IF_CONDITION hue). Each domain `NodeType` resolves to its catalog
-    // analogue's header tint; the table is computed once per theme change and
-    // looked up by the source node's type in the draw loop.
-    val hueByNodeType: Map<NodeType, Color> = NodeType.entries.associateWith { domainType ->
-        NodeTypeMapper.toCatalog(domainType).headerTint()
-    }
-
-    // Continuous elapsed-time tick (in milliseconds since first frame) drives every running
-    // edge's traveling dot. Storing a monotonically increasing scalar — rather than the prior
-    // shared `0..1` infinite transition — lets each edge compute its own phase as
-    // `(timeMs / 1000f / cycleSec) % 1f` regardless of how long the edge is: a 4-second
-    // cycle no longer races a 2-second reset window and teleports back to the source.
-    //
-    // `withFrameNanos` runs only when the host has running edges (this composable is only in
-    // the tree while the editor is mounted and edges are drawn); when none are running we
-    // still tick, but the per-edge branch below short-circuits before computing positions.
-    val animateRunning = runningEdgeIds.isNotEmpty() && !reducedMotion
-    var timeMs by remember { mutableLongStateOf(0L) }
-    LaunchedEffect(animateRunning) {
-        if (!animateRunning) return@LaunchedEffect
-        val startNanos = withFrameNanosCompat { it }
-        while (true) {
-            withFrameNanosCompat { now -> timeMs = (now - startNanos) / NS_PER_MS }
-        }
-    }
 
     Canvas(modifier = modifier.fillMaxSize()) {
         connections.forEach { c ->
@@ -247,66 +203,18 @@ internal fun EditorEdges(
             val tx = transform.canvasToScreenX(tgtAnchor.xCanvas)
             val ty = transform.canvasToScreenY(tgtAnchor.yCanvas)
             val (c0, c1) = BezierEdge.controlPoints(sx, sy, tx, ty)
-            val isRunning = c.id in runningEdgeIds
             val isSelected = c.id == selectedEdgeId
             val path = Path().apply {
                 moveTo(sx, sy)
                 cubicTo(c0.first, c0.second, c1.first, c1.second, tx, ty)
             }
-            val strokeMultiplier = when {
-                isSelected -> EDGE_STROKE_SELECTED_FACTOR
-                isRunning -> EDGE_STROKE_RUNNING_FACTOR
-                else -> 1f
-            }
-            // Running edges adopt the source node's header hue (the
-            // active branch is tinted in the upstream node's colour). Selected
-            // edges keep the generic accent so the user's deliberate pick stands
-            // apart from the live run signal.
-            val strokeColor = when {
-                isRunning -> hueByNodeType[source.type] ?: accentColor
-                isSelected -> accentColor
-                else -> edgeColor
-            }
+            val strokeMultiplier = if (isSelected) EDGE_STROKE_SELECTED_FACTOR else 1f
+            val strokeColor = if (isSelected) accentColor else edgeColor
             drawPath(
                 path = path,
                 color = strokeColor,
                 style = Stroke(width = strokeWidth * strokeMultiplier),
             )
-            if (isRunning) {
-                val arcLength = BezierEdge.approximateArcLength(
-                    sx,
-                    sy,
-                    c0.first,
-                    c0.second,
-                    c1.first,
-                    c1.second,
-                    tx,
-                    ty,
-                )
-                val phase = if (reducedMotion) {
-                    MIDPOINT_T
-                } else {
-                    // Each edge cycles independently in (arcLength / dotTravelSpeedPx) seconds,
-                    // floored at MIN_CYCLE_SECONDS so very short edges don't spin so fast they
-                    // strobe. `timeMs` is the continuous elapsed-time tick — no shared base
-                    // duration that could clip long edges.
-                    val cycleSec = (arcLength / dotTravelSpeedPx).coerceAtLeast(MIN_CYCLE_SECONDS)
-                    val timeSec = timeMs / MS_PER_SEC.toFloat()
-                    (timeSec / cycleSec) % 1f
-                }
-                val (dx, dy) = BezierEdge.pointAt(
-                    phase,
-                    sx,
-                    sy,
-                    c0.first,
-                    c0.second,
-                    c1.first,
-                    c1.second,
-                    tx,
-                    ty,
-                )
-                drawCircle(color = dotColor, radius = dotRadius, center = Offset(dx, dy))
-            }
         }
         if (connectionDraft != null) {
             drawPreviewEdge(
@@ -407,18 +315,5 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawPreviewEdge(
     )
 }
 
-private const val MS_PER_SEC = 1_000
-private const val NS_PER_MS = 1_000_000L
-private const val MIN_CYCLE_SECONDS = 0.5f
-private const val MIDPOINT_T = 0.5f
-private const val EDGE_STROKE_RUNNING_FACTOR = 1.5f
 private const val EDGE_STROKE_SELECTED_FACTOR = 2f
 private const val EDGE_PREVIEW_STROKE_FACTOR = 1.5f
-
-/**
- * Thin wrapper over [androidx.compose.runtime.withFrameNanos] so the public
- * surface signature stays one line and the import block does not gain a noisy
- * `kotlin.coroutines` re-export. Exists purely to keep [EditorEdges] readable.
- */
-private suspend inline fun <R> withFrameNanosCompat(crossinline block: (Long) -> R): R =
-    androidx.compose.runtime.withFrameNanos { nanos -> block(nanos) }

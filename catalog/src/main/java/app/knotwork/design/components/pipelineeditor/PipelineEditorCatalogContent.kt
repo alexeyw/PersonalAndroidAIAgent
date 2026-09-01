@@ -36,7 +36,7 @@ fun PipelineEditorCatalogContent() {
             SectionLabel(text = "NodeCard — every type (idle)")
             NodeCardGrid(rotation = NodeCardRotation.Idle)
 
-            SectionLabel(text = "NodeCard — selected / error / running")
+            SectionLabel(text = "NodeCard — selected / error")
             NodeCardStateMatrix()
 
             SectionLabel(text = "EdgeLabel — variants")
@@ -47,21 +47,17 @@ fun PipelineEditorCatalogContent() {
                 name = "Weekly digest",
                 onNameChange = {},
                 onNavigateUp = {},
-                onPrimaryAction = {},
                 onOverflow = {},
                 subtitle = "Editing · 4 nodes · 3 edges",
-                primaryAction = EditorPrimaryAction.Run,
             )
 
-            SectionLabel(text = "EditorToolbar — last run done")
+            SectionLabel(text = "EditorToolbar — overview")
             EditorToolbar(
                 name = "research-deepdive",
                 onNameChange = {},
                 onNavigateUp = {},
-                onPrimaryAction = {},
                 onOverflow = {},
-                subtitle = "Last run · 12.8 s · 2 408 tok",
-                primaryAction = EditorPrimaryAction.Rerun,
+                subtitle = "Overview · 0.42× · 11 nodes",
             )
 
             SectionLabel(text = "NodeConfigSheet body — LiteRT (idle)")
@@ -122,7 +118,6 @@ private fun NodeCardGrid(rotation: NodeCardRotation) {
                 subtitle = sampleSubtitle(type),
                 selected = false,
                 error = null,
-                running = false,
                 multiSelected = false,
                 ports = NodePorts.forType(
                     type = type,
@@ -138,7 +133,7 @@ private fun NodeCardGrid(rotation: NodeCardRotation) {
     }
 }
 
-/** Selected / runtime-error / running state cards side by side. */
+/** Selected / runtime-error state cards side by side. */
 @Composable
 private fun NodeCardStateMatrix() {
     Row(
@@ -151,7 +146,6 @@ private fun NodeCardStateMatrix() {
             subtitle = "gpt-5",
             selected = true,
             error = null,
-            running = false,
             multiSelected = false,
             ports = NodePorts.forType(NodeType.CLOUD),
         )
@@ -161,7 +155,6 @@ private fun NodeCardStateMatrix() {
             subtitle = "fs.write_file",
             selected = false,
             error = NodeError.Runtime(message = "Tool timed out"),
-            running = false,
             multiSelected = false,
             ports = NodePorts.forType(NodeType.TOOL),
         )
@@ -171,7 +164,6 @@ private fun NodeCardStateMatrix() {
             subtitle = null,
             selected = false,
             error = NodeError.Validation(message = "Missing criteria"),
-            running = false,
             multiSelected = false,
             ports = NodePorts.forType(NodeType.EVALUATION, maxRetries = 2),
         )
@@ -195,17 +187,17 @@ private fun EdgeLabelRow() {
 /** Sample subtitle for the per-type grid. */
 private fun sampleSubtitle(type: NodeType): String? = when (type) {
     NodeType.INPUT -> "user.message"
-    NodeType.OUTPUT -> "markdown"
+    NodeType.OUTPUT -> "final answer"
     NodeType.LITE_RT -> "gemma-2b-it"
     NodeType.CLOUD -> "openai/gpt-5"
     NodeType.INTENT_ROUTER -> "3 classes"
-    NodeType.IF_CONDITION -> "score > 0.8"
+    NodeType.IF_CONDITION -> "is it urgent?"
     NodeType.CLARIFICATION -> "Ask the user"
     NodeType.TOOL -> "fs.write_file"
     NodeType.DECOMPOSITION -> "max 5 steps"
-    NodeType.QUEUE_PROCESSOR -> "parallelism = 2"
+    NodeType.QUEUE_PROCESSOR -> "one subtask at a time"
     NodeType.EVALUATION -> "retries = 2"
-    NodeType.SUMMARY -> "bullets"
+    NodeType.SUMMARY -> "condense"
     NodeType.PIPELINE -> "→ Multi-step research"
     NodeType.SKILL -> "★ Translator"
 }

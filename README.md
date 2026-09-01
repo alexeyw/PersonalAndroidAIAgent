@@ -3,7 +3,7 @@
 [![Check](https://github.com/alexeyw/knotwork/actions/workflows/check.yml/badge.svg)](https://github.com/alexeyw/knotwork/actions/workflows/check.yml)
 [![Instrumented](https://github.com/alexeyw/knotwork/actions/workflows/instrumented.yml/badge.svg?branch=main)](https://github.com/alexeyw/knotwork/actions/workflows/instrumented.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-![Version](https://img.shields.io/badge/version-0.8.0-orange.svg)
+![Version](https://img.shields.io/badge/version-0.9.0-orange.svg)
 ![Android API](https://img.shields.io/badge/Android-API%2034%2B-3DDC84.svg?logo=android)
 [![Google Play](https://img.shields.io/badge/Google%20Play-available-3DDC84.svg?logo=googleplay&logoColor=white)](https://play.google.com/store/apps/details?id=app.knotwork.android)
 
@@ -80,8 +80,8 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   opt-in, and bring-your-own-key — nothing leaves the device unless you
   configure it to.
 - **You build the pipeline.** A drag-and-drop editor with pan / pinch-zoom,
-  snap-to-grid, a radial node picker, auto-layout, inline validation, run-trace
-  overlay, and per-type configuration for all 14 node types — plus a standalone
+  snap-to-grid, a radial node picker, auto-layout, inline validation, and
+  per-type configuration for all 14 node types — plus a standalone
   [browser editor](pipeline-editor.html) for authoring pipelines without
   launching the app. Prompt variables (`$DATE`, `$TIME`, `$TOOLS`, `$MODEL`,
   `$MEMORY_SUMMARY`, `$LANG`, `$LOCATION`, `$USER`, `$DEVICE`) render fresh on
@@ -104,12 +104,13 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   the agent does the language-model part of *what*. Off by default and behind an
   explicit consent dialog; the binding is an allowlist, not a fallback, so a
   request naming anything else is refused rather than redirected. Every inbound
-  request — accepted or refused — lands in a readable journal.
+  request — accepted or refused — lands in a readable journal you can export as
+  a file when a profile misbehaves.
 - **Local-first by construction.** The Room database is SQLCipher-encrypted and
   API keys are sealed with AES-GCM under a dedicated Android Keystore key.
-  On-device usage statistics (a build-time guard forbids any network on that
-  path), attachment images that never reach cloud models, and voice input
-  transcribed on-device before the pipeline runs. A **FOSS build** ships with
+  On-device usage statistics and journal exports (build-time guards forbid any
+  network on either path), attachment images that never reach cloud models, and
+  voice input transcribed on-device before the pipeline runs. A **FOSS build** ships with
   zero proprietary dependencies for F-Droid.
 - **Reliable over long, autonomous runs.** A validate-and-repair gate keeps
   structured nodes producing well-formed output, exponential-backoff retry
@@ -128,6 +129,14 @@ https://github.com/user-attachments/assets/2ea06de5-6832-4e0c-ad48-430f375d8b72
   out of the drawer without deleting a single message: it waits, whole and
   exportable, on its own screen until you restore it — and opens read-only in
   the meantime, so nothing brings it back except you.
+- **Settings that say what they do.** Options that carry a number, a borrowed
+  term, or a consequence beyond their own row explain themselves in one
+  sentence, opened in place from the **ⓘ** beside the label — so *Similarity
+  threshold*, *Recency half-life* and the retention windows stop being words you
+  have to look up elsewhere. There is exactly one copy of each explanation: the
+  reference table in the user guide is generated from the strings the app itself
+  shows. A setting whose behaviour is not wired up yet carries no explanation at
+  all rather than a plausible one — the reference table records which, and why.
 
 The full feature tour lives in the [user guide](docs/user-guide.md).
 
@@ -241,6 +250,9 @@ yourself? Choose **Start from scratch**, then open **Models**, download a
 LiteRT model through the built-in manager (or paste a custom URL), and send your
 first message once it loads.
 
+Stuck on which buttons to press, or wondering whether something is supported
+at all? [docs/faq.md](docs/faq.md) answers both, briefly.
+
 ## Tech stack
 
 | Layer            | Technology                                              |
@@ -300,6 +312,12 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 - Architecture overview — [docs/architecture.md](docs/architecture.md).
 - User guide — [docs/user-guide.md](docs/user-guide.md).
+- Pipeline cookbook — what every node type does, which of its settings
+  actually change a run, and importable recipes —
+  [docs/cookbook.md](docs/cookbook.md).
+- Frequently asked questions, and the standing list of what the app
+  deliberately does not do — [docs/faq.md](docs/faq.md).
+- Troubleshooting — [docs/troubleshooting.md](docs/troubleshooting.md).
 - External-automation contract (calling the agent from Tasker, MacroDroid or
   `adb`) — [docs/external-automation.md](docs/external-automation.md).
 - Extending the agent (new node types, tools, providers, prompt
@@ -318,7 +336,7 @@ threat model behind it, including what is explicitly *out* of scope, is in
 
 ## Pre-release notice
 
-This project is currently at **version 0.8.0** and is published for review and
+This project is currently at **version 0.9.0** and is published for review and
 experimentation. Expect rough edges:
 
 - There are no stability guarantees for the public surface (Kotlin APIs,

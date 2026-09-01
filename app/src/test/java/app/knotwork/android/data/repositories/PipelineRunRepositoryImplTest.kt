@@ -2,6 +2,7 @@ package app.knotwork.android.data.repositories
 
 import app.knotwork.android.data.local.dao.PipelineRunDao
 import app.knotwork.android.data.local.models.PipelineRunEntity
+import app.knotwork.android.data.local.models.RunChatIdentityProjection
 import app.knotwork.android.data.local.models.RunSpendProjection
 import app.knotwork.android.domain.constants.ExternalAutomationContract
 import app.knotwork.android.domain.models.ExternalAutomationJournalEntry
@@ -16,6 +17,7 @@ import app.knotwork.android.domain.repositories.ExternalAutomationJournalReposit
 import app.knotwork.android.domain.repositories.TriggerJournalRepository
 import app.knotwork.android.domain.repositories.UsageTelemetryRepository
 import app.knotwork.android.domain.services.ExternalAutomationCallbackNotifier
+import app.knotwork.android.domain.services.RunOutcomeAnnouncer
 import app.knotwork.android.domain.usecases.ParkedRunResumer
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -47,10 +49,12 @@ class PipelineRunRepositoryImplTest {
     private lateinit var triggerJournal: TriggerJournalRepository
     private lateinit var externalAutomationJournal: ExternalAutomationJournalRepository
     private lateinit var externalAutomationCallback: ExternalAutomationCallbackNotifier
+    private lateinit var runOutcomeAnnouncer: RunOutcomeAnnouncer
     private lateinit var repository: PipelineRunRepositoryImpl
 
     private val terminalNames = listOf("COMPLETED", "FAILED", "CANCELLED", "INTERRUPTED")
-    private val activeNames = listOf("QUEUED", "RUNNING", "WAITING_APPROVAL", "WAITING_CLARIFICATION")
+    private val activeNames =
+        listOf("QUEUED", "RUNNING", "WAITING_APPROVAL", "WAITING_CLARIFICATION", "WAITING_CEILING")
 
     private val sampleRun = PipelineRun(
         id = "run-1",
@@ -95,12 +99,14 @@ class PipelineRunRepositoryImplTest {
         // would default to false and silently disable every callback assertion.
         coEvery { externalAutomationJournal.recordOutcome(any(), any()) } returns true
         externalAutomationCallback = mockk(relaxed = true)
+        runOutcomeAnnouncer = mockk(relaxed = true)
         repository = PipelineRunRepositoryImpl(
             pipelineRunDao,
             usageTelemetry,
             triggerJournal,
             externalAutomationJournal,
             externalAutomationCallback,
+            runOutcomeAnnouncer,
         )
     }
 
@@ -627,6 +633,67 @@ class PipelineRunRepositoryImplTest {
         coVerify(exactly = 0) { usageTelemetry.recordPipelineRunOutcome(any(), any(), any()) }
     }
 
+    // region The line a stopped run leaves in its chat
+
+    @Test
+    fun `given a terminal transition then the run's chat is told what happened`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns false
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunChatIdentity("run-1") } returns
+            RunChatIdentityProjection(sessionId = "session-a", parentRunId = null)
+        val reason = RunTerminationReason.StepCeiling(spent = 40, limit = 40)
+
+        repository.finishRun("run-1", PipelineRunStatus.FAILED, "over the cap", reason)
+
+        coVerify {
+            runOutcomeAnnouncer.announce("session-a", PipelineRunStatus.FAILED, reason, "over the cap")
+        }
+    }
+
+    @Test
+    fun `given a duplicate finishRun that transitions no row then the chat is not told twice`() = runTest {
+        // The reason this lives inside the `rowsTransitioned > 0` guard rather
+        // than at the call sites. `ParkedRunResumer.failPark` is reachable both
+        // from the user's response and from the expiry pass, so a second
+        // settlement of one run is a real race — and outside the guard it would
+        // put a second identical line in the conversation, where a duplicate is
+        // visible rather than merely wasteful.
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 0
+
+        repository.finishRun("run-1", PipelineRunStatus.FAILED, "boom")
+
+        coVerify(exactly = 0) { pipelineRunDao.getRunChatIdentity(any()) }
+        coVerify(exactly = 0) { runOutcomeAnnouncer.announce(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `given a nested sub-pipeline child finishes then its chat is not told`() = runTest {
+        // A child shares its parent's session and its failure already reaches
+        // the user as the root's, so announcing here would print the same stop
+        // once per nesting level.
+        coEvery { usageTelemetry.isEnabled() } returns false
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunChatIdentity("child-1") } returns
+            RunChatIdentityProjection(sessionId = "session-a", parentRunId = "root-1")
+
+        repository.finishRun("child-1", PipelineRunStatus.FAILED, "child blew up")
+
+        coVerify(exactly = 0) { runOutcomeAnnouncer.announce(any(), any(), any(), any()) }
+    }
+
+    @Test
+    fun `given the run row cannot be read then finishing it still succeeds`() = runTest {
+        coEvery { usageTelemetry.isEnabled() } returns false
+        coEvery { pipelineRunDao.finishRun(any(), any(), any(), any(), any(), any()) } returns 1
+        coEvery { pipelineRunDao.getRunChatIdentity("run-1") } returns null
+
+        repository.finishRun("run-1", PipelineRunStatus.FAILED, "boom")
+
+        coVerify(exactly = 0) { runOutcomeAnnouncer.announce(any(), any(), any(), any()) }
+    }
+
+    // endregion
+
     @Test
     fun `given a duplicate finishRun that transitions no row then telemetry is not recorded`() = runTest {
         coEvery { usageTelemetry.isEnabled() } returns true
@@ -924,7 +991,12 @@ class PipelineRunRepositoryImplTest {
 
     @Test
     fun `given a stored spend then it round-trips for the resume seed`() = runTest {
-        coEvery { pipelineRunDao.getSpend("root-1") } returns RunSpendProjection(stepsSpent = 9, tokensSpent = 900)
+        coEvery { pipelineRunDao.getSpend("root-1") } returns RunSpendProjection(
+            stepsSpent = 9,
+            tokensSpent = 900,
+            stepCeilingExtensions = 0,
+            tokenCeilingExtensions = 0,
+        )
 
         assertEquals(RunSpend(steps = 9, tokens = 900), repository.getSpend("root-1"))
     }

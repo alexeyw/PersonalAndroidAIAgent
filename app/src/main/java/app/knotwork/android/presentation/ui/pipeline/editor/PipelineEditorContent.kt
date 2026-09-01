@@ -2,7 +2,6 @@ package app.knotwork.android.presentation.ui.pipeline.editor
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import app.knotwork.android.domain.models.NodeModel
@@ -13,12 +12,8 @@ import app.knotwork.android.presentation.ui.pipeline.editor.bars.MultiSelectTool
 import app.knotwork.android.presentation.ui.pipeline.editor.bars.ValidationBar
 import app.knotwork.android.presentation.ui.pipeline.editor.canvas.EditorCanvas
 import app.knotwork.android.presentation.ui.pipeline.editor.core.EditorState
-import app.knotwork.design.components.pipelineeditor.EditorPrimaryAction
 import app.knotwork.design.components.pipelineeditor.EditorToolbar
 import app.knotwork.design.components.pipelineeditor.NodeError
-import app.knotwork.design.components.pipelineeditor.RunStatus
-import app.knotwork.design.components.pipelineeditor.RunStatusBanner
-import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Pure-layout content for the [PipelineEditorScreen] — caller provides the live state
@@ -43,21 +38,12 @@ import app.knotwork.design.theme.KnotworkTheme
  * @param errorsByNodeId map of `nodeId -> NodeError?` for the canvas to render the
  * inline error border / icon on the matching [app.knotwork.design.components.pipelineeditor.NodeCard].
  * @param reducedMotion reduced-motion flag — gates animations longer than `motionSm`.
+ * @param unsavedChanges whether the editor holds work that is not in storage;
+ * drives the toolbar marker and, on the screen, the leave guard.
  * @param toolbarSubtitle subtitle line under the pipeline name — pre-computed by
- * the screen from runState / validation / node count / mini-map state.
- * @param toolbarPrimaryAction `Run` / `Rerun` / `None` — picked by the screen.
- * @param toolbarPrimaryActionEnabled gates the primary action button (e.g. greyed
- * `Run` while validation errors are present).
- * @param runStatus banner status — `Idle` hides the strip; `Running` / `Paused`
- * / `Done` render the matching variant. Banner sits between the toolbar and the
- * canvas so it doesn't fight the validation bar for vertical real estate.
- * @param onRunPause callback for the banner's `Pause` button (Running variant).
- * @param onRunResume callback for the banner's `Resume` button (Paused variant).
- * @param onRunStop callback for the banner's destructive `Stop` button.
- * @param onRunTrace callback for the banner's `Trace` button (Done variant).
+ * the screen from validation / node count / mini-map state.
  * @param onPipelineNameChange invoked when the inline name field accepts input.
  * @param onNavigateUp invoked when the leading back icon is tapped.
- * @param onPrimaryAction invoked when the primary action button is tapped.
  * @param onOverflow `EditorToolbar` overflow tap — screen opens its own
  * `DropdownMenu` from here.
  * @param onMoveNode forwarded from the canvas drag handler — commits the canvas-space delta.
@@ -67,7 +53,6 @@ import app.knotwork.design.theme.KnotworkTheme
  * @param onFocusNode forwarded from a `ValidationBar` row tap.
  * @param onMultiSelectCancel exits multi-select without acting.
  * @param onMultiSelectDelete removes every multi-selected node + their connections.
- * @param activeRunningEdgeIds edge ids the run-trace dot animation should follow.
  */
 @Composable
 @Suppress("LongParameterList")
@@ -79,16 +64,9 @@ internal fun PipelineEditorContent(
     errorsByNodeId: Map<String, NodeError?>,
     reducedMotion: Boolean,
     toolbarSubtitle: String?,
-    toolbarPrimaryAction: EditorPrimaryAction,
-    toolbarPrimaryActionEnabled: Boolean,
-    runStatus: RunStatus,
-    onRunPause: () -> Unit,
-    onRunResume: () -> Unit,
-    onRunStop: () -> Unit,
-    onRunTrace: () -> Unit,
+    unsavedChanges: Boolean,
     onPipelineNameChange: (String) -> Unit,
     onNavigateUp: () -> Unit,
-    onPrimaryAction: () -> Unit,
     onOverflow: () -> Unit,
     onMoveNode: (nodeId: String, dxCanvas: Float, dyCanvas: Float) -> Unit,
     onAddNode: (type: NodeType, canvasX: Float, canvasY: Float) -> Unit,
@@ -103,7 +81,6 @@ internal fun PipelineEditorContent(
     onMultiSelectCancel: () -> Unit,
     onMultiSelectCopy: () -> Unit,
     onMultiSelectDelete: () -> Unit,
-    activeRunningEdgeIds: Set<String>,
     modifier: Modifier = Modifier,
     subtitleForNode: (NodeModel) -> String? = { null },
 ) {
@@ -120,33 +97,15 @@ internal fun PipelineEditorContent(
                 name = graph.name,
                 onNameChange = onPipelineNameChange,
                 onNavigateUp = onNavigateUp,
-                onPrimaryAction = onPrimaryAction,
                 onOverflow = onOverflow,
                 subtitle = toolbarSubtitle,
-                primaryAction = toolbarPrimaryAction,
-                primaryActionEnabled = toolbarPrimaryActionEnabled,
+                unsavedChanges = unsavedChanges,
             )
         }
-
-        // Run status banner sits between the toolbar and the canvas. When status
-        // is Idle the composable returns early and consumes zero vertical space —
-        // the canvas slides up flush against the toolbar.
-        RunStatusBanner(
-            status = runStatus,
-            onPause = onRunPause,
-            onResume = onRunResume,
-            onStop = onRunStop,
-            onTrace = onRunTrace,
-            modifier = Modifier.padding(
-                horizontal = KnotworkTheme.spacing.sp3,
-                vertical = KnotworkTheme.spacing.sp2,
-            ),
-        )
 
         EditorCanvas(
             graph = graph,
             editor = editor,
-            activeRunningEdgeIds = activeRunningEdgeIds,
             errorsByNodeId = errorsByNodeId,
             reducedMotion = reducedMotion,
             onMoveNode = onMoveNode,
@@ -161,9 +120,8 @@ internal fun PipelineEditorContent(
             modifier = Modifier.weight(1f),
         )
 
-        // ValidationBar at the bottom. During a live run the [RunStatusBanner]
-        // at the top owns the run-progress messaging; the bottom bar stays put
-        // and reports validation state so the user still sees the gate.
+        // ValidationBar at the bottom reports validation state so the user
+        // always sees the save gate.
         ValidationBar(
             graph = graph,
             errors = validationErrors,

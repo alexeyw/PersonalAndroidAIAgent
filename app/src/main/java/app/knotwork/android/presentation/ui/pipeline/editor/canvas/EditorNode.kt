@@ -41,13 +41,6 @@ private const val DRAG_PICKUP_SCALE = 1.04f
 private const val DRAG_PICKUP_DURATION_MS = 100
 
 /**
- * Opacity applied to non-active nodes while a run is in progress. Tuned to be
- * low enough to clearly demote them, high enough to keep
- * the pipeline shape readable so the user follows along visually.
- */
-private const val DIMMED_ALPHA = 0.40f
-
-/**
  * Wraps the catalog [NodeCard] with editor-only behaviour: drag-to-move, tap-to-select,
  * long-press multi-select, and a hit-target overlay on the outbound port that hands off
  * to connection mode.
@@ -61,13 +54,9 @@ private const val DIMMED_ALPHA = 0.40f
  * @param transform pan / zoom applied to the canvas.
  * @param selected `true` when the node is the single-selected entry.
  * @param multiSelected `true` when the node is part of a multi-select set.
- * @param running `true` when the node is the currently-running step of a pipeline trace.
  * @param error optional validation / runtime error surface.
  * @param ports outbound / inbound port layout.
  * @param reducedMotion reduced-motion flag — pickup / release animations collapse to instant.
- * @param dimmed `true` for nodes that are NOT the currently-running step during a
- * live run — drops opacity to ~0.4 so the active node visually pops. Only meaningful
- * while a run is in progress; the canvas passes `false` outside of run mode.
  * @param subtitle optional one-line secondary text shown under the title on the
  * card (`null` hides it). Used by PIPELINE nodes to surface the target pipeline
  * name (or a "no target" / "not found" note); every other type passes `null`.
@@ -113,11 +102,9 @@ internal fun EditorNode(
     transform: CanvasTransform,
     selected: Boolean,
     multiSelected: Boolean,
-    running: Boolean,
     error: NodeError?,
     ports: NodePorts,
     reducedMotion: Boolean,
-    dimmed: Boolean,
     subtitle: String? = null,
     onSelect: () -> Unit,
     onOpenConfig: () -> Unit,
@@ -159,7 +146,6 @@ internal fun EditorNode(
                 scaleX = scale.value * transform.scale
                 scaleY = scale.value * transform.scale
                 transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0f)
-                alpha = if (dimmed) DIMMED_ALPHA else 1f
             }
             .combinedClickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -194,7 +180,6 @@ internal fun EditorNode(
             subtitle = subtitle,
             selected = selected,
             error = error,
-            running = running,
             multiSelected = multiSelected,
             ports = ports,
         )

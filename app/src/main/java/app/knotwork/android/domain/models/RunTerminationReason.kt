@@ -168,6 +168,73 @@ sealed interface RunTerminationReason {
 }
 
 /**
+ * One hard ceiling that bound, with everything needed to ask the user about it.
+ *
+ * The counterpart of [SoftCeilingBreach], which names the same three facts for
+ * the warning that fires earlier. Both exist because a breach has to be
+ * *described* — to a console line, to a notification, to a card the user answers
+ * — and every one of those descriptions needs the axis and both numbers. Passing
+ * the [RunTerminationReason] alone would make each of them re-open the sealed
+ * type to get at fields that only two of its nine variants have.
+ *
+ * @property axis Which ceiling bound.
+ * @property limit The limit in force when it bound, in that axis's unit —
+ *   including every portion already granted to this run.
+ * @property spent What the run tree had charged against the axis.
+ */
+data class HardCeilingBreach(val axis: RunCeilingAxis, val limit: Int, val spent: Int) {
+
+    /**
+     * The typed stop a run settles with when this breach is not continued.
+     *
+     * Stated once because three callers need it and would otherwise each write
+     * the same `when`: the submission path when the user stops the run, the
+     * expiry pass when nobody answers, and the chat surface when it explains
+     * the stop it just asked for. Three copies of one mapping is how the same
+     * event ends up recorded as two different things.
+     *
+     * `null` for the unmeasured money axis, which cannot raise a pause in this
+     * release — inventing a `MoneyCeiling` stop for it would put a cause into
+     * the run record that no code can produce.
+     */
+    fun asTerminationReason(): RunTerminationReason? = when (axis) {
+        RunCeilingAxis.STEPS -> RunTerminationReason.StepCeiling(limit = limit, spent = spent)
+        RunCeilingAxis.TOKENS -> RunTerminationReason.TokenCeiling(limit = limit, spent = spent)
+        RunCeilingAxis.MONEY -> null
+    }
+}
+
+/**
+ * Reads a stop back as a ceiling breach, or `null` when the run stopped for
+ * something that is not a ceiling.
+ *
+ * A ceiling is the one class of stop the user can overrule: it is *their*
+ * number, and reaching it says nothing went wrong. Every other reason here is
+ * either the app protecting itself from a run that misbehaved or a fact about
+ * the world (the process died, the graph changed) — none of them is answerable
+ * by granting more budget, and offering to continue would be offering something
+ * that cannot work.
+ *
+ * Exhaustive rather than defaulting to `null`, for the reason
+ * `consoleTypeFor` gives: a new reason must be classified by whoever adds it,
+ * not silently declared unanswerable.
+ *
+ * @return The breach, or `null` when this stop is not a ceiling.
+ */
+fun RunTerminationReason.asCeilingBreach(): HardCeilingBreach? = when (this) {
+    is RunTerminationReason.StepCeiling -> HardCeilingBreach(RunCeilingAxis.STEPS, limit = limit, spent = spent)
+    is RunTerminationReason.TokenCeiling -> HardCeilingBreach(RunCeilingAxis.TOKENS, limit = limit, spent = spent)
+    RunTerminationReason.HitlWindowExpired,
+    RunTerminationReason.NoProgress,
+    RunTerminationReason.RunStalled,
+    RunTerminationReason.GraphChanged,
+    RunTerminationReason.ProcessDied,
+    RunTerminationReason.DiscardedByUser,
+    RunTerminationReason.NotResumable,
+    -> null
+}
+
+/**
  * Terse, stable, **log-oriented** rendering of a termination reason.
  *
  * Deliberately not user copy. Two audiences read a stopped run and they need

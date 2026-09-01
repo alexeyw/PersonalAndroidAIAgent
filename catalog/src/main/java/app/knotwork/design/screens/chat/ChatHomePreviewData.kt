@@ -12,6 +12,7 @@ import app.knotwork.design.components.chat.ClarificationCardModel
 import app.knotwork.design.components.chat.ComposerState
 import app.knotwork.design.components.chat.HitlConfirmationModel
 import app.knotwork.design.components.chat.InterruptedRunCardModel
+import app.knotwork.design.components.chat.RunCeilingPauseCardModel
 import app.knotwork.design.components.chips.Risk
 import app.knotwork.design.components.console.ConsoleFilter
 import app.knotwork.design.components.console.ConsoleLevel
@@ -67,6 +68,21 @@ internal object ChatHomePreview {
             content = ChatContent.Text("Add a 30-minute meeting tomorrow at 10:00 to discuss the rollout."),
             metadata = ChatMetadata(timestamp = "09:15"),
         ),
+    )
+
+    /**
+     * The `SYSTEM` line a run leaves in the conversation when it stops without
+     * an answer. Byte-identical to `run_termination_body_step_ceiling`, which is
+     * what `RunOutcomeAnnouncer` resolves for the same event.
+     */
+    private val stoppedByCeilingLine = ChatHomeMessageRow(
+        id = "sys1",
+        role = ChatRole.System,
+        content = ChatContent.Text(
+            "This run used all the steps it was allowed. Raise the step limit, or split the work " +
+                "into smaller runs.",
+        ),
+        metadata = ChatMetadata(timestamp = "09:15"),
     )
 
     /** Sample thread rows surfaced in the drawer overlay. */
@@ -166,6 +182,45 @@ internal object ChatHomePreview {
         messages = baselineMessages(),
     )
 
+    /**
+     * Chat with the console entry strip visible, in one of its status states.
+     *
+     * No other fixture sets `agentStatusLine`, so before this one the strip —
+     * the control an external tester could not find at all — had **zero**
+     * snapshot coverage while the chat screen looked thoroughly covered.
+     *
+     * @param status the live status line, verbatim from `strings_chat.xml`.
+     * @param consoleOpen when `true`, the console sheet is up and the strip
+     *        renders as its header instead of above the composer.
+     */
+    fun consoleStrip(status: String, consoleOpen: Boolean = false): ChatHomeViewState = ChatHomeViewState(
+        visualState = if (consoleOpen) ChatHomeVisualState.ConsoleExpanded else ChatHomeVisualState.Idle,
+        threadTitle = THREAD_TITLE,
+        modelName = MODEL_NAME,
+        messages = baselineMessages(),
+        agentStatusLine = status,
+        console = if (consoleOpen) consoleExpanded().console else ChatHomeConsoleState(),
+    )
+
+    /** Every status line the strip has to render, keyed by the state that produces it. */
+    object StripStatus {
+        const val IDLE: String = "[NODE]  idle · ready"
+        const val GENERATING: String = "[NODE]  generating"
+
+        /**
+         * The line the app actually shows while answering: backend and a
+         * growing token count. Every other fixture here is short enough to fit,
+         * so the strip's overflow behaviour was in no baseline at all — and the
+         * first two attempts at it (trailing, then middle ellipsis) each ate
+         * something worth keeping before anyone saw it on a device.
+         */
+        const val GENERATING_LONG: String = "[NODE]  generating (GPU) · 128 tok"
+        const val PREPARING: String = "[NODE]  loading model · please wait"
+        const val HITL: String = "[TOOL]  awaiting approval"
+        const val CLARIFICATION: String = "[NODE]  waiting on clarification"
+        const val ERROR: String = "[NODE]  error · see message"
+    }
+
     /** Generating state — the assistant is producing tokens. */
     fun generating(): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.Generating,
@@ -250,6 +305,32 @@ internal object ChatHomePreview {
         ),
     )
 
+    /**
+     * A run paused at one of its own ceilings, waiting to be told whether it
+     * may carry on. Numbers match the run-ceiling copy the app resolves, so the
+     * baseline photographs the real arithmetic rather than a placeholder.
+     */
+    fun ceilingPause(): ChatHomeViewState = ChatHomeViewState(
+        visualState = ChatHomeVisualState.CeilingPause,
+        threadTitle = THREAD_TITLE,
+        modelName = MODEL_NAME,
+        messages = baselineMessages() + ChatHomeMessageRow(
+            id = "a-ceiling-pause",
+            role = ChatRole.Assistant,
+            content = ChatContent.RunCeilingPause(
+                model = RunCeilingPauseCardModel(
+                    title = "Paused at a safety limit",
+                    body = "This run has used every step it was allowed. You can let it carry on " +
+                        "for another 15 steps, or stop it here.",
+                    meter = "Used 15 of 15 steps",
+                    continueLabel = "Continue (+15)",
+                    stopLabel = "Stop the run",
+                ),
+            ),
+            metadata = ChatMetadata(timestamp = "09:16", model = MODEL_NAME),
+        ),
+    )
+
     /** Error state — model failed, inline error tile + retry. */
     fun error(): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.Error,
@@ -269,13 +350,16 @@ internal object ChatHomePreview {
         visualState = ChatHomeVisualState.Error,
         threadTitle = THREAD_TITLE,
         modelName = MODEL_NAME,
-        messages = baselineMessages(),
+        // The run writes its outcome into the conversation as it settles, so the
+        // sentence is a message and the tile below it carries only the numbers
+        // and the action. A fixture without this line would picture a state the
+        // app no longer produces — and the tile would look like it had lost its
+        // explanation rather than handed it over.
+        messages = baselineMessages() + stoppedByCeilingLine,
         termination = ChatTerminationUi(
             tone = RunTerminationToneUi.Limit,
             toneLabel = "Safety limit",
             title = "Stopped by a safety limit",
-            body = "This run used all the steps it was allowed. Raise the step limit, or split the work " +
-                "into smaller runs.",
             banner = "Stopped by a safety limit — used 15 of 15 steps.",
             meter = "Used 15 of 15 steps",
             actionLabel = "Adjust limits",
@@ -292,8 +376,6 @@ internal object ChatHomePreview {
             tone = RunTerminationToneUi.Info,
             toneLabel = "Run ended",
             title = "The pipeline changed while this run was paused",
-            body = "This run was built on the earlier version of the pipeline, so it could not pick up " +
-                "where it left off. Running it again uses the current version.",
             banner = "The pipeline changed while this run was paused.",
             actionLabel = "Run it again",
         ),
@@ -325,23 +407,34 @@ internal object ChatHomePreview {
         ),
     )
 
-    /** DrawerOpen state — alt-nav drawer overlayed. */
-    fun drawerOpen(): ChatHomeViewState = ChatHomeViewState(
+    /**
+     * DrawerOpen state — alt-nav drawer overlayed.
+     *
+     * The drawer's three sub-states are parameters rather than three named
+     * factories: each differs from the base by exactly one field, and the call
+     * site reads better naming the field than naming a fixture that hides it.
+     *
+     * @param openThreadMenuId row whose overflow menu (Rename · Archive ·
+     *   Delete) is open, or `null` for none.
+     * @param revealedThreadId row whose single Archive swipe action is
+     *   revealed, or `null` for none.
+     * @param archivedCount archived-chat count; the drawer's archive footer
+     *   entry appears only when it is positive.
+     */
+    fun drawerOpen(
+        openThreadMenuId: String? = null,
+        revealedThreadId: String? = null,
+        archivedCount: Int = 0,
+    ): ChatHomeViewState = ChatHomeViewState(
         visualState = ChatHomeVisualState.DrawerOpen,
         threadTitle = THREAD_TITLE,
         modelName = MODEL_NAME,
         messages = baselineMessages(),
         threads = threadRows(activeId = "t1"),
+        openThreadMenuId = openThreadMenuId,
+        revealedThreadId = revealedThreadId,
+        archivedCount = archivedCount,
     )
-
-    /** DrawerOpen with the second row's overflow menu open (Rename · Archive · Delete). */
-    fun drawerRowMenu(): ChatHomeViewState = drawerOpen().copy(openThreadMenuId = "t2")
-
-    /** DrawerOpen with the active row's single Archive swipe action revealed. */
-    fun drawerSwipeOpen(): ChatHomeViewState = drawerOpen().copy(revealedThreadId = "t1")
-
-    /** DrawerOpen with the archive footer entry visible (count > 0). */
-    fun drawerWithArchive(): ChatHomeViewState = drawerOpen().copy(archivedCount = 6)
 
     /** Idle state on an archived thread — read-only, composer replaced by the restore bar. */
     fun archivedReadOnly(): ChatHomeViewState = idle().copy(archivedReadOnly = true)
@@ -370,6 +463,7 @@ internal object ChatHomePreview {
         hitlConfirm(),
         clarification(),
         interrupted(),
+        ceilingPause(),
         error(),
         drawerOpen(),
         consoleExpanded(),
@@ -389,6 +483,7 @@ internal fun ChatHomeVisualState.snapshotTag(): String = when (this) {
     ChatHomeVisualState.HitlConfirm -> "hitl_confirm"
     ChatHomeVisualState.Clarification -> "clarification"
     ChatHomeVisualState.Interrupted -> "interrupted"
+    ChatHomeVisualState.CeilingPause -> "ceiling_pause"
     ChatHomeVisualState.Error -> "error"
     ChatHomeVisualState.DrawerOpen -> "drawer_open"
     ChatHomeVisualState.ConsoleExpanded -> "console_expanded"

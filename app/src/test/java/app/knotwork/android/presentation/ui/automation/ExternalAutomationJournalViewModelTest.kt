@@ -7,10 +7,15 @@ import app.knotwork.android.domain.models.ExternalAutomationTarget
 import app.knotwork.android.domain.repositories.ExternalAutomationJournalRepository
 import app.knotwork.android.domain.repositories.PipelineRepository
 import app.knotwork.android.domain.repositories.SettingsRepository
+import app.knotwork.android.domain.usecases.automation.BuildExternalAutomationJournalExportUseCase
+import app.knotwork.android.domain.usecases.automation.ExportExternalAutomationJournalUseCase
+import app.knotwork.android.presentation.ui.common.JournalExportEvent
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -19,6 +24,7 @@ import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -37,6 +43,12 @@ class ExternalAutomationJournalViewModelTest {
     private lateinit var settings: SettingsRepository
     private lateinit var pipelines: PipelineRepository
     private lateinit var journal: ExternalAutomationJournalRepository
+
+    /**
+     * Real export use case over the mocked store: the assertions are about the
+     * document the screen hands out, which a mocked renderer could not verify.
+     */
+    private lateinit var exportJournal: ExportExternalAutomationJournalUseCase
 
     private val refusal = ExternalAutomationJournalEntry(
         id = "row-1",
@@ -62,6 +74,8 @@ class ExternalAutomationJournalViewModelTest {
         every { settings.externalAutomationPipelineId } returns flowOf("p1")
         every { pipelines.observePipelineNames() } returns flowOf(mapOf("p1" to "Morning digest"))
         every { journal.observeAll() } returns flowOf(emptyList())
+        coEvery { journal.readAll() } returns emptyList()
+        exportJournal = ExportExternalAutomationJournalUseCase(journal, BuildExternalAutomationJournalExportUseCase())
     }
 
     @After
@@ -69,7 +83,7 @@ class ExternalAutomationJournalViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun newViewModel() = ExternalAutomationJournalViewModel(settings, pipelines, journal)
+    private fun newViewModel() = ExternalAutomationJournalViewModel(settings, pipelines, journal, exportJournal)
 
     @Test
     fun `given no read yet when observed then entries are null so the screen shows a skeleton`() = runTest {
@@ -141,5 +155,55 @@ class ExternalAutomationJournalViewModelTest {
         advanceUntilIdle()
 
         assertEquals(emptyList<ExternalAutomationJournalEntry>(), viewModel.uiState.value.entries)
+    }
+
+    // --- Journal export ----------------------------------------------------
+
+    @Test
+    fun `given a journal when exported then the document carries every request the store holds`() =
+        runTest(testDispatcher) {
+            coEvery { journal.readAll() } returns listOf(refusal)
+            val vm = newViewModel()
+            val received = mutableListOf<JournalExportEvent>()
+            val collector = launch { vm.journalExportEvents.collect(received::add) }
+
+            vm.journalExport.share()
+            advanceUntilIdle()
+            collector.cancel()
+
+            val event = received.single() as JournalExportEvent.Share
+            assertEquals(1, event.document.entryCount)
+            assertTrue(event.document.json.contains("\"requestId\": \"tsk-1\""))
+            // The collapsed repeat count is what turns a looping profile into one
+            // recurring problem, so it has to survive the export.
+            assertTrue(event.document.json.contains("\"repeatCount\": 7"))
+            assertTrue(event.document.json.contains("\"statusReason\": \"TARGET_NOT_ALLOWED\""))
+        }
+
+    @Test
+    fun `given the store holds requests the screen has not rendered when exported then they still travel`() =
+        runTest(testDispatcher) {
+            // The screen renders `observeAll`; the export reads the store afresh.
+            // Exporting the rendered copy would silently produce a stale document.
+            every { journal.observeAll() } returns flowOf(emptyList())
+            coEvery { journal.readAll() } returns listOf(refusal)
+            val vm = newViewModel()
+            advanceUntilIdle()
+            val received = mutableListOf<JournalExportEvent>()
+            val collector = launch { vm.journalExportEvents.collect(received::add) }
+
+            vm.journalExport.share()
+            advanceUntilIdle()
+            collector.cancel()
+
+            assertEquals(0, vm.uiState.value.entries?.size)
+            assertEquals(1, (received.single() as JournalExportEvent.Share).document.entryCount)
+        }
+
+    @Test
+    fun `given the export filename when minted then it names the request journal`() {
+        // A user who exports both journals ends up with two files in one folder;
+        // the stem is the only thing that tells them apart.
+        assertTrue(newViewModel().journalExport.newFileName().startsWith("external-requests-"))
     }
 }

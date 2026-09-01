@@ -168,6 +168,23 @@ object NavRoutes {
     /** Tools-&-workspace category sub-screen. */
     const val SETTINGS_TOOLS: String = "settings/tools"
 
+    /**
+     * Tool / MCP management **inside the settings subtree**, reached from the
+     * Tools-&-workspace category's "Manage tools" row.
+     *
+     * Deliberately a second route onto the same `ToolsScreen` surface that the
+     * [TOOLS] tab hosts, rather than a link to that tab. Navigating from a
+     * settings category to a tab root dropped the user onto a tab they had not
+     * chosen and moved the bottom-nav highlight with them (closed-test finding
+     * `#14`); a settings-owned route keeps the whole interaction inside
+     * settings, where the user asked to be.
+     *
+     * The two routes never coexist on one stack, so the duplicated surface
+     * costs a second `ToolsViewModel` instance and nothing else — both read the
+     * same repositories.
+     */
+    const val SETTINGS_TOOLS_MANAGE: String = "settings/tools/manage"
+
     /** Background-&-triggers category sub-screen. */
     const val SETTINGS_BACKGROUND: String = "settings/background"
 

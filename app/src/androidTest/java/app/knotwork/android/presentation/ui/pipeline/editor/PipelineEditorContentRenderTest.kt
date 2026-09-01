@@ -12,8 +12,6 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.test.platform.app.InstrumentationRegistry
 import app.knotwork.android.R
 import app.knotwork.android.presentation.ui.pipeline.editor.core.EditorState
-import app.knotwork.design.components.pipelineeditor.EditorPrimaryAction
-import app.knotwork.design.components.pipelineeditor.RunStatus
 import org.junit.Rule
 import org.junit.Test
 
@@ -23,9 +21,9 @@ import org.junit.Test
  *
  * The screen-level [PipelineEditorScreen] orchestrates VM streams and
  * overflow / sheet chrome; [PipelineEditorContent] owns the top-toolbar
- * swap, the run banner, and the canvas / validation bar stack. Verifying
- * the swap conditions and empty-vs-populated rendering here keeps the
- * sheet / overflow tests focused on dialog behaviour.
+ * swap and the canvas / validation bar stack. Verifying the swap
+ * conditions and empty-vs-populated rendering here keeps the sheet /
+ * overflow tests focused on dialog behaviour.
  */
 class PipelineEditorContentRenderTest {
 
@@ -47,16 +45,9 @@ class PipelineEditorContentRenderTest {
                     errorsByNodeId = emptyMap(),
                     reducedMotion = true,
                     toolbarSubtitle = null,
-                    toolbarPrimaryAction = EditorPrimaryAction.Run,
-                    toolbarPrimaryActionEnabled = true,
-                    runStatus = RunStatus.Idle,
-                    onRunPause = {},
-                    onRunResume = {},
-                    onRunStop = {},
-                    onRunTrace = {},
+                    unsavedChanges = false,
                     onPipelineNameChange = {},
                     onNavigateUp = {},
-                    onPrimaryAction = {},
                     onOverflow = {},
                     onMoveNode = { _, _, _ -> },
                     onAddNode = { _, _, _ -> },
@@ -71,7 +62,6 @@ class PipelineEditorContentRenderTest {
                     onMultiSelectCancel = {},
                     onMultiSelectCopy = {},
                     onMultiSelectDelete = {},
-                    activeRunningEdgeIds = emptySet(),
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -98,16 +88,9 @@ class PipelineEditorContentRenderTest {
                     errorsByNodeId = emptyMap(),
                     reducedMotion = true,
                     toolbarSubtitle = null,
-                    toolbarPrimaryAction = EditorPrimaryAction.Run,
-                    toolbarPrimaryActionEnabled = true,
-                    runStatus = RunStatus.Idle,
-                    onRunPause = {},
-                    onRunResume = {},
-                    onRunStop = {},
-                    onRunTrace = {},
+                    unsavedChanges = false,
                     onPipelineNameChange = {},
                     onNavigateUp = {},
-                    onPrimaryAction = {},
                     onOverflow = {},
                     onMoveNode = { _, _, _ -> },
                     onAddNode = { _, _, _ -> },
@@ -122,7 +105,6 @@ class PipelineEditorContentRenderTest {
                     onMultiSelectCancel = {},
                     onMultiSelectCopy = {},
                     onMultiSelectDelete = {},
-                    activeRunningEdgeIds = emptySet(),
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -152,16 +134,9 @@ class PipelineEditorContentRenderTest {
                     errorsByNodeId = emptyMap(),
                     reducedMotion = true,
                     toolbarSubtitle = null,
-                    toolbarPrimaryAction = EditorPrimaryAction.Run,
-                    toolbarPrimaryActionEnabled = true,
-                    runStatus = RunStatus.Idle,
-                    onRunPause = {},
-                    onRunResume = {},
-                    onRunStop = {},
-                    onRunTrace = {},
+                    unsavedChanges = false,
                     onPipelineNameChange = {},
                     onNavigateUp = {},
-                    onPrimaryAction = {},
                     onOverflow = {},
                     onMoveNode = { _, _, _ -> },
                     onAddNode = { _, _, _ -> },
@@ -176,7 +151,6 @@ class PipelineEditorContentRenderTest {
                     onMultiSelectCancel = {},
                     onMultiSelectCopy = {},
                     onMultiSelectDelete = {},
-                    activeRunningEdgeIds = emptySet(),
                     modifier = Modifier.fillMaxSize(),
                 )
             }
@@ -207,16 +181,9 @@ class PipelineEditorContentRenderTest {
                     errorsByNodeId = emptyMap(),
                     reducedMotion = true,
                     toolbarSubtitle = null,
-                    toolbarPrimaryAction = EditorPrimaryAction.Run,
-                    toolbarPrimaryActionEnabled = true,
-                    runStatus = RunStatus.Idle,
-                    onRunPause = {},
-                    onRunResume = {},
-                    onRunStop = {},
-                    onRunTrace = {},
+                    unsavedChanges = false,
                     onPipelineNameChange = {},
                     onNavigateUp = {},
-                    onPrimaryAction = {},
                     onOverflow = {},
                     onMoveNode = { _, _, _ -> },
                     onAddNode = { _, _, _ -> },
@@ -231,7 +198,6 @@ class PipelineEditorContentRenderTest {
                     onMultiSelectCancel = {},
                     onMultiSelectCopy = {},
                     onMultiSelectDelete = {},
-                    activeRunningEdgeIds = emptySet(),
                     modifier = Modifier.fillMaxSize(),
                 )
             }

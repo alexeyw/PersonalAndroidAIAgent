@@ -17,7 +17,6 @@ import app.knotwork.android.domain.models.PipelineGraph
 import app.knotwork.android.domain.models.ToolRisk
 import app.knotwork.android.presentation.ui.orchestrator.OrchestratorUiState
 import app.knotwork.android.presentation.ui.orchestrator.OrchestratorViewModel
-import app.knotwork.android.presentation.ui.orchestrator.PipelineRunState
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -31,12 +30,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
  *
  * Exposing the mutable handles (rather than just the readable mock) keeps
  * the tests free of MockK re-stubbing between phases of a single scenario
- * (e.g. idle → running → idle, or fresh graph → graph with validation
- * errors).
+ * (e.g. fresh graph → graph with validation errors).
  */
 internal class OrchestratorMockHandles(
     val uiStateFlow: MutableStateFlow<OrchestratorUiState>,
-    val runStateFlow: MutableStateFlow<PipelineRunState>,
     val focusNodeRequestFlow: MutableSharedFlow<String>,
 )
 
@@ -55,18 +52,14 @@ internal class OrchestratorMockHandles(
  * `OrchestratorUiState.validationErrors → label` so `ValidationBar`
  * tests render real copy without manual override.
  */
-@Suppress("LongParameterList")
 internal fun mockOrchestratorViewModel(
     initialUiState: OrchestratorUiState = OrchestratorUiState(),
-    initialRunState: PipelineRunState = PipelineRunState(),
 ): Pair<OrchestratorViewModel, OrchestratorMockHandles> {
     val uiStateFlow = MutableStateFlow(initialUiState)
-    val runStateFlow = MutableStateFlow(initialRunState)
     val focusNodeRequestFlow = MutableSharedFlow<String>(extraBufferCapacity = 1)
 
     val vm = mockk<OrchestratorViewModel>(relaxed = true)
     every { vm.uiState } returns uiStateFlow
-    every { vm.runState } returns runStateFlow
     every { vm.focusNodeRequest } returns focusNodeRequestFlow
     // `addNode` returns the id of the new node — the production screen
     // assigns this id straight into `editor.configuringNodeId`, so a
@@ -77,7 +70,6 @@ internal fun mockOrchestratorViewModel(
 
     val handles = OrchestratorMockHandles(
         uiStateFlow = uiStateFlow,
-        runStateFlow = runStateFlow,
         focusNodeRequestFlow = focusNodeRequestFlow,
     )
     return vm to handles
@@ -142,7 +134,7 @@ internal object PipelineEditorTestFixtures {
     /**
      * Three-node valid pipeline: `INPUT → LITE_RT → OUTPUT`. Useful for
      * tests that need at least one LLM-bearing node alongside the start /
-     * end markers (search-by-name, mini-map, run-state telemetry).
+     * end markers (search-by-name, mini-map).
      */
     fun threeNodePipeline(name: String = "Three-node pipeline"): PipelineGraph {
         val input = NodeModel(

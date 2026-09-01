@@ -12,8 +12,8 @@ import app.knotwork.design.theme.KnotworkTheme
 
 /**
  * Generation category sub-screen. Basic tier surfaces the system-instructions
- * textarea; the Advanced disclosure holds the tool-usage instruction, the
- * sampling sliders, the voice-input length and the reset-sampling action.
+ * textarea; the Advanced disclosure holds the sampling sliders, the
+ * voice-input length and the reset-sampling action.
  *
  * @param state Immutable Generation state.
  * @param modifier Layout modifier.
@@ -27,7 +27,7 @@ fun GenerationSettingsContent(
     callbacks: SettingsCallbacks = noopSettingsCallbacks(),
     advancedExpanded: Boolean = false,
 ) {
-    val count = 1 + 1 + state.advancedSliders.size
+    val count = 1 + state.advancedSliders.size
     CategoryScaffold(
         title = stringResource(R.string.knotwork_settings_cat_generation_title),
         subtitle = stringResource(R.string.knotwork_settings_count, count),
@@ -46,13 +46,6 @@ fun GenerationSettingsContent(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(KnotworkTheme.spacing.sp3),
             ) {
-                SettingsAnchor(anchorKey = SettingsRowAnchors.TOOL_USAGE_INSTRUCTION) {
-                    ToolUsageField(
-                        value = state.toolUsageValue,
-                        helper = state.toolUsageHelper,
-                        onValueChange = callbacks.onToolUsageInstructionChange,
-                    )
-                }
                 SettingSliderList(
                     sliders = state.advancedSliders,
                     tagPrefix = GENERATION_SLIDER_TAG_PREFIX,
