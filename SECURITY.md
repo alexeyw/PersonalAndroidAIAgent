@@ -274,6 +274,13 @@ new risk surface, and the design constrains it deliberately:
   typed reason the surfaces render in plain language; it is a **defensive stop**,
   reported as such, not a silent truncation. A separate stuck-detector ends a run
   that is repeating work without progressing.
+- **The journals can be exported, by you, over no network.** Both the trigger
+  journal and the external-request journal can be written to a file through the
+  system share sheet on an explicit action. There is no network on that path —
+  a build-time architecture check fails the build if a network dependency
+  reaches the export code — and the file carries the journal rows, not the
+  content of the runs they describe. Once the share sheet hands the file to
+  another app, that app's handling is outside this threat model.
 - **Each trigger owns one bound chat.** A trigger's runs land in a single chat
   session named after it (recurring fires accumulate there), so the results of an
   autonomous run are visible and auditable in the same encrypted store as the

@@ -1,6 +1,6 @@
 # Privacy Policy — Knotwork
 
-**Effective date:** 14 August 2026
+**Effective date:** 1 September 2026
 **Applies to:** the Knotwork Android application (package `app.knotwork.android`),
 both published distributions — `full` and `foss` — from version `0.7.1` onward.
 
@@ -131,6 +131,45 @@ stores. Full detail is in
 You can revoke consent at any time from the same setting. The `foss`
 distribution contains no crash-reporting dependency at all and hides the
 setting.
+
+### 3.6 External automation (another app on this device)
+
+Another app on the same device — a Tasker or MacroDroid profile, a shell script
+over `adb` — can ask Knotwork to run one of your pipelines. This is **off by
+default**; it does nothing until you switch it on in
+*Settings → Background & triggers → External automation* and bind exactly one
+pipeline that outside callers may reach.
+
+While it is on, data moves in two directions and neither leaves the device:
+
+- **Inbound.** The caller's broadcast carries the prompt text into Knotwork.
+  That text is another app's to send, so what it contains is governed by that
+  app, not by this one; here it is treated like any other input.
+- **Outbound (optional).** If the request asked to be answered, Knotwork sends
+  one broadcast to **the package that request named** — an explicit intent, never
+  a general broadcast — carrying the request id, the admission status and, when
+  refused, the reason. It never carries the prompt, the model's reply, or
+  anything the run produced. Note the precision: Android does not tell the app
+  who sent a broadcast unless the sender opts in, so the address is a claim made
+  *in* the request rather than a verified identity. That is exactly why the
+  payload is this thin — an unverified address must not be able to have anything
+  of yours read back to it. A request that names no package gets no callback at
+  all, which is the normal shape for a shell script.
+
+Every inbound request, accepted or refused, is written to a local journal on
+the device. The vocabulary of the contract is documented in
+[docs/external-automation.md](docs/external-automation.md).
+
+### 3.7 Journal export (you share the file)
+
+The trigger journal and the external-request journal can be exported to a file
+through the system share sheet, by an explicit action you take in the app.
+There is no network on that path — a build-time architecture check fails the
+build if any network dependency reaches the export code — and the exported file
+does not contain the content of your runs.
+
+Where the file goes after the share sheet is decided by the app you pick, and
+that app's own policy applies from that point on.
 
 ---
 

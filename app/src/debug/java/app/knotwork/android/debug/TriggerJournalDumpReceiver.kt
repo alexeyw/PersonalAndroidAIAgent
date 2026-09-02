@@ -22,7 +22,8 @@ import javax.inject.Inject
 /**
  * **Debug-only** diagnostic receiver that dumps the whole trigger-evaluation
  * journal to an app-private JSON file, so a background-reliability soak run can
- * pull it off the device for offline analysis (`project_docs/metrics.md`).
+ * pull it off the device for offline analysis without opening the app or
+ * decrypting the SQLCipher database.
  *
  * It exists solely to make the soak protocol executable without breaking its two
  * defining constraints: the app is never opened (so the in-app journal UI is off

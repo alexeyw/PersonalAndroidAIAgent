@@ -755,11 +755,25 @@ file (ratchet, `app-main.undescribed: 1, recorded 0` and
 ## Public documentation hygiene guard (`verifyDocsHygiene`)
 
 `:app:verifyDocsHygiene` is a custom Gradle verification task, wired into
-`check`, that scans the public-documentation contour — every top-level
-`*.md` file plus `NOTICE`, and everything under `docs/` — for two defect
-classes that are cheap to introduce and expensive once the repository is
-public. The root scope is a **glob**, not a hand-maintained allowlist, so a
-newly added top-level public doc is guarded automatically:
+`check`, that scans the public-documentation contour for two defect classes
+that are cheap to introduce and expensive once the repository is public.
+
+**Scope.** It shares the `documentationFiles` collection with the link and
+Mermaid gates: every top-level `*.md`, plus everything under `docs/`,
+`.github/`, `app/`, `catalog/` and `gradle/`, plus `NOTICE`. Each scope is a
+**glob**, not a hand-maintained allowlist, so a newly added public document is
+guarded automatically.
+
+It used to resolve a narrower set of its own — the repository root, `NOTICE`
+and `docs/` — which left the generated `FILE_MAP.md` files outside every rule
+it enforces. Those are exactly the documents most likely to acquire an internal
+reference, because their descriptions are seeded from KDoc written for
+maintainers, and by the time the gate was widened they had accumulated nine
+violations across three files. The three maps are additionally pinned by exact
+path in `requiredPrefixes`, so a glob that quietly stops matching them fails
+the build instead of passing over nothing.
+
+The defect classes:
 
 1. **LLM tool-call wrapper artifacts** — stray fragments of an assistant's
    tool-call envelope (closing wrapper tags, or the opening of a markup /
@@ -771,7 +785,16 @@ newly added top-level public doc is guarded automatically:
    or of the internal `project_docs` tree. External readers cannot see
    them, so such a reference is always dangling.
 
-Two families are deliberately **excluded** from the root glob: `CHANGELOG.md`
+**What this gate still does not catch**, recorded so the question is not
+reopened: an internal file named by its **bare basename** with no directory
+(`node-specs.md`), and any reference that lives in a KDoc comment which never
+reaches a generated map. Scanning all KDoc rather than the first sentence, and
+scanning `CHANGELOG.md`, are both deliberately out of scope — the first because
+the gate would then police prose that no public reader ever sees, the second
+because its past entries legitimately name internal documents as they were
+called at the time.
+
+Two families are deliberately **excluded** from the glob: `CHANGELOG.md`
 (a historical journal whose past entries legitimately name internal documents
 as they were called at the time — rewriting history to satisfy a lint rule
 would be worse than the dangling reference) and the untracked, internal

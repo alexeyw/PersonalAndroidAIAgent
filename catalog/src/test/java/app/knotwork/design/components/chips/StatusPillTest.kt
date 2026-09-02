@@ -14,8 +14,8 @@ import org.robolectric.annotation.Config
 
 /**
  * Verifies every [StatusPill] variant exposes a `Status: <label>`
- * `contentDescription` so colour is never the only signal
- * (`decisions.md §14`). All variants are rendered in one column so a single
+ * `contentDescription` so colour is never the only signal. All variants are
+ * rendered in one column so a single
  * `setContent` block exercises the full mapping.
  */
 @RunWith(AndroidJUnit4::class)

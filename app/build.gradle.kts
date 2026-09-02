@@ -2,7 +2,6 @@ import app.knotwork.android.buildtools.BrowserEditorConstantsGenerator
 import app.knotwork.android.buildtools.CookbookDocsGenerator
 import app.knotwork.android.buildtools.DetektAnalysisModeGuard
 import app.knotwork.android.buildtools.DexInstantiabilityChecker
-import app.knotwork.android.buildtools.DocsHygieneChecker
 import app.knotwork.android.buildtools.ExternalAutomationDocsGenerator
 import app.knotwork.android.buildtools.FileMapSpec
 import app.knotwork.android.buildtools.GenerateFileMapTask
@@ -14,6 +13,7 @@ import app.knotwork.android.buildtools.SettingsHelpDocsGenerator
 import app.knotwork.android.buildtools.StoreListingLengthChecker
 import app.knotwork.android.buildtools.VerifyDialogInventoryTask
 import app.knotwork.android.buildtools.VerifyDocLinksTask
+import app.knotwork.android.buildtools.VerifyDocsHygieneTask
 import app.knotwork.android.buildtools.VerifyFileMapTask
 import app.knotwork.android.buildtools.VerifyMermaidDiagramsTask
 import app.knotwork.android.buildtools.VerifyNoOrphanedKdocTask
@@ -1426,57 +1426,14 @@ val verifyFileMap by tasks.registering(VerifyFileMapTask::class) {
 verifyFileMap { mustRunAfter(generateFileMap) }
 tasks.named("check") { dependsOn(verifyFileMap) }
 
-// Public documentation hygiene guard.
+// Public documentation hygiene guard — moved.
 //
-// Scans the public-contour Markdown for two defect classes that are cheap to
-// introduce and expensive reputationally once the repo is announced: leaked LLM
-// tool-call wrapper artifacts, and references to internal-only planning
-// documents that external readers cannot see. The pure scanner lives in
-// `buildSrc` (`DocsHygieneChecker`) and is unit-tested there
-// (`./gradlew -p buildSrc test`).
-//
-// The root scope is a *glob* (`*.md`), not a hand-maintained allowlist, so a
-// newly added top-level public doc is guarded automatically. Two families are
-// excluded, both by design: `CHANGELOG.md` (a historical journal whose past
-// entries legitimately name internal documents as they were called at the
-// time) and the untracked, internal `CLAUDE.md` manifest family (which
-// deliberately references the private planning docs). `NOTICE` carries no `.md`
-// extension, so it is added explicitly when present.
-//
-// The file set and the root directory are resolved into *local* `val`s inside
-// the configuration block and captured by the task action as plain
-// `Set<File>` / `File` values, so the action never reaches back into the
-// `Project` or the build script object — keeping the task configuration-cache
-// compatible.
-val verifyDocsHygiene by tasks.registering {
-    group = "verification"
-    description =
-        "Fails the build if public docs contain LLM tool-call artifacts or references to internal-only documents."
-    val rootDirForAction: File = rootDir
-    val docsHygieneFiles: Set<File> = buildSet {
-        addAll(
-            fileTree("$rootDir") {
-                include("*.md")
-                exclude("CHANGELOG.md", "CLAUDE.md", "CLAUDE.local.md")
-            }.files,
-        )
-        file("$rootDir/NOTICE").takeIf { it.exists() }?.let { add(it) }
-        addAll(fileTree("$rootDir/docs") { include("**/*.md") }.files)
-    }
-    inputs.files(docsHygieneFiles)
-    doLast {
-        val contents = docsHygieneFiles.associate { it.relativeTo(rootDirForAction).path to it.readText() }
-        val violations = DocsHygieneChecker.scan(contents)
-        if (violations.isNotEmpty()) {
-            throw GradleException(
-                "Public documentation hygiene check failed " +
-                    "(${violations.size} violation(s)):\n" +
-                    violations.joinToString(separator = "\n") { it.format() },
-            )
-        }
-    }
-}
-tasks.named("check") { dependsOn(verifyDocsHygiene) }
+// It used to be registered here with a file set of its own: the repository
+// root, `NOTICE` and `docs/`. That set left the generated `FILE_MAP.md` files
+// outside every rule it enforces, which is where the references into the
+// internal tree had accumulated. It now sits with the other documentation
+// gates, below `documentationFiles`, and shares that already-declared,
+// already-prefix-guarded set.
 
 // Play store-listing length gate. Google rejects an over-length field in the
 // Console — after the merge and after the release workflow has signed an
@@ -2008,6 +1965,36 @@ val verifyMermaidDiagrams by tasks.registering(VerifyMermaidDiagramsTask::class)
     stampFile.set(layout.buildDirectory.file("reports/docs-links/mermaid-verified.txt"))
 }
 tasks.named("check") { dependsOn(verifyMermaidDiagrams) }
+
+// Documentation hygiene — a blocking gate over the same shared set. Two classes
+// of defect: a leaked LLM tool-call artifact, and a reference into the internal
+// `project_docs/` tree that a public reader cannot open. `CHANGELOG.md` is
+// excluded here and only here: its past entries name internal documents as they
+// were called at the time, and rewriting history to satisfy a gate would be the
+// wrong repair.
+val verifyDocsHygiene by tasks.registering(VerifyDocsHygieneTask::class) {
+    group = "verification"
+    description = "Fails the build if public docs carry LLM tool-call artifacts or internal-document references."
+    repositoryRoot.set(rootProject.layout.projectDirectory)
+    documents.from(
+        files(documentationFiles).asFileTree.matching { exclude("CHANGELOG.md") },
+        rootProject.layout.projectDirectory.file("NOTICE"),
+    )
+    // The generated maps are pinned by their exact paths, not just by the `app/`
+    // and `catalog/` roots those roots would be satisfied by any other Markdown
+    // under them. These three are the reason the set was widened, and a glob
+    // that quietly stops matching them would return the gate to the state this
+    // change fixed — passing while covering nothing that mattered.
+    requiredPrefixes.set(
+        documentationRoots + listOf(
+            "app/src/main/java/app/knotwork/android/FILE_MAP.md",
+            "app/src/test/java/app/knotwork/android/FILE_MAP.md",
+            "catalog/FILE_MAP.md",
+        ),
+    )
+    stampFile.set(layout.buildDirectory.file("reports/docs-links/hygiene-verified.txt"))
+}
+tasks.named("check") { dependsOn(verifyDocsHygiene) }
 
 // The `FILE_MAP.md` files are Markdown, so they are inputs to the three tasks
 // above and outputs of `generateFileMap`. Without an ordering, asking for both

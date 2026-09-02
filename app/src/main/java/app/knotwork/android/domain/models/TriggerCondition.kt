@@ -10,7 +10,7 @@ package app.knotwork.android.domain.models
  * switch over the variants exhaustively. The first wave is deliberately limited
  * to **low-sensitivity** conditions (time, charging, network) that need no
  * dangerous Android permission; notification-listener / geofence / SMS triggers
- * are deferred (see `project_docs/decisions.md`).
+ * are deferred — a design boundary, not an omission (see `SECURITY.md`).
  *
  * Conditions are persisted through
  * [app.knotwork.android.domain.triggerio.TriggerConditionCodec] as a compact

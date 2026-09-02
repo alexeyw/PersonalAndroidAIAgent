@@ -310,6 +310,50 @@ abstract class VerifyMermaidDiagramsTask : AbstractDocsScanTask() {
 }
 
 /**
+ * Fails the build when a public document carries an LLM tool-call artifact or a
+ * reference into the internal-only tree.
+ *
+ * Shares [documentationFiles][AbstractDocsScanTask.documents] with the other
+ * documentation gates rather than resolving its own narrower set. It used to
+ * scan only the repository root, `NOTICE` and `docs/`, which left the generated
+ * `FILE_MAP.md` files outside every rule the gate enforces — and they are
+ * exactly the documents most likely to acquire an internal reference, because
+ * their descriptions are seeded from KDoc written for maintainers. Widening the
+ * set costs nothing: the shared collection is already declared, already
+ * prefix-guarded against a glob that stops matching, and the scan is a pure
+ * function of the text.
+ *
+ * `CHANGELOG.md` stays out, and that exclusion is the caller's: it is a
+ * historical journal whose past entries legitimately name internal documents as
+ * they were called at the time.
+ */
+@CacheableTask
+abstract class VerifyDocsHygieneTask : AbstractDocsScanTask() {
+
+    /** Written on success so the task can be up to date. */
+    @get:OutputFile
+    abstract val stampFile: RegularFileProperty
+
+    /** Scans every document in scope and fails on the first crop of violations. */
+    @TaskAction
+    fun verify() {
+        val documents = readDocuments()
+        val violations = DocsHygieneChecker.scan(documents)
+        if (violations.isNotEmpty()) {
+            throw VerificationException(
+                "Public documentation hygiene check failed (${violations.size} violation(s)):\n" +
+                    violations.joinToString(separator = "\n") { "  " + it.format() } + "\n\n" +
+                    "A public reader cannot open the internal tree, so a reference into it is a dead " +
+                    "end. Link the public canon instead, or state the reason inline without the link.",
+            )
+        }
+        val stamp = stampFile.get().asFile
+        stamp.parentFile.mkdirs()
+        stamp.writeText("documents=${documents.size}\n")
+    }
+}
+
+/**
  * Fails the build when a hand-written copy of the version number disagrees with
  * the `versionName` the build declares.
  */
