@@ -145,11 +145,16 @@ While it is on, data moves in two directions and neither leaves the device:
 - **Inbound.** The caller's broadcast carries the prompt text into Knotwork.
   That text is another app's to send, so what it contains is governed by that
   app, not by this one; here it is treated like any other input.
-- **Outbound (optional).** If the caller asked to be answered, Knotwork sends
-  one broadcast back to the **calling package only** — never a general
-  broadcast — carrying the request id, the admission status and, when refused,
-  the reason. It never carries the prompt, the model's reply, or anything the
-  run produced.
+- **Outbound (optional).** If the request asked to be answered, Knotwork sends
+  one broadcast to **the package that request named** — an explicit intent, never
+  a general broadcast — carrying the request id, the admission status and, when
+  refused, the reason. It never carries the prompt, the model's reply, or
+  anything the run produced. Note the precision: Android does not tell the app
+  who sent a broadcast unless the sender opts in, so the address is a claim made
+  *in* the request rather than a verified identity. That is exactly why the
+  payload is this thin — an unverified address must not be able to have anything
+  of yours read back to it. A request that names no package gets no callback at
+  all, which is the normal shape for a shell script.
 
 Every inbound request, accepted or refused, is written to a local journal on
 the device. The vocabulary of the contract is documented in
