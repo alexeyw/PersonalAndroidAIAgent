@@ -13,7 +13,7 @@ import org.robolectric.annotation.Config
 /**
  * Verifies that every [RiskPill] variant exposes a `Risk level: <level>`
  * `contentDescription` so TalkBack announces the state and not just the
- * decorative colour (`decisions.md §14`).
+ * decorative colour.
  */
 @RunWith(AndroidJUnit4::class)
 @Config(sdk = [36])

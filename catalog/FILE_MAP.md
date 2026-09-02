@@ -22,7 +22,7 @@ Only Kotlin files appear inside the generated blocks.
 Paths below are relative to `src/main/java/app/knotwork/design/`.
 
 <!-- AUTO-GEN:FILE_MAP -->
-- `a11y/` - accessibility scaffolding (`decisions.md §14`).
+- `a11y/` - accessibility scaffolding (`docs/testing.md`).
   - `KnotworkA11y.kt` - `KnotworkA11y` interface, `DefaultKnotworkA11y` implementation backed by `Settings.Global`, `FixedKnotworkA11y` test double, and the `LocalKnotworkA11y` composition local.
   - `RespectReducedMotionTransitions.kt` - `respectReducedMotionTransitions` helper that swaps caller-supplied enter/exit transitions for an 80 ms alpha-only crossfade when reduced motion is on.
 - `components/` - atomic components.
@@ -396,7 +396,7 @@ matters.
 - `a11y/` - the design system's accessibility guarantees, kept as tests rather than as a checklist — the font-scale × theme matrix, the TalkBack happy paths, and the `KnotworkA11y` override contract the snapshot suites depend on.
   - `A11yMatrixSnapshotTest.kt` - Accessibility matrix baseline.
   - `KnotworkA11yTest.kt` - Verifies the `KnotworkA11y` contract in three parts: the default local resolves to `DefaultKnotworkA11y`, a test may pin `FixedKnotworkA11y` for deterministic snapshots, and that override survives `KnotworkTheme` applied from either side of it.
-  - `TalkBackHappyPathsTest.kt` - Compose-side scaffolds for the five TalkBack happy paths ratified in `project_docs/design/compose/decisions.md §14`.
+  - `TalkBackHappyPathsTest.kt` - Compose-side scaffolds for the five TalkBack happy paths (`docs/testing.md`).
 - `components/` - one suite per component family. Each family pairs a Roborazzi baseline (what it looks like) with behavioural tests (what a baseline cannot show — gating, affordances, semantics).
   - `buttons/` - the button family's baseline.
     - `KnotworkButtonsSnapshotTest.kt` - Roborazzi snapshot baseline for the `KnotworkButtonsCatalogContent` harness in both themes — covers every primary / secondary / text / icon button state in two snapshots (`buttons_light.png`, `buttons_dark.png`).
@@ -410,8 +410,8 @@ matters.
   - `chips/` - chips and pills. The behavioural tests here exist for one reason: colour is never the only signal, so every variant must announce its state.
     - `KnotworkChipsSnapshotTest.kt` - Roborazzi snapshot baseline for `KnotworkChipsCatalogContent` in both themes.
     - `KnotworkChipTest.kt` - Behavioural tests for `KnotworkChip`.
-    - `RiskPillTest.kt` - Verifies that every `RiskPill` variant exposes a `Risk level: <level>` `contentDescription` so TalkBack announces the state and not just the decorative colour (`decisions.md §14`).
-    - `StatusPillTest.kt` - Verifies every `StatusPill` variant exposes a `Status: <label>` `contentDescription` so colour is never the only signal (`decisions.md §14`).
+    - `RiskPillTest.kt` - Verifies that every `RiskPill` variant exposes a `Risk level: <level>` `contentDescription` so TalkBack announces the state and not just the decorative colour.
+    - `StatusPillTest.kt` - Verifies every `StatusPill` variant exposes a `Status: <label>` `contentDescription` so colour is never the only signal.
   - `ComponentsCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for `ComponentsCatalogPage` in both Knotwork themes.
   - `console/` - the run console — its baseline, and the affordances that decide whether anyone finds it: the entry strip, search, filtering and long-press copy.
     - `ConsoleCatalogPageSnapshotTest.kt` - Roborazzi snapshot baseline for `ConsoleCatalogContent` in both themes.

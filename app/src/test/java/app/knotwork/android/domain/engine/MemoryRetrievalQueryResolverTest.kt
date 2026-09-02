@@ -6,7 +6,7 @@ import org.junit.Test
 
 /**
  * Unit tests for [MemoryRetrievalQueryResolver] — the `RunOrigin` × declared-query
- * matrix of the retrieval-key contract (`DESCRIPTION.md` §6.10.1).
+ * matrix of the retrieval-key contract (`docs/architecture.md`).
  */
 class MemoryRetrievalQueryResolverTest {
 

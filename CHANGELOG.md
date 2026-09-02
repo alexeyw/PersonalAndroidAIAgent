@@ -13,6 +13,21 @@ details.
 
 ## [Unreleased]
 
+### Changed
+
+- **The privacy policy now covers the two data paths added since it was
+  written.** External automation (another app on the device asking Knotwork to
+  run a pipeline) and journal export both arrived after the policy's effective
+  date, and a policy that silently lags the product is worse than no policy for
+  the reader who checks it. The new sections say what crosses the boundary in
+  each direction: an inbound broadcast carries the caller's prompt in, an
+  optional callback goes to the calling package alone and carries only the
+  request id, status and refusal reason — never the prompt or the run's output —
+  and an exported journal is written by an explicit action, over no network, and
+  without the content of your runs. Where an exported file goes after the share
+  sheet is the receiving app's business, and the policy says so rather than
+  implying a guarantee that is not ours to give.
+
 ## [0.9.0] - 2026-09-01
 
 ### Added

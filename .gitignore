@@ -3,12 +3,6 @@
 # Kotlin build-tools daemon working directory (Kotlin 2.x).
 .kotlin
 /local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
 .DS_Store
 /build
 /app/build
@@ -63,3 +57,10 @@ fastlane/test_output/
 #     Firebase identifiers or secrets.
 #   * app/src/main/assets/universal_sentence_encoder.tflite — bundled on-device
 #     USE embedding model, the default embedding provider; required at runtime.
+
+# --- IDE state ---
+# The whole `.idea/` tree is ignored. It is the state of somebody else's IDE:
+# it changes on its own as the editor is used, it carries no build or review
+# value, and it was already shipping a stale product name in `.name`. Nothing
+# in it is needed to build or run the project.
+/.idea/

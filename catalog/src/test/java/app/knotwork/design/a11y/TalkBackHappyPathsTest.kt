@@ -26,7 +26,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Compose-side scaffolds for the five TalkBack happy paths ratified in
- * `project_docs/design/compose/decisions.md §14`.
+ * `docs/testing.md`.
  *
  * These tests do **not** drive TalkBack itself — the AccessibilityService
  * bridge cannot be toggled from Compose-test. They instead assert the

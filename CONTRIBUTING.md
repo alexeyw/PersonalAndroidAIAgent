@@ -219,6 +219,14 @@ This applies to new content as well as to edits of existing content. If
 you encounter non-English text in any of the locations above, treat it as
 a bug.
 
+## Licensing of contributions
+
+Contributions are accepted under the [Apache License 2.0](LICENSE), the licence
+this project ships under. That is not a separate agreement — clause 5 of the
+licence already says that anything you deliberately submit for inclusion is
+submitted under its terms, so inbound and outbound are the same licence. There
+is no CLA to sign and no DCO sign-off to add; opening a pull request is enough.
+
 ## Adding a decision record
 
 Write one when a decision would otherwise be re-litigated in review — not once
