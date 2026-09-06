@@ -172,9 +172,16 @@ graph can be persisted.
 ### 1.6. Mirror the new type into the browser editor
 
 [`pipeline-editor.html`](../pipeline-editor.html) is a standalone
-single-file HTML app that mirrors the Android pipeline schema. It is
-the most common place where changes drift out of sync — every change
-to the `NodeType` set must be reflected here in **three** places:
+single-file HTML app that mirrors the Android pipeline schema, and
+standalone is meant literally: the graph library (Drawflow, MIT) is inlined
+into the file rather than fetched from a CDN, so the editor works from disk
+with no network. Keep it that way — a `<script src="https://…">` would
+quietly undo it, and a local-first product whose editor needs a CDN is a
+contradiction a reader will find.
+
+The editor is also the most common place where changes drift out of sync —
+every change to the `NodeType` set must be reflected here in **three**
+places:
 
 1. `NODE_TYPES` array (around line 827) — add a row with `id`,
    `label`, `color`, `icon`, `inputs`, `outputs`. Match the
