@@ -15,6 +15,18 @@ details.
 
 ### Changed
 
+- **The browser pipeline editor now works with no network.** It was described
+  as a standalone single-file editor, and that was true only in the sense that
+  it was one file: opening it pulled its graph library from a public CDN, so
+  without a connection the canvas never appeared. The library (Drawflow, MIT) is
+  now inlined into the file, which grows it by about 50 KB and makes the
+  standalone claim true in the sense a reader means it. The offline behaviour is
+  the smaller half of the reason — until now the editor executed whatever that
+  CDN path happened to serve, which is a supply-chain surface a local-first tool
+  has no business carrying. Licence text and attribution are in
+  [NOTICE](NOTICE); the editor is a development tool and is still not part of
+  the released APK or AAB.
+
 - **The privacy policy now covers the two data paths added since it was
   written.** External automation (another app on the device asking Knotwork to
   run a pipeline) and journal export both arrived after the policy's effective
